@@ -109,6 +109,8 @@ button { font: inherit; color: inherit; }
   margin: 8px 0 -6px; font: 700 13px/1.2 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
 }
 .muted { color: var(--muted); }
+.sign { align-self: flex-end; margin: 0; font-size: 12.5px; color: var(--muted); letter-spacing: .04em; }
+.sign b { font: 800 17px/1 var(--f-display); text-transform: uppercase; letter-spacing: .05em; color: var(--ink); border-bottom: 2px solid var(--rubber); }
 
 .btn {
   appearance: none; border: 2px solid var(--line); background: var(--surface);
@@ -289,6 +291,7 @@ button { font: inherit; color: inherit; }
       <button class="btn primary" id="startBtn">Commencer · 10 balles</button>
       <h2 class="h">Ta lecture par revêtement</h2>
       <div class="stats" id="statsList"></div>
+      <p class="sign">par <b>François Daoud</b></p>
     </div>
 
     <div id="train-play" class="view" hidden>
@@ -356,6 +359,7 @@ button { font: inherit; color: inherit; }
       </ol>
     </div>
     <div id="fichesList" class="view"></div>
+    <p class="sign">par <b>François Daoud</b></p>
   </section>
 </main>
 

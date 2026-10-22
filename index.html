@@ -161,6 +161,8 @@ button { font: inherit; color: inherit; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .row .btn { flex: 1 1 140px; }
 .link { color: var(--accent); font-weight: 700; text-align: center; padding: 4px; }
+.sign { align-self: flex-end; margin: -4px 0 0; font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+.sign b { font: 800 16px/1 var(--f-display); text-transform: uppercase; letter-spacing: .05em; color: var(--ink); border-bottom: 2px solid var(--rubber); }
 .verdict { margin: 0; font: 800 30px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; }
 .verdict.ok { color: var(--good); }
 .verdict.ko { color: var(--bad); }
@@ -230,6 +232,7 @@ button { font: inherit; color: inherit; }
     </label>
     <button class="btn primary" id="playBtn">Jouer le match</button>
     <a class="link" id="quizLink" href="quiz.html" target="_blank" rel="noopener">Quiz et fiches « Lire le picot »</a>
+    <p class="sign">par <b>François Daoud</b></p>
   </div>
 </div>
 
@@ -510,6 +513,26 @@ box(18, 7, 0.1, 0x3b4d67, 0, 3.5, -11);
 box(0.1, 7, 28, 0x33455d, -8, 3.5, 0);
 box(0.1, 7, 28, 0x33455d, 8, 3.5, 0);
 for (const x of [-3, -1, 1, 3]) box(1.96, 0.7, 0.04, 0x1d3a68, x, 0.35, -6.8);
+// Bannière de salle au-dessus de l'adversaire
+const sc2 = document.createElement("canvas"); sc2.width = 1024; sc2.height = 184;
+const sx = sc2.getContext("2d");
+const signTex = new THREE.CanvasTexture(sc2);
+function drawSign() {
+  sx.fillStyle = "#1d3a68"; sx.fillRect(0, 0, 1024, 184);
+  sx.fillStyle = "#e5453d"; sx.fillRect(0, 0, 1024, 10); sx.fillRect(0, 174, 1024, 10);
+  sx.textBaseline = "middle"; sx.textAlign = "center"; sx.fillStyle = "#ffffff";
+  sx.font = '700 40px "Atkinson Hyperlegible", sans-serif';
+  sx.fillText("par", 190, 94);
+  sx.font = '800 118px "Big Shoulders Display", "Arial Narrow", sans-serif';
+  sx.fillText("FRANÇOIS DAOUD", 580, 98);
+  signTex.needsUpdate = true;
+}
+drawSign();
+if (document.fonts && document.fonts.load) {
+  Promise.all([document.fonts.load('800 118px "Big Shoulders Display"'), document.fonts.load('700 40px "Atkinson Hyperlegible"')]).then(drawSign, () => {});
+}
+const signM = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 1.0), new THREE.MeshBasicMaterial({ map: signTex, fog: false }));
+signM.position.set(0, 2.55, -10.94); scene.add(signM);
 for (const z of [-5.8, -3.8, -1.8, 0.2, 2.2, 4.2]) { box(0.04, 0.7, 1.96, 0x1d3a68, -4, 0.35, z); box(0.04, 0.7, 1.96, 0x1d3a68, 4, 0.35, z); }
 // Table
 box(1.525, 0.03, 2.74, 0x1b4f8c, 0, TY - 0.015, 0);
