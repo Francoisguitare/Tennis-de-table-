@@ -337,7 +337,7 @@ button { font: inherit; color: inherit; }
 
   <!-- Labo -->
   <section class="view" id="view-lab" hidden>
-    <p class="lede">Compose l’échange et regarde ce qui revient. Change un seul paramètre à la fois pour sentir la logique.</p>
+    <p class="lede">Compose l’échange et regarde ce qui revient. Change un seul paramètre à la fois pour sentir la logique. Les rotations viennent du moteur physique du jeu 3D, mesurées au moment où tu frappes.</p>
     <h2 class="h">Ton coup</h2>
     <div class="chips" id="labShot"></div>
     <h2 class="h">Son revêtement</h2>
@@ -392,9 +392,9 @@ const SHOTS = {
   mort: { l: "Balle sans effet", s: "Poussette « morte », service sans effet", spin: "none" },
 };
 const RUB = {
-  pc:   { l: "Picot court", n: "ce picot court", tag: "Picot court", s: "Balle tendue, peu d’effet" },
+  pc:   { l: "Picot court", n: "ce picot court", tag: "Picot court", s: "Casse ton effet, balle tendue" },
   pl:   { l: "Picot long", n: "ce picot long", tag: "Picot long", s: "Avec mousse, inverse l’effet" },
-  ox:   { l: "Picot long OX", n: "ce picot long OX", tag: "Picot long OX", s: "Sans mousse, inversion maximale" },
+  ox:   { l: "Picot long OX", n: "ce picot long OX", tag: "Picot long OX", s: "Sans mousse, défenseur loin" },
   anti: { l: "Anti-top", n: "cet anti-top", tag: "Anti-top", s: "Lisse, balle lente et morte" },
 };
 const GEST = {
@@ -403,155 +403,77 @@ const GEST = {
   pous:  { l: "Poussette", s: "Remise sous la balle" },
   punch: { l: "Attaque / punch", s: "Frappe vers l’avant" },
 };
-const VALID = { top: ["bloc", "coupe", "punch"], back: ["pous", "punch"], none: ["pous", "punch"] };
 const EFF = {
   lift:   { l: "Lifté", v: 2 },
   llift:  { l: "Légèrement lifté", d: "La balle « remonte »", v: 1 },
-  flot:   { l: "Sans effet", d: "Balle flottante", v: 0 },
+  flot:   { l: "Sans effet", d: "Presque pas de rotation", v: 0 },
   lcoupe: { l: "Légèrement coupé", v: -1 },
   coupe:  { l: "Coupé", v: -2 },
   tcoupe: { l: "Très coupé", v: -3 },
 };
-const SPEED = { lente: "Balle lente", moyenne: "Vitesse moyenne", rapide: "Balle rapide" };
-const RESP = {
-  ouvert:     "Top d’ouverture : raquette ouverte, geste vers le haut",
-  tresouvert: "Top très ouvert en accélérant vers le haut, ou poussette longue",
-  ferme:      "Top ou frappe raquette fermée, vers l’avant",
-  plat:       "Frappe ou top tendu, raquette presque verticale",
-  blocferme:  "Bloc court, raquette fermée, sans geste",
-  blocvert:   "Bloc raquette plus verticale, en poussant vers l’avant",
-  poussette:  "Poussette : raquette ouverte, sous la balle",
-  topcourt:   "Top court et compact, peu d’élévation, près de la table",
+/* Tes coups : les mêmes que dans le jeu 3D « Face au picot » */
+const CHQ = {
+  tresouvert: { l: "Top très ouvert", s: "Raquette très ouverte, gros frottement" },
+  ouvert:     { l: "Top d’ouverture", s: "Raquette ouverte, frottement" },
+  plat:       { l: "Top tendu / frappe", s: "Raquette verticale, vers l’avant" },
+  pous:       { l: "Poussette", s: "Raquette ouverte, sous la balle" },
+  morte:      { l: "Balle morte", s: "Poussette sans frotter" },
+  bloc:       { l: "Bloc fermé", s: "Raquette fermée, court" },
 };
-/* Ce qu'un backside classique renverrait avec le même geste */
-function naive(shot, gest) {
-  const sp = SHOTS[shot].spin;
-  if (gest === "bloc") return "lift";
-  if (gest === "coupe") return "coupe";
-  if (gest === "punch") return "lift";
-  if (gest === "pous") return sp === "none" ? "lcoupe" : "coupe";
-  return "flot";
-}
+const CH_ORDER = ["tresouvert", "ouvert", "plat", "pous", "morte", "bloc"];
 
-/* [coup, revêtement, geste, effet, vitesse, bonne réponse, piège, pourquoi, erreur classique] */
+/* Scénarios calculés avec le moteur physique du jeu 3D (rotation en tours/s au moment où tu frappes,
+   après le rebond sur ta table). ans : le coup à jouer ; alt : ce qui passe aussi ; trap : le réflexe « backside » ;
+   nEff / nW : ce qu'un backside aurait renvoyé avec le même geste. */
 const SC = [
-  // Picot court
-  ["gtop","pc","bloc","llift","rapide","topcourt","ouvert",
-    "Le picot court accroche peu : il te renvoie une partie de ton lift, mais la balle arrive tendue, rapide et basse.",
-    "Ouvrir la raquette comme sur une balle coupée : la balle sort en longueur."],
-  ["ttop","pc","bloc","flot","rapide","blocvert","blocferme",
-    "Peu de rotation en entrée et un revêtement qui accroche peu : la balle revient vite et sans effet.",
-    "Fermer comme sur un top : une balle sans effet tombe plus que tu ne crois, elle part dans le filet."],
-  ["gtop","pc","coupe","lcoupe","moyenne","ouvert","tresouvert",
-    "En défense, le picot court coupe beaucoup moins qu’un backside. La balle est moins coupée que le geste le laisse croire.",
-    "Trop ouvrir comme sur une vraie coupe de défenseur : la balle sort."],
-  ["ttop","pc","coupe","flot","lente","plat","tresouvert",
-    "Ton top rapide a peu de rotation, et le picot court n’en crée presque pas : la défense revient flottante.",
-    "Lever la balle comme sur une coupe lourde : elle passe au-dessus de la table."],
-  ["gtop","pc","punch","llift","rapide","blocferme","ouvert",
-    "Le picot court frappe ton top à plat : balle très rapide et tendue, avec un peu de lift. Pas le temps de faire un geste.",
-    "Ouvrir ou armer un grand geste : tu es en retard et la balle sort."],
-  ["ttop","pc","punch","flot","rapide","blocvert","blocferme",
-    "Frappe au picot court sur un top rapide : la balle repart à plat, très vite, presque sans rotation.",
-    "Bloquer raquette très fermée : la balle flottante plonge dans le filet."],
-  ["pous","pc","pous","lcoupe","moyenne","ouvert","tresouvert",
-    "Le picot court renvoie moins de coupé qu’un backside. Ton top d’ouverture n’a pas besoin d’être très ouvert.",
-    "Ouvrir à fond comme sur une poussette backside : la balle sort en longueur."],
-  ["mort","pc","pous","flot","lente","plat","ouvert",
-    "Rien en entrée, presque rien en sortie : la poussette au picot court revient sans effet.",
-    "Ouvrir comme sur une coupée : la balle monte et sort."],
-  ["pous","pc","punch","flot","rapide","blocvert","blocferme",
-    "Le picot court frappe ta poussette à plat : la balle arrive vite mais presque sans rotation. Elle descend plus qu’un top.",
-    "Fermer comme sur un top : filet."],
-  ["mort","pc","punch","flot","rapide","blocvert","blocferme",
-    "Frappe à plat sur une balle sans effet : vitesse, mais aucune rotation.",
-    "Fermer comme sur un top : la balle tombe dans le filet."],
-
-  // Picot long avec mousse
-  ["gtop","pl","bloc","coupe","moyenne","ouvert","plat",
-    "Le picot long garde le sens de rotation de ta balle : ton lift revient en coupé. Plus ton top est lourd, plus le retour est coupé.",
-    "Enchaîner un top tendu comme si la balle était liftée : filet."],
-  ["ttop","pl","bloc","lcoupe","moyenne","ouvert","blocferme",
-    "Moins de lift envoyé, moins de coupé reçu : le retour est seulement un peu coupé, souvent bas.",
-    "Bloquer ou contrer raquette fermée comme contre un backside : filet."],
-  ["gtop","pl","coupe","tcoupe","lente","tresouvert","plat",
-    "Défense au picot long sur un gros top : ton énorme rotation revient presque entière en coupé. Balle lourde et basse.",
-    "Frapper ou topper à plat : la balle s’écrase dans le filet."],
-  ["ttop","pl","coupe","coupe","lente","ouvert","tresouvert",
-    "Ton top avait peu de rotation : le coupé qui revient est réel mais moyen. Ouverture normale.",
-    "Ouvrir comme sur une balle très coupée : la balle sort."],
-  ["gtop","pl","punch","flot","rapide","blocvert","blocferme",
-    "Quand le picot long attaque ton top, il écrase la rotation : la balle arrive vite, sans effet, et plonge en fin de course.",
-    "Bloquer très fermé comme contre un top : la balle plonge dans le filet."],
-  ["pous","pl","pous","llift","lente","ferme","poussette",
-    "Le grand piège : ta coupée revient en balle légèrement liftée. C’est une balle à attaquer, pas à remettre.",
-    "Remettre une poussette : la balle monte et sort, ou il t’attaque derrière."],
-  ["mort","pl","pous","flot","lente","plat","ouvert",
-    "Sans effet en entrée, le picot long ne peut rien inventer : la balle revient morte. C’est ta balle d’attaque.",
-    "Ouvrir comme sur une coupée : la balle passe au-dessus."],
-  ["pous","pl","punch","llift","rapide","blocferme","ouvert",
-    "Le picot long attaque ta poussette : ta rotation coupée devient une balle liftée, rapide et basse.",
-    "Ouvrir la raquette par réflexe en pensant à une balle coupée : la balle sort."],
-  ["mort","pl","punch","flot","rapide","blocvert","blocferme",
-    "Picot long qui frappe une balle sans effet : vitesse, mais toujours aucune rotation.",
-    "Fermer comme contre un top : filet."],
-
-  // Picot long sans mousse
-  ["gtop","ox","bloc","tcoupe","lente","tresouvert","plat",
-    "Sans mousse, l’inversion est encore plus nette, et la balle plus lente et plus courte : ton gros top revient très coupé.",
-    "Rester loin et topper à plat : la balle courte et coupée finit dans le filet."],
-  ["ttop","ox","bloc","coupe","lente","ouvert","blocferme",
-    "Même un top rapide revient coupé avec un OX. La balle est lente : avance et prends le temps de remonter.",
-    "Contrer fermé comme sur un top : filet."],
-  ["gtop","ox","coupe","tcoupe","lente","tresouvert","ouvert",
-    "Défense OX sur un gros top : retour très coupé et flottant. Il faut beaucoup d’élévation, ou une poussette longue pour patienter.",
-    "Ouvrir seulement un peu : pas assez d’élévation, filet."],
-  ["ttop","ox","coupe","coupe","lente","ouvert","tresouvert",
-    "Moins de rotation envoyée, retour moins coupé : ouverture normale, en avançant.",
-    "Ouvrir comme sur une balle très coupée : la balle sort."],
-  ["pous","ox","pous","lift","lente","ferme","poussette",
-    "L’OX renvoie ta coupée avec presque toute sa rotation : elle arrive nettement liftée, lente et un peu haute.",
-    "Remettre une poussette ouverte : la balle sort à coup sûr."],
-  ["mort","ox","pous","flot","lente","plat","ouvert",
-    "L’OX n’a ni vitesse ni effet propre : sur une balle sans effet, il ne renvoie rien. Attaque.",
-    "Attendre la balle en reculant : elle tombe courte et morte, tu arrives trop tard."],
-  ["pous","ox","punch","llift","moyenne","ferme","poussette",
-    "L’OX qui attaque ta poussette te renvoie ta rotation en lift, sans grande vitesse.",
-    "Pousser par habitude : la balle liftée monte et sort."],
-  ["mort","ox","punch","flot","moyenne","plat","ouvert",
-    "Aucune rotation à renvoyer : l’attaque OX sur balle morte reste sans effet et assez lente.",
-    "Ouvrir comme sur une balle coupée : la balle sort."],
-
-  // Anti-top
-  ["gtop","anti","bloc","lcoupe","lente","ouvert","plat",
-    "L’anti absorbe ta vitesse et renvoie une balle lente, courte et un peu coupée. C’est à toi de créer la vitesse.",
-    "Attendre la balle puis frapper à plat : elle est courte et coupée, filet."],
-  ["ttop","anti","bloc","flot","lente","plat","blocferme",
-    "Peu d’effet en entrée : l’anti renvoie une balle morte et lente. Profites-en.",
-    "Bloquer fermé comme contre un top : la balle tombe dans le filet."],
-  ["gtop","anti","coupe","lcoupe","lente","ouvert","tresouvert",
-    "Le geste de coupe est ample, mais l’anti accroche à peine : la balle est bien moins coupée qu’elle n’en a l’air.",
-    "Ouvrir comme sur une vraie défense coupée : la balle sort."],
-  ["ttop","anti","coupe","flot","lente","plat","tresouvert",
-    "Top peu lifté + anti = défense sans effet, malgré le geste.",
-    "Croire le geste et ouvrir beaucoup : la balle sort."],
-  ["pous","anti","pous","llift","lente","ferme","poussette",
-    "Geste de poussette, mais l’anti te renvoie un peu de ta rotation : la balle flotte et remonte légèrement.",
-    "Remettre une poussette : la balle monte."],
-  ["mort","anti","pous","flot","lente","plat","ouvert",
-    "Balle sans effet dans l’anti : retour mort et lent. Attaque.",
-    "Ouvrir comme sur une coupée : la balle sort."],
-].map(r => ({ shot: r[0], rub: r[1], gest: r[2], eff: r[3], speed: r[4], ans: r[5], trap: r[6], why: r[7], err: r[8] }));
+  {"shot":"gtop","rub":"pc","gest":"bloc","eff":"flot","w":-2,"kmh":12,"ans":"plat","trap":"bloc","alt":["ouvert","pous","morte"],"why":"Ton gros top arrivait chez lui avec 57 tours/s de lift. Son picot court glisse sur la balle : elle garde 28 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 16 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : presque pas de rotation quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"lift","nW":24},
+  {"shot":"gtop","rub":"pc","gest":"coupe","eff":"tcoupe","w":-31,"kmh":19,"ans":"tresouvert","trap":"morte","alt":["ouvert","pous"],"why":"Ton gros top arrivait chez lui avec 57 tours/s de lift. Son picot court glisse sur la balle : elle garde 75 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 43 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 31 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"tcoupe","nW":-30},
+  {"shot":"gtop","rub":"pc","gest":"punch","eff":"flot","w":-4,"kmh":19,"ans":"plat","trap":"bloc","alt":["ouvert","pous","morte"],"why":"Ton gros top arrivait chez lui avec 57 tours/s de lift. Son picot court glisse sur la balle : elle garde 25 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 14 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 4 tours/s de coupé quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"lift","nW":59},
+  {"shot":"ttop","rub":"pc","gest":"bloc","eff":"flot","w":3,"kmh":14,"ans":"plat","trap":"ouvert","alt":["pous","morte","bloc"],"why":"Ton top rapide arrivait chez lui avec 26 tours/s de lift. Son picot court glisse sur la balle : elle garde 35 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 9 tours/s. Au rebond sur ta table, le frottement mange tout le coupé et lui donne même du lift : 3 tours/s de lift quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"lift","nW":19},
+  {"shot":"ttop","rub":"pc","gest":"coupe","eff":"coupe","w":-24,"kmh":16,"ans":"ouvert","trap":"plat","alt":["tresouvert","pous","morte"],"why":"Ton top rapide arrivait chez lui avec 26 tours/s de lift. Son picot court glisse sur la balle : elle garde 142 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 37 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 24 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"tcoupe","nW":-32},
+  {"shot":"ttop","rub":"pc","gest":"punch","eff":"flot","w":3,"kmh":24,"ans":"plat","trap":"bloc","alt":["pous","morte"],"why":"Ton top rapide arrivait chez lui avec 26 tours/s de lift. Son picot court glisse sur la balle : elle garde 23 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 6 tours/s. Au rebond sur ta table, le frottement mange tout le coupé et lui donne même du lift : 3 tours/s de lift quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"lift","nW":58},
+  {"shot":"pous","rub":"pc","gest":"pous","eff":"flot","w":4,"kmh":15,"ans":"plat","trap":"ouvert","alt":["pous","morte","bloc"],"why":"Ta poussette arrivait chez lui avec 24 tours/s de coupé. Son picot court accroche un peu et casse l’effet : elle repart avec 5 tours/s de coupé. Au rebond sur ta table, le frottement mange tout le coupé et lui donne même du lift : 4 tours/s de lift quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"coupe","nW":-18},
+  {"shot":"pous","rub":"pc","gest":"punch","eff":"llift","w":17,"kmh":21,"ans":"plat","trap":"morte","alt":["bloc"],"why":"Ta poussette arrivait chez lui avec 24 tours/s de coupé. Son picot court glisse sur la balle : elle garde 29 % de sa rotation, dans le même sens. Pour toi, elle repart en lift : 7 tours/s. Au rebond sur ta table, le frottement lui donne du lift : 17 tours/s de lift quand tu frappes.","err":"Remettre une poussette sur la balle qui remonte : ta coupée revient en lift. Il faut l’attaquer, raquette fermée.","nEff":"lift","nW":49},
+  {"shot":"mort","rub":"pc","gest":"pous","eff":"flot","w":-2,"kmh":16,"ans":"plat","trap":"tresouvert","alt":["ouvert","pous","morte"],"why":"Ta balle sans effet arrivait chez lui presque sans effet. Son picot court ne crée presque rien : elle repart avec 12 tours/s de coupé. Au rebond sur ta table, le frottement mange une partie du coupé : presque pas de rotation quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"coupe","nW":-17},
+  {"shot":"mort","rub":"pc","gest":"punch","eff":"llift","w":9,"kmh":22,"ans":"plat","trap":"bloc","alt":["morte"],"why":"Ta balle sans effet arrivait chez lui presque sans effet. Son picot court ne crée presque rien : elle repart avec presque pas de rotation. Au rebond sur ta table, le frottement lui donne du lift : 9 tours/s de lift quand tu frappes.","err":"La remettre en poussette : elle a pris du lift au rebond, elle monterait. Attaque-la.","nEff":"lift","nW":51},
+  {"shot":"gtop","rub":"pl","gest":"bloc","eff":"coupe","w":-23,"kmh":9,"ans":"ouvert","trap":"plat","alt":["tresouvert","pous","morte"],"why":"Ton gros top arrivait chez lui avec 58 tours/s de lift. Son picot long glisse sur la balle : elle garde 72 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 42 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 23 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"lift","nW":24},
+  {"shot":"gtop","rub":"pl","gest":"coupe","eff":"tcoupe","w":-32,"kmh":15,"ans":"tresouvert","trap":"morte","alt":["ouvert","pous"],"why":"Ton gros top arrivait chez lui avec 58 tours/s de lift. Son picot long glisse sur la balle : elle garde 79 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 46 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 32 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"tcoupe","nW":-30},
+  {"shot":"gtop","rub":"pl","gest":"punch","eff":"coupe","w":-26,"kmh":20,"ans":"ouvert","trap":"plat","alt":["tresouvert","pous"],"why":"Ton gros top arrivait chez lui avec 58 tours/s de lift. Son picot long glisse sur la balle : elle garde 64 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 37 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 26 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"lift","nW":59},
+  {"shot":"ttop","rub":"pl","gest":"bloc","eff":"flot","w":2,"kmh":9,"ans":"plat","trap":"bloc","alt":["ouvert","pous","morte"],"why":"Ton top rapide arrivait chez lui avec 26 tours/s de lift. Son picot long glisse sur la balle : elle garde 50 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 13 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : presque pas de rotation quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"lift","nW":19},
+  {"shot":"ttop","rub":"pl","gest":"coupe","eff":"coupe","w":-25,"kmh":16,"ans":"ouvert","trap":"plat","alt":["tresouvert","pous","morte"],"why":"Ton top rapide arrivait chez lui avec 26 tours/s de lift. Son picot long glisse sur la balle : elle garde 142 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 37 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 25 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"tcoupe","nW":-32},
+  {"shot":"ttop","rub":"pl","gest":"punch","eff":"flot","w":1,"kmh":21,"ans":"plat","trap":"bloc","alt":["ouvert","pous","morte"],"why":"Ton top rapide arrivait chez lui avec 26 tours/s de lift. Son picot long glisse sur la balle : elle garde 31 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 8 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : presque pas de rotation quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"lift","nW":58},
+  {"shot":"pous","rub":"pl","gest":"pous","eff":"lift","w":23,"kmh":10,"ans":"plat","trap":"ouvert","alt":["bloc"],"why":"Ta poussette arrivait chez lui avec 24 tours/s de coupé. Son picot long glisse sur la balle : elle garde 46 % de sa rotation, dans le même sens. Pour toi, elle repart en lift : 11 tours/s. Au rebond sur ta table, le frottement lui donne du lift : 23 tours/s de lift quand tu frappes.","err":"Remettre une poussette sur la balle qui remonte : ta coupée revient en lift. Il faut l’attaquer, raquette fermée.","nEff":"coupe","nW":-18},
+  {"shot":"pous","rub":"pl","gest":"punch","eff":"lift","w":19,"kmh":17,"ans":"bloc","trap":"morte","alt":["plat"],"why":"Ta poussette arrivait chez lui avec 24 tours/s de coupé. Son picot long glisse sur la balle : elle garde 38 % de sa rotation, dans le même sens. Pour toi, elle repart en lift : 9 tours/s. Au rebond sur ta table, le frottement lui donne du lift : 19 tours/s de lift quand tu frappes.","err":"Remettre une poussette sur la balle qui remonte : ta coupée revient en lift. Il faut l’attaquer, raquette fermée.","nEff":"lift","nW":49},
+  {"shot":"mort","rub":"pl","gest":"pous","eff":"flot","w":-1,"kmh":12,"ans":"plat","trap":"tresouvert","alt":["ouvert","pous","morte"],"why":"Ta balle sans effet arrivait chez lui presque sans effet. Son picot long ne crée presque rien : elle repart avec 13 tours/s de coupé. Au rebond sur ta table, le frottement mange une partie du coupé : presque pas de rotation quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"coupe","nW":-17},
+  {"shot":"mort","rub":"pl","gest":"punch","eff":"llift","w":9,"kmh":18,"ans":"plat","trap":"ouvert","alt":["morte","bloc"],"why":"Ta balle sans effet arrivait chez lui presque sans effet. Son picot long ne crée presque rien : elle repart avec presque pas de rotation. Au rebond sur ta table, le frottement lui donne du lift : 9 tours/s de lift quand tu frappes.","err":"La remettre en poussette : elle a pris du lift au rebond, elle monterait. Attaque-la.","nEff":"lift","nW":51},
+  {"shot":"gtop","rub":"ox","gest":"coupe","eff":"coupe","w":-17,"kmh":5,"ans":"ouvert","trap":"tresouvert","alt":["plat","pous","morte"],"why":"Ton gros top arrivait chez lui avec 55 tours/s de lift. Son picot long OX glisse sur la balle : elle garde 85 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 47 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 17 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"tcoupe","nW":-30},
+  {"shot":"gtop","rub":"ox","gest":"punch","eff":"coupe","w":-26,"kmh":13,"ans":"ouvert","trap":"plat","alt":["tresouvert","pous","morte"],"why":"Ton gros top arrivait chez lui avec 55 tours/s de lift. Son picot long OX glisse sur la balle : elle garde 82 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 45 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 26 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"lift","nW":59},
+  {"shot":"ttop","rub":"ox","gest":"coupe","eff":"lcoupe","w":-10,"kmh":6,"ans":"ouvert","trap":"tresouvert","alt":["plat","pous","morte"],"why":"Ton top rapide arrivait chez lui avec 25 tours/s de lift. Son picot long OX glisse sur la balle : elle garde 140 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 35 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 10 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"tcoupe","nW":-32},
+  {"shot":"ttop","rub":"ox","gest":"punch","eff":"flot","w":0,"kmh":13,"ans":"plat","trap":"bloc","alt":["ouvert","pous","morte"],"why":"Ton top rapide arrivait chez lui avec 25 tours/s de lift. Son picot long OX glisse sur la balle : elle garde 56 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 14 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : presque pas de rotation quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"lift","nW":58},
+  {"shot":"pous","rub":"ox","gest":"pous","eff":"lift","w":25,"kmh":11,"ans":"plat","trap":"ouvert","alt":["bloc"],"why":"Ta poussette arrivait chez lui avec 23 tours/s de coupé. Son picot long OX glisse sur la balle : elle garde 65 % de sa rotation, dans le même sens. Pour toi, elle repart en lift : 15 tours/s. Au rebond sur ta table, le frottement lui donne du lift : 25 tours/s de lift quand tu frappes.","err":"Remettre une poussette sur la balle qui remonte : ta coupée revient en lift. Il faut l’attaquer, raquette fermée.","nEff":"coupe","nW":-18},
+  {"shot":"pous","rub":"ox","gest":"punch","eff":"lift","w":25,"kmh":11,"ans":"plat","trap":"morte","alt":["bloc"],"why":"Ta poussette arrivait chez lui avec 23 tours/s de coupé. Son picot long OX glisse sur la balle : elle garde 61 % de sa rotation, dans le même sens. Pour toi, elle repart en lift : 14 tours/s. Au rebond sur ta table, le frottement lui donne du lift : 25 tours/s de lift quand tu frappes.","err":"Remettre une poussette sur la balle qui remonte : ta coupée revient en lift. Il faut l’attaquer, raquette fermée.","nEff":"lift","nW":49},
+  {"shot":"pous","rub":"ox","gest":"coupe","eff":"lift","w":19,"kmh":9,"ans":"plat","trap":"tresouvert","alt":["bloc"],"why":"Ta poussette arrivait chez lui avec 23 tours/s de coupé. Son picot long OX glisse sur la balle : elle garde 65 % de sa rotation, dans le même sens. Pour toi, elle repart en lift : 15 tours/s. Au rebond sur ta table, le frottement lui donne du lift : 19 tours/s de lift quand tu frappes.","err":"Remettre une poussette sur la balle qui remonte : ta coupée revient en lift. Il faut l’attaquer, raquette fermée.","nEff":"tcoupe","nW":-33},
+  {"shot":"mort","rub":"ox","gest":"pous","eff":"llift","w":6,"kmh":9,"ans":"plat","trap":"ouvert","alt":["pous","morte","bloc"],"why":"Ta balle sans effet arrivait chez lui presque sans effet. Son picot long OX ne crée presque rien : elle repart avec 10 tours/s de coupé. Au rebond sur ta table, le frottement mange tout le coupé et lui donne même du lift : 6 tours/s de lift quand tu frappes.","err":"La remettre en poussette : elle a pris du lift au rebond, elle monterait. Attaque-la.","nEff":"coupe","nW":-17},
+  {"shot":"mort","rub":"ox","gest":"punch","eff":"llift","w":16,"kmh":12,"ans":"plat","trap":"morte","alt":["bloc"],"why":"Ta balle sans effet arrivait chez lui presque sans effet. Son picot long OX ne crée presque rien : elle repart avec 3 tours/s de lift. Au rebond sur ta table, le frottement lui donne du lift : 16 tours/s de lift quand tu frappes.","err":"La remettre en poussette : elle a pris du lift au rebond, elle monterait. Attaque-la.","nEff":"lift","nW":51},
+  {"shot":"mort","rub":"ox","gest":"coupe","eff":"llift","w":7,"kmh":7,"ans":"plat","trap":"tresouvert","alt":["pous","morte","bloc"],"why":"Ta balle sans effet arrivait chez lui presque sans effet. Son picot long OX ne crée presque rien : elle repart avec 13 tours/s de coupé. Au rebond sur ta table, le frottement mange tout le coupé et lui donne même du lift : 7 tours/s de lift quand tu frappes.","err":"La remettre en poussette : elle a pris du lift au rebond, elle monterait. Attaque-la.","nEff":"tcoupe","nW":-31},
+  {"shot":"gtop","rub":"anti","gest":"bloc","eff":"lcoupe","w":-13,"kmh":6,"ans":"ouvert","trap":"bloc","alt":["plat","pous","morte"],"why":"Ton gros top arrivait chez lui avec 57 tours/s de lift. Son anti-top glisse sur la balle : elle garde 63 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 36 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 13 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"lift","nW":24},
+  {"shot":"gtop","rub":"anti","gest":"coupe","eff":"coupe","w":-28,"kmh":11,"ans":"ouvert","trap":"tresouvert","alt":["pous","morte"],"why":"Ton gros top arrivait chez lui avec 57 tours/s de lift. Son anti-top glisse sur la balle : elle garde 82 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 47 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 28 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"tcoupe","nW":-30},
+  {"shot":"ttop","rub":"anti","gest":"bloc","eff":"flot","w":3,"kmh":7,"ans":"plat","trap":"tresouvert","alt":["ouvert","pous","morte","bloc"],"why":"Ton top rapide arrivait chez lui avec 26 tours/s de lift. Son anti-top glisse sur la balle : elle garde 54 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 14 tours/s. Au rebond sur ta table, le frottement mange tout le coupé et lui donne même du lift : 3 tours/s de lift quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"lift","nW":19},
+  {"shot":"ttop","rub":"anti","gest":"coupe","eff":"coupe","w":-22,"kmh":12,"ans":"ouvert","trap":"tresouvert","alt":["pous","morte"],"why":"Ton top rapide arrivait chez lui avec 26 tours/s de lift. Son anti-top glisse sur la balle : elle garde 150 % de sa rotation, dans le même sens. Pour toi, elle repart en coupé : 39 tours/s. Au rebond sur ta table, le frottement mange une partie du coupé : 22 tours/s de coupé quand tu frappes.","err":"Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.","nEff":"tcoupe","nW":-32},
+  {"shot":"pous","rub":"anti","gest":"pous","eff":"lift","w":19,"kmh":8,"ans":"plat","trap":"ouvert","alt":["bloc"],"why":"Ta poussette arrivait chez lui avec 24 tours/s de coupé. Son anti-top glisse sur la balle : elle garde 29 % de sa rotation, dans le même sens. Pour toi, elle repart en lift : 7 tours/s. Au rebond sur ta table, le frottement lui donne du lift : 19 tours/s de lift quand tu frappes.","err":"Remettre une poussette sur la balle qui remonte : ta coupée revient en lift. Il faut l’attaquer, raquette fermée.","nEff":"coupe","nW":-18},
+  {"shot":"mort","rub":"anti","gest":"pous","eff":"flot","w":-1,"kmh":10,"ans":"plat","trap":"tresouvert","alt":["ouvert","pous","morte"],"why":"Ta balle sans effet arrivait chez lui presque sans effet. Son anti-top ne crée presque rien : elle repart avec 15 tours/s de coupé. Au rebond sur ta table, le frottement mange une partie du coupé : presque pas de rotation quand tu frappes.","err":"Croire son geste et ouvrir : la balle est presque sans rotation. Raquette verticale, vers l’avant.","nEff":"coupe","nW":-17}
+];
 
 const RARE = {
   anti_punch: "Avec un anti-top, l’attaque est rare : le revêtement n’a presque pas de vitesse. Attends-toi plutôt à un bloc ou une poussette, et surveille quand il tourne sa raquette pour attaquer avec l’autre face.",
+  ox_bloc: "Un défenseur ne bloque pas : loin de la table, il coupe ou il attaque.",
 };
 
 const FICHES = [
   { id: "pc", t: "Picot court", s: "Balle tendue, peu d’effet, beaucoup de frappes",
-    how: "Picots courts et larges : peu d’adhérence au contact, la balle part vite et tendue. Il est moins sensible à ton effet qu’un backside, mais il n’inverse pas la rotation.",
+    how: "Picots courts et larges : peu d’adhérence au contact, la balle part vite et tendue. Il accroche juste assez pour casser ton effet : ce qui revient tourne peu, dans un sens ou dans l’autre.",
     see: ["Balles tendues et basses, frappes à plat sur tes poussettes.", "De temps en temps une balle sans effet qui flotte et tombe.", "Joueur souvent collé à la table, qui prend la balle tôt."],
-    gold: "Ce qu’il renvoie ressemble à ce que tu envoies, avec moins d’effet et plus de vitesse.",
+    gold: "Il casse ton effet : ses blocs et ses frappes reviennent tendus et presque sans rotation. Seule sa défense coupée revient vraiment coupée.",
     tac: ["Tops lourds et lents : il a du mal à les contrôler à plat.", "Joue long, vers son coude, pour le gêner dans ses frappes.", "Varie la longueur : balle courte, puis longue.", "Sur ses frappes : bloc court, raquette fermée, sans geste."],
     err: "Trop ouvrir sur ses balles coupées : elles le sont beaucoup moins qu’avec un backside." },
   { id: "pl", t: "Picot long", s: "Avec mousse : inverse l’effet que tu donnes",
@@ -567,11 +489,11 @@ const FICHES = [
     tac: ["Avance-toi : les balles tombent courtes.", "Top lent et très lifté pour obtenir un retour coupé prévisible, puis ouvre beaucoup.", "Balles sans effet longues : il n’a pas la vitesse pour te mettre en difficulté.", "Patience : ne force pas le point sur une balle très coupée."],
     err: "Rester loin de la table : la balle tombe courte et morte, tu arrives trop tard." },
   { id: "anti", t: "Anti-top", s: "Lisse, absorbe ta vitesse et ton effet",
-    how: "Revêtement lisse presque sans adhérence : il absorbe ta vitesse et ton effet. Il te renvoie une petite partie de ta rotation, inversée, et surtout une balle lente et morte.",
+    how: "Revêtement lisse presque sans adhérence et mousse morte : il ne crée presque pas d’effet et absorbe ta vitesse. Comme le picot long, il te renvoie ta propre rotation, inversée et ralentie.",
     see: ["Surface mate, sans brillance.", "Son sourd, « toc ».", "Balles lentes et sans effet, même sur un geste ample.", "Il remet tes services sans difficulté, quel que soit l’effet."],
-    gold: "Son geste ment : regarde la balle, pas le bras. La plupart de ses balles sont flottantes ou très peu coupées.",
-    tac: ["Tops longs dans l’anti, puis attaque la balle morte qui revient.", "Change de rythme : l’anti ne peut pas accélérer, c’est toi qui fixes le tempo.", "Sur ses défenses, n’ouvre pas trop : c’est peu coupé.", "Le danger vient de son autre face : surveille quand il tourne la raquette.", "Au service, mise sur le placement et la longueur plutôt que sur l’effet."],
-    err: "Trop ouvrir sur ses coupes qui n’en sont pas, ou attendre la balle : elle est lente, va la chercher." },
+    gold: "Son geste ment : c’est ton coup d’avant qui décide. Ton top revient coupé, ta poussette revient en lift, ta balle sans effet revient sans effet.",
+    tac: ["Tops longs dans l’anti, puis attaque la balle morte qui revient.", "Change de rythme : l’anti ne peut pas accélérer, c’est toi qui fixes le tempo.", "Sa défense te renvoie ton lift en coupé : plus ton top est lourd, plus elle est coupée. Sur ton top tendu, elle l’est beaucoup moins.", "Le danger vient de son autre face : surveille quand il tourne la raquette.", "Au service, mise sur le placement et la longueur plutôt que sur l’effet."],
+    err: "Croire son geste plutôt que ton coup d’avant, ou attendre la balle : elle est lente et courte, va la chercher." },
 ];
 
 /* ---------- Stockage ---------- */
@@ -607,13 +529,13 @@ function pathFor(v) {
   if (v === 0) return "M24 78 Q 128 44 236 106 Q 272 74 312 72";
   return `M24 78 Q 132 54 244 106 Q ${268 + v * 2} ${62 + v * 3} ${298 + v * 3} ${60 + v * 3}`;
 }
-function playTraj(svg, effKey, speed) {
+function playTraj(svg, effKey, kmh) {
   const v = EFF[effKey].v;
   const path = svg.querySelector(".path");
   const ball = svg.querySelector(".ball");
   path.setAttribute("d", pathFor(v));
   const len = path.getTotalLength();
-  const dur = { rapide: 1000, moyenne: 1500, lente: 2100 }[speed] || 1500;
+  const dur = kmh > 16 ? 1000 : kmh > 9 ? 1500 : 2100;
   const prev = anims.get(svg); if (prev) cancelAnimationFrame(prev);
   if (reduceMotion) {
     const p = path.getPointAtLength(len * 0.55);
@@ -627,10 +549,8 @@ function playTraj(svg, effKey, speed) {
     const el = ts - t0;
     const t = Math.min(el / dur, 1);
     const p = path.getPointAtLength(len * t);
-    let rot, jx = 0, jy = 0;
-    if (v === 0) { rot = Math.sin(el / 45) * 9; jx = Math.sin(el / 33) * 1.2; jy = Math.cos(el / 41) * 1.2; }
-    else rot = (el / 1000) * v * 520;
-    ball.setAttribute("transform", `translate(${(p.x + jx).toFixed(1)} ${(p.y + jy).toFixed(1)}) rotate(${rot.toFixed(1)})`);
+    const rot = (el / 1000) * v * 420;
+    ball.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${rot.toFixed(1)})`);
     if (el > dur + 700) t0 = ts;
     anims.set(svg, requestAnimationFrame(step));
   };
@@ -639,17 +559,16 @@ function playTraj(svg, effKey, speed) {
 }
 
 function resultHTML(sc, mode) {
-  const nv = naive(sc.shot, sc.gest);
-  const naiveLine = nv !== sc.eff
-    ? `<p class="naive">Contre un backside, ce geste t’aurait renvoyé : <b>${esc(EFF[nv].l)}</b>. Avec ${esc(RUB[sc.rub].n)} : <b>${esc(EFF[sc.eff].l)}</b>.</p>`
+  const naiveLine = sc.nEff && sc.nEff !== sc.eff
+    ? `<p class="naive">Contre un backside, ce geste t’aurait renvoyé : <b>${esc(EFF[sc.nEff].l)}</b> (${Math.abs(sc.nW)} tr/s). Avec ${esc(RUB[sc.rub].n)} : <b>${esc(EFF[sc.eff].l)}</b> (${Math.abs(sc.w)} tr/s).</p>`
     : "";
   return `
     ${trajSVG()}
-    <div class="pills"><span class="pill eff">${esc(EFF[sc.eff].l)}</span><span class="pill">${esc(SPEED[sc.speed])}</span>${EFF[sc.eff].d ? `<span class="pill">${esc(EFF[sc.eff].d)}</span>` : ""}</div>
-    <div class="kv"><span>${mode === "lab" ? "Ta réponse" : "La bonne réponse"}</span><p class="answer">${esc(RESP[sc.ans])}</p></div>
+    <div class="pills"><span class="pill eff">${esc(EFF[sc.eff].l)}</span><span class="pill">${Math.abs(sc.w)} tr/s ${sc.w > 2 ? "de lift" : sc.w < -2 ? "de coupé" : ""}</span></div>
+    <div class="kv"><span>${mode === "lab" ? "Ta réponse" : "La bonne réponse"}</span><p class="answer">${esc(CHQ[sc.ans].l)} : ${esc(CHQ[sc.ans].s.toLowerCase())}</p>${sc.alt.length ? `<p class="muted">Passe aussi : ${esc(sc.alt.map(k => CHQ[k].l).join(", "))}.</p>` : ""}</div>
     <div class="kv"><span>Pourquoi</span><p>${esc(sc.why)}</p></div>
     ${naiveLine}
-    <p class="trap"><b>Erreur classique :</b> ${esc(sc.err)}</p>`;
+    ${sc.err ? `<p class="trap"><b>Erreur classique :</b> ${esc(sc.err)}</p>` : ""}`;
 }
 
 /* ---------- Onglets ---------- */
@@ -714,9 +633,8 @@ function ask() {
   $("fb").innerHTML = "";
 
   // Effets proposés : le bon, celui qu'aurait donné un backside, et les plus proches
-  const nv = naive(sc.shot, sc.gest);
   const set = [sc.eff];
-  if (nv !== sc.eff) set.push(nv);
+  if (sc.nEff && sc.nEff !== sc.eff) set.push(sc.nEff);
   Object.keys(EFF).filter(k => !set.includes(k))
     .sort((a, b) => Math.abs(EFF[a].v - EFF[sc.eff].v) - Math.abs(EFF[b].v - EFF[sc.eff].v) || Math.random() - .5)
     .slice(0, 4 - set.length).forEach(k => set.push(k));
@@ -752,8 +670,9 @@ function pick(step, k, good) {
   if (step === 1) {
     cur.ok1 = ok; cur.step = 2;
     const sc = cur.sc;
-    const others = shuffle(Object.keys(RESP).filter(x => x !== sc.ans && x !== sc.trap)).slice(0, 1);
-    renderOpts("opts2", shuffle([sc.ans, sc.trap, ...others]).map(x => ({ k: x, l: RESP[x] })), sc.ans, 2);
+    const wrong = CH_ORDER.filter(x => x !== sc.ans && !sc.alt.includes(x));
+    const pickWrong = [sc.trap].concat(shuffle(wrong.filter(x => x !== sc.trap))).filter(Boolean).slice(0, 2);
+    renderOpts("opts2", shuffle([sc.ans, ...pickWrong]).map(x => ({ k: x, l: CHQ[x].l, d: CHQ[x].s })), sc.ans, 2);
     $("step2").hidden = false;
     startTimer();
     $("step2").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
@@ -765,7 +684,7 @@ function pick(step, k, good) {
     fb.className = "result";
     fb.innerHTML = `<p class="verdict ${both ? "ok" : "ko"}">${both ? "Bien lu" : cur.ok1 || cur.ok2 ? "À moitié" : "Raté"}</p>` + resultHTML(cur.sc, "game");
     fb.hidden = false;
-    playTraj(fb.querySelector(".traj"), cur.sc.eff, cur.sc.speed);
+    playTraj(fb.querySelector(".traj"), cur.sc.eff, cur.sc.kmh);
     $("nextBtn").hidden = false;
     $("nextBtn").textContent = game.i + 1 < N ? "Balle suivante" : "Voir mon score";
     fb.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
@@ -813,7 +732,7 @@ function endGame() {
   const miss = game.miss.filter(s => { const id = s.shot + s.rub + s.gest; if (seen.has(id)) return false; seen.add(id); return true; });
   $("missTitle").hidden = !miss.length;
   $("endMiss").innerHTML = miss.map(s =>
-    `<li><b>${esc(SHOTS[s.shot].l)} → ${esc(RUB[s.rub].l)}, ${esc(GEST[s.gest].l.toLowerCase())}</b>Arrive ${esc(EFF[s.eff].l.toLowerCase())}. ${esc(RESP[s.ans])}.</li>`).join("");
+    `<li><b>${esc(SHOTS[s.shot].l)} → ${esc(RUB[s.rub].l)}, ${esc(GEST[s.gest].l.toLowerCase())}</b>Arrive ${esc(EFF[s.eff].l.toLowerCase())} (${Math.abs(s.w)} tr/s). À jouer : ${esc(CHQ[s.ans].l.toLowerCase())}.</li>`).join("");
   renderHeader();
   window.scrollTo(0, 0);
 }
@@ -831,7 +750,7 @@ function chipRow(id, data, key, valid) {
   $(id).querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => { lab[key] = b.dataset.k; renderLab(); }));
 }
 function renderLab() {
-  const valid = VALID[SHOTS[lab.shot].spin];
+  const valid = Object.keys(GEST).filter(g => SC.some(s => s.shot === lab.shot && s.rub === lab.rub && s.gest === g) || RARE[lab.rub + "_" + g]);
   if (!valid.includes(lab.gest)) lab.gest = valid[0];
   chipRow("labShot", SHOTS, "shot");
   chipRow("labRub", RUB, "rub");
@@ -843,7 +762,7 @@ function renderLab() {
     return;
   }
   out.innerHTML = `<p class="verdict">Ce qui revient</p>` + resultHTML(sc, "lab");
-  playTraj(out.querySelector(".traj"), sc.eff, sc.speed);
+  playTraj(out.querySelector(".traj"), sc.eff, sc.kmh);
 }
 
 /* ---------- Fiches ---------- */

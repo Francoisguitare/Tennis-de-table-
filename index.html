@@ -228,7 +228,11 @@ button { font: inherit; color: inherit; }
     <div class="seg" id="lvlCards"></div>
     <label class="switch" for="aide">
       <input type="checkbox" id="aide" checked>
-      <span><b>Aide visuelle</b><small>Nom de la face au contact et trace de la balle</small></span>
+      <span><b>Aide visuelle</b><small>Balle bicolore pour voir la rotation, nom de la face au contact, trace de la balle</small></span>
+    </label>
+    <label class="switch" for="son">
+      <input type="checkbox" id="son" checked>
+      <span><b>Son</b><small>Chaque revêtement a son bruit : écoute-le</small></span>
     </label>
     <button class="btn primary" id="playBtn">Jouer le match</button>
     <a class="link" id="quizLink" href="quiz.html" target="_blank" rel="noopener">Quiz et fiches « Lire le picot »</a>
@@ -284,203 +288,386 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const sm = k => { k = Math.max(0, Math.min(1, k)); return k * k * (3 - 2 * k); };
+const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 1.41;
 function pickW(o) { let r = Math.random(), acc = 0; for (const k in o) { acc += o[k]; if (r < acc) return k; } return Object.keys(o).pop(); }
 
+/* ===== Moteur physique de la balle =====
+   Balle 40 mm / 2,7 g (sphère creuse), traînée de l'air, effet Magnus,
+   rebond table avec frottement (glissement ou roulement), contact raquette
+   selon l'adhérence du revêtement. Unités : m, s, rad/s. */
+const PHYS = (() => {
+  const g = 9.81, r = 0.02, m = 0.0027, rho = 1.2, A = Math.PI * r * r;
+  const KD = rho * 0.5 * A / (2 * m);     // traînée, C_D = 0,5
+  const KL = rho * A / (2 * m);           // portance Magnus, × C_L(S)
+  const AL = 2 / 3;                       // I = 2/3 m r² (sphère creuse)
+  const TY = 0.76, L = 1.37, W = 0.7625, NETY = TY + 0.1525, NETW = 0.915;
+  const TABLE = { e: 0.89, mu: 0.25, et: 0 };
+  const DECAY = 0.2;                      // perte de rotation dans l'air, par seconde
+  const TAU = 2 * Math.PI;
+
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const clone = s => ({ p: s.p.slice(), v: s.v.slice(), w: s.w.slice() });
+
+  /* Choc balle / surface : n normale sortante, V vitesse de la surface */
+  function impact(s, n, V, rub) {
+    const v = s.v, w = s.w;
+    const vr = [v[0] - V[0], v[1] - V[1], v[2] - V[2]];
+    let vn = dot(vr, n);
+    if (vn > -0.2) vn = -0.2;
+    const Jn = (1 + rub.e) * -vn;
+    const rc = [-r * n[0], -r * n[1], -r * n[2]];
+    const wr = cross(w, rc);
+    const u = [vr[0] + wr[0], vr[1] + wr[1], vr[2] + wr[2]];
+    const un = dot(u, n);
+    const ut = [u[0] - un * n[0], u[1] - un * n[1], u[2] - un * n[2]];
+    const f = (1 + rub.et) * AL / (1 + AL);
+    let j = [-f * ut[0], -f * ut[1], -f * ut[2]];
+    const jm = Math.hypot(j[0], j[1], j[2]), lim = rub.mu * Jn;
+    if (jm > lim && jm > 0) { const k = lim / jm; j = [j[0] * k, j[1] * k, j[2] * k]; }
+    s.v = [v[0] + Jn * n[0] + j[0], v[1] + Jn * n[1] + j[1], v[2] + Jn * n[2] + j[2]];
+    const dw = cross(rc, j), kw = 1 / (AL * r * r);
+    s.w = [w[0] + dw[0] * kw, w[1] + dw[1] * kw, w[2] + dw[2] * kw];
+    return Jn;
+  }
+
+  /* Un pas d'intégration ; renvoie un événement éventuel */
+  function step(s, dt) {
+    const p = s.p, v = s.v, w = s.w;
+    const sp = Math.hypot(v[0], v[1], v[2]);
+    let ax = 0, ay = -g, az = 0;
+    if (sp > 1e-6) {
+      ax -= KD * sp * v[0]; ay -= KD * sp * v[1]; az -= KD * sp * v[2];
+      const cx = w[1] * v[2] - w[2] * v[1], cy = w[2] * v[0] - w[0] * v[2], cz = w[0] * v[1] - w[1] * v[0];
+      const wv = (w[0] * v[0] + w[1] * v[1] + w[2] * v[2]) / sp;
+      const wn = Math.sqrt(Math.max(0, w[0] * w[0] + w[1] * w[1] + w[2] * w[2] - wv * wv));
+      if (wn > 1e-3) {
+        const S = r * wn / sp, CL = S / (2 * S + 1), k = KL * CL * sp / wn;
+        ax += k * cx; ay += k * cy; az += k * cz;
+      }
+    }
+    v[0] += ax * dt; v[1] += ay * dt; v[2] += az * dt;
+    const z0 = p[2];
+    p[0] += v[0] * dt; p[1] += v[1] * dt; p[2] += v[2] * dt;
+    const d = 1 - DECAY * dt; w[0] *= d; w[1] *= d; w[2] *= d;
+    if ((z0 > 0) !== (p[2] > 0) && Math.abs(p[0]) < NETW && p[1] < NETY + r * 0.5 && p[1] > TY - 0.02) {
+      const sp0 = Math.abs(v[2]);
+      p[2] = z0 > 0 ? r : -r;
+      v[2] *= -0.1; v[0] *= 0.3; v[1] = Math.min(v[1], 0) * 0.3;
+      w[0] *= 0.3; w[1] *= 0.3; w[2] *= 0.3;
+      return { type: "net", x: p[0], z: p[2], sp: sp0 };
+    }
+    if (v[1] < 0 && p[1] - r <= TY && p[1] > TY - 0.04 && Math.abs(p[0]) <= W && Math.abs(p[2]) <= L) {
+      const sp0 = -v[1];
+      p[1] = TY + r;
+      impact(s, [0, 1, 0], [0, 0, 0], TABLE);
+      return { type: "table", x: p[0], z: p[2], sp: sp0 };
+    }
+    if (v[1] < 0 && p[1] - r <= 0) {
+      const sp0 = -v[1];
+      p[1] = r; v[1] *= -0.6; v[0] *= 0.7; v[2] *= 0.7; w[0] *= 0.5; w[1] *= 0.5; w[2] *= 0.5;
+      return { type: "floor", x: p[0], z: p[2], sp: sp0 };
+    }
+    return null;
+  }
+
+  /* Vol complet enregistré (rendu, contact du receveur) */
+  function fly(s0, tMax) {
+    const dt = 1 / 1000, N = Math.ceil((tMax || 3) / dt);
+    const s = clone(s0);
+    const P = new Float32Array((N + 1) * 3), Vv = new Float32Array((N + 1) * 3), Wv = new Float32Array((N + 1) * 3);
+    const events = [];
+    let floors = 0, n = 0;
+    const rec = i => { P.set(s.p, i * 3); Vv.set(s.v, i * 3); Wv.set(s.w, i * 3); };
+    rec(0);
+    for (let i = 1; i <= N; i++) {
+      const ev = step(s, dt);
+      rec(i); n = i;
+      if (ev) { ev.i = i; ev.t = i * dt; events.push(ev); if (ev.type === "floor" && ++floors >= 3) break; }
+    }
+    return { dt, n, P, V: Vv, W: Wv, events };
+  }
+  function stateAt(tr, i) {
+    i = Math.max(0, Math.min(tr.n, i));
+    return { p: Array.from(tr.P.subarray(i * 3, i * 3 + 3)), v: Array.from(tr.V.subarray(i * 3, i * 3 + 3)), w: Array.from(tr.W.subarray(i * 3, i * 3 + 3)) };
+  }
+
+  /* Vol rapide jusqu'au premier événement (pour les calculs de visée) */
+  function quick(s0) {
+    const s = clone(s0), dt = 1 / 400;
+    let nh = null;
+    for (let t = 0; t < 2.2; t += dt) {
+      const z0 = s.p[2];
+      const ev = step(s, dt);
+      if (nh === null && (z0 > 0) !== (s.p[2] > 0)) nh = s.p[1] - TY;
+      if (ev) { ev.nh = nh; return ev; }
+    }
+    return { type: "none", x: s.p[0], z: s.p[2], nh };
+  }
+  /* Profondeur atteinte au-delà du filet, dans le camp visé (side = signe de z du camp visé) */
+  function reach(o, side) {
+    if (o.type === "table") return side * o.z > 0 ? side * o.z : -1;
+    if (o.type === "net") return -0.5;
+    if (o.type === "floor") {
+      if (side * o.z > L) return side * o.z;
+      if (side * o.z > 0 && Math.abs(o.x) > W) return L + 0.05;
+      return -1;
+    }
+    return -1;
+  }
+
+  /* Rotation « lift » (positif) ou « coupé » (négatif), en tours/s, par rapport au sens de la balle */
+  function topRps(s) {
+    const h = Math.hypot(s.v[0], s.v[2]) || 1;
+    const ax = s.v[2] / h, az = -s.v[0] / h;          // axe y × direction
+    return (s.w[0] * ax + s.w[2] * az) / TAU;
+  }
+  function setTop(s, rps) {
+    const h = Math.hypot(s.v[0], s.v[2]) || 1;
+    const ax = s.v[2] / h, az = -s.v[0] / h;
+    const cur = s.w[0] * ax + s.w[2] * az, d = rps * TAU - cur;
+    s.w[0] += d * ax; s.w[2] += d * az;
+  }
+
+  /* Raquette : direction horizontale d, angle th (ouverture), coup = {a : vitesse vers l'avant de la face, b : frottement le long de la face} */
+  function racket(d, th, st) {
+    const c = Math.cos(th), sn = Math.sin(th);
+    const n = [c * d[0], sn, c * d[2]];
+    const t = [-sn * d[0], c, -sn * d[2]];
+    const V = [st.a * n[0] + st.b * t[0], st.a * n[1] + st.b * t[1], st.a * n[2] + st.b * t[2]];
+    return { n, V };
+  }
+  function hitWith(sIn, d, th, st, rub) {
+    const s = clone(sIn), rk = racket(d, th, st);
+    impact(s, rk.n, rk.V, rub);
+    return { s, n: rk.n, V: rk.V };
+  }
+
+  /* Cherche l'ouverture de raquette qui fait rebondir la balle à la profondeur voulue */
+  function solve(sIn, side, st, rub, tgt) {
+    const D = 0.0174533, want = side * tgt.z, maxNet = st.maxNet || 0.45;
+    let aimX = tgt.x, best = null;
+    for (let pass = 0; pass < 3; pass++) {
+      const dx = aimX - sIn.p[0], dz = tgt.z - sIn.p[2], h = Math.hypot(dx, dz) || 1;
+      const d = [dx / h, 0, dz / h];
+      const Q = th => quick(hitWith(sIn, d, th, st, rub).s);
+      const R = th => reach(Q(th), side);
+      let pt = null, pr = null, br = null, bestTh = null, bestR = -9;
+      for (let k = -60; k <= 82; k += 4) {
+        const th = k * D, o = Q(th), rr = reach(o, side);
+        const low = o.nh === null || o.nh < maxNet;
+        // le coup le plus long qui reste bas au-dessus du filet, sans dépasser la cible
+        if (rr > 0.2 && rr < L - 0.02 && low && (bestTh === null || Math.abs(rr - want) < Math.abs(bestR - want))) { bestTh = th; bestR = rr; }
+        if (pr !== null && pr < want && rr >= want && low) { br = [pt, th]; break; }
+        pt = th; pr = rr;
+      }
+      let th = bestTh === null ? 0 : bestTh;
+      if (br) {
+        let lo = br[0], hi = br[1];
+        for (let it = 0; it < 10; it++) { const mid = (lo + hi) / 2; if (R(mid) < want) lo = mid; else hi = mid; }
+        th = (lo + hi) / 2;
+      }
+      const hit = hitWith(sIn, d, th, st, rub);
+      const o = quick(hit.s), rr = reach(o, side);
+      const ok = o.type === "table" && rr > 0.15 && rr < L;
+      const ex = ok ? o.x - tgt.x : 9;
+      const cand = { th, d, n: hit.n, V: hit.V, out: o, ok, ex: Math.abs(ex) };
+      if (!best || (cand.ok && (!best.ok || cand.ex < best.ex))) best = cand;
+      if (!ok || Math.abs(ex) < 0.05) break;
+      aimX -= ex;
+    }
+    return best;
+  }
+
+  /* Comme solve, en augmentant la puissance du coup si la balle n'arrive pas sur la table (joueur loin, balle lente) */
+  function solveAuto(sIn, side, st, rub, tgt) {
+    let res = null;
+    for (const k of [1, 0.65, 1.35, 0.4, 1.8, 2.4]) {
+      const st2 = { a: st.a * k, b: st.b, maxNet: st.maxNet };
+      const r = solve(sIn, side, st2, rub, tgt);
+      r.st = st2;
+      if (!res || (r.ok && !res.ok)) res = r;
+      if (r.ok) break;
+    }
+    return res;
+  }
+
+  /* Service : premier rebond dans son camp (z1), second dans le camp adverse (z2) */
+  function serve(p0, side, rps, z1, z2) {
+    // side : signe du camp adverse ; z1 > 0 distance au filet côté serveur ; z2 > 0 côté receveur
+    const mk = (hs, vy) => {
+      const s = { p: p0.slice(), v: [0, vy, side * hs], w: [0, 0, 0] };
+      setTop(s, rps);
+      return s;
+    };
+    const first = (hs, vy) => {
+      const s = mk(hs, vy), dt = 1 / 400, evs = [];
+      for (let t = 0; t < 2.5 && evs.length < 2; t += dt) { const e = step(s, dt); if (e) evs.push(e); }
+      return evs;
+    };
+    let lo = 1.5, hi = 9, res = null;
+    for (let it = 0; it < 14; it++) {
+      const hs = (lo + hi) / 2;
+      let a = -7, b = 3;
+      for (let k = 0; k < 14; k++) {
+        const vy = (a + b) / 2, e = first(hs, vy)[0];
+        const zz = e && e.type === "table" ? -side * e.z : -5;
+        if (zz > z1) a = vy; else b = vy;     // rebond trop près du serveur → descendre moins vite
+      }
+      const vy = (a + b) / 2, evs = first(hs, vy);
+      res = mk(hs, vy);
+      const e2 = evs[1];
+      const z = e2 && e2.type === "table" && side * e2.z > 0 ? side * e2.z : (e2 && e2.type === "floor" && side * e2.z > 0 ? 3 : -1);
+      if (z < z2) lo = hs; else hi = hs;
+    }
+    return res;
+  }
+
+  /* Instant de frappe du receveur (camp de signe side) : au sommet du rebond (early, ou balle courte), au plan zPlane, ou quand elle redescend sous yLow */
+  function contactIdx(tr, side, zPlane, yLow, early) {
+    const ev = tr.events.find(e => e.type === "table" && Math.sign(e.z) === side);
+    if (!ev) return -1;
+    let apex = -1;
+    for (let i = ev.i + 1; i <= tr.n; i++) {
+      const y = tr.P[i * 3 + 1], z = tr.P[i * 3 + 2], vy = tr.V[i * 3 + 1];
+      if (side * z >= Math.abs(zPlane)) return i;
+      if (apex < 0 && vy <= 0) { apex = i; if (early || side * z < L - 0.3) return i; }
+      if (apex >= 0 && y <= TY + r + yLow) return i;
+    }
+    return -1;
+  }
+
+  return { g, r, TY, L, W, NETY, TAU, contactIdx, impact, step, fly, stateAt, quick, reach, topRps, setTop, racket, hitWith, solve, solveAuto, serve, clone };
+})();
+
+const TY = PHYS.TY, L = PHYS.L, W = PHYS.W, NETY = PHYS.NETY, DEG = Math.PI / 180;
+const RV = 0.03;            // rayon d'affichage de la balle (rayon réel : 2 cm)
+const Z_ME = L + 0.25;      // position de repos du joueur
+const Z_BACK = L + 0.95;    // il recule au plus jusque-là pour prendre la balle au sommet du rebond
+
 /* ================= Données de jeu ================= */
-const RUB = {
-  pc: { l: "Picot court" }, pl: { l: "Picot long" }, ox: { l: "Picot long OX" }, anti: { l: "Anti-top" },
+const RUBL = { pc: "Picot court", pl: "Picot long", ox: "Picot long OX", anti: "Anti-top", inv: "Backside" };
+const RUBN = { pc: "picot court", pl: "picot long", ox: "picot long OX", anti: "anti-top", inv: "backside" };
+/* e : rebond, mu : adhérence, et : élasticité tangentielle (le backside « mord », le picot glisse) */
+const RUBP = {
+  inv:  { e: 0.80, mu: 0.90, et: 0.4 },
+  pc:   { e: 0.82, mu: 0.35, et: 0.05 },
+  pl:   { e: 0.62, mu: 0.10, et: 0 },
+  ox:   { e: 0.50, mu: 0.06, et: 0 },
+  anti: { e: 0.50, mu: 0.15, et: 0 },
 };
 const EFF = {
-  lift:   { l: "Lifté", v: 2 },
-  llift:  { l: "Légèrement lifté", v: 1 },
-  flot:   { l: "Sans effet", v: 0 },
-  lcoupe: { l: "Légèrement coupé", v: -1 },
-  coupe:  { l: "Coupé", v: -2 },
-  tcoupe: { l: "Très coupé", v: -3 },
+  lift: "Lifté", llift: "Légèrement lifté", flot: "Sans effet",
+  lcoupe: "Légèrement coupé", coupe: "Coupé", tcoupe: "Très coupé",
 };
-const SPEED = { lente: "Balle lente", moyenne: "Vitesse moyenne", rapide: "Balle rapide" };
-const VH = { lente: 3.9, moyenne: 5.3, rapide: 7.6 };
-const GESTL = { bloc: "son bloc", coupe: "sa défense coupée", pous: "sa poussette", punch: "son attaque", serve: "son service" };
-const CATL = { gtop: "ton top lourd", ttop: "ton top tendu", pous: "ta poussette", mort: "ta balle sans effet" };
-const CATSPIN = { gtop: "top", ttop: "top", pous: "back", mort: "none" };
+const effKey = w => w >= 18 ? "lift" : w >= 6 ? "llift" : w > -6 ? "flot" : w > -15 ? "lcoupe" : w > -30 ? "coupe" : "tcoupe";
+const kmh = s => Math.round(Math.hypot(s.v[0], s.v[1], s.v[2]) * 3.6);
+function spinTxt(w) {
+  const a = Math.round(Math.abs(w));
+  if (a < 3) return "presque pas de rotation";
+  return `${a} tours/s de ${w > 0 ? "lift" : "coupé"}`;
+}
 
-/* Tes coups : ok = effets entrants (v) que ce coup contrôle */
+/* Tes coups : win = rotation (tours/s, + lift / − coupé) pour laquelle tu règles ta raquette */
 const CH = {
-  tresouvert: { l: "Top très ouvert", s: "Raquette très ouverte, vers le haut", cat: "gtop", ok: [-3, -2], vH: 4.3, sOut: 2 },
-  ouvert:     { l: "Top d’ouverture", s: "Raquette ouverte", cat: "gtop", ok: [-2, -1], vH: 4.9, sOut: 2 },
-  plat:       { l: "Top tendu / frappe", s: "Raquette verticale", cat: "ttop", ok: [0, 1], vH: 7.4, sOut: 1 },
-  bloc:       { l: "Bloc fermé", s: "Raquette fermée, court", cat: "ttop", ok: [1, 2], vH: 5.6, sOut: 1 },
-  pous:       { l: "Poussette", s: "Sous la balle", cat: "pous", ok: [-3, -1], vH: 3.7, sOut: -2, soft: true },
-  morte:      { l: "Balle morte", s: "Poussette sans effet", cat: "mort", ok: [-2, 0], vH: 3.5, sOut: 0, soft: true },
+  tresouvert: { l: "Top très ouvert", s: "Raquette très ouverte, gros frottement", read: "très coupée", win: [-80, -26], a: 2.5, b: 9, depth: [1.0, 1.15], maxNet: 0.7, my: "ton top très ouvert" },
+  ouvert:     { l: "Top d’ouverture", s: "Raquette ouverte, frottement", read: "coupée ou légèrement coupée", win: [-30, -4], a: 3.5, b: 8.5, depth: [1.0, 1.15], maxNet: 0.7, my: "ton top d’ouverture" },
+  plat:       { l: "Top tendu / frappe", s: "Raquette verticale, vers l’avant", read: "sans effet ou liftée et lente", win: [-5, 30], a: 5, b: 2.5, depth: [0.95, 1.15], maxNet: 0.45, my: "ton top tendu" },
+  pous:       { l: "Poussette", s: "Raquette ouverte, sous la balle", read: "coupée", win: [-80, -5], a: 2.0, b: -3.5, depth: [0.55, 0.85], maxNet: 0.35, my: "ta poussette" },
+  morte:      { l: "Balle morte", s: "Poussette sans frotter", read: "légèrement coupée ou sans effet", win: [-20, 5], a: 2.2, b: 0, depth: [0.75, 1.0], maxNet: 0.4, my: "ta balle morte" },
+  bloc:       { l: "Bloc fermé", s: "Raquette fermée, court", read: "liftée", win: [15, 90], a: 1.0, b: 1.2, depth: [0.8, 0.95], maxNet: 0.45, my: "ton bloc" },
 };
 const CH_ORDER = ["tresouvert", "ouvert", "plat", "pous", "morte", "bloc"];
 const SV = {
-  coupe: { l: "Service coupé", s: "Court, effet coupé", cat: "pous", sOut: -2, anim: "pous" },
-  mort:  { l: "Service sans effet", s: "Court, flottant", cat: "mort", sOut: 0, anim: "morte" },
-  lift:  { l: "Service lifté", s: "Long et rapide", cat: "ttop", sOut: 1, anim: "plat" },
+  coupe: { l: "Service coupé", s: "Court, effet coupé", rps: -55, y0: 0.97, z1: 1.0, z2: 0.45, my: "ton service coupé" },
+  mort:  { l: "Service sans effet", s: "Court, flottant", rps: 0, y0: 0.97, z1: 1.0, z2: 0.5, my: "ton service sans effet" },
+  lift:  { l: "Service lifté", s: "Long et rapide", rps: 30, y0: 0.95, z1: 0.8, z2: 1.15, my: "ton service lifté" },
 };
-const BEST = {
-  "-3": "Top très ouvert, ou poussette pour patienter",
-  "-2": "Top d’ouverture ou top très ouvert",
-  "-1": "Top d’ouverture (la poussette passe aussi)",
-  "0": "Top tendu / frappe, ou balle morte",
-  "1": "Top tendu / frappe, ou bloc fermé",
-  "2": "Bloc fermé",
+/* Gestes de l'adversaire : a = vitesse de raquette vers l'avant de la face, b = frottement le long de la face (+ vers le haut) */
+const OG = {
+  bloc:  { picot: { a: 0.9, b: 0.3, maxNet: 0.4 }, bs: { a: 1.0, b: 1.5, maxNet: 0.4 }, depth: [0.85, 1.15] },
+  punch: { picot: { a: 4.0, b: 0.5, maxNet: 0.45 }, bs: { a: 3.0, b: 8.0, maxNet: 0.5 }, depth: [0.9, 1.2] },
+  coupe: { picot: { a: 2.5, b: -4.5, maxNet: 0.6 }, bs: { a: 2.5, b: -5.0, maxNet: 0.6 }, depth: [1.0, 1.2] },
+  pous:  { picot: { a: 2.3, b: -1.5, maxNet: 0.35 }, bs: { a: 2.3, b: -3.0, maxNet: 0.35 }, depth: [0.5, 0.95] },
 };
-
-/* Ce que renvoie la face picot : [ton coup, revêtement, geste, effet, vitesse, pourquoi, erreur classique] */
-const SC = [
-  ["gtop","pc","bloc","llift","rapide","Le picot court accroche peu : il te renvoie une partie de ton lift, mais la balle arrive tendue, rapide et basse.","Ouvrir la raquette comme sur une balle coupée : la balle sort."],
-  ["ttop","pc","bloc","flot","rapide","Peu de rotation en entrée et un revêtement qui accroche peu : la balle revient vite et sans effet.","Fermer comme sur un top : une balle sans effet tombe plus que tu ne crois."],
-  ["gtop","pc","coupe","lcoupe","moyenne","En défense, le picot court coupe beaucoup moins qu’un backside.","Trop ouvrir comme sur une vraie coupe : la balle sort."],
-  ["ttop","pc","coupe","flot","lente","Ton top rapide a peu de rotation, et le picot court n’en crée presque pas : la défense revient flottante.","Lever la balle comme sur une coupe lourde : elle sort."],
-  ["gtop","pc","punch","llift","rapide","Le picot court frappe ton top à plat : balle très rapide et tendue, avec un peu de lift.","Ouvrir ou armer un grand geste : tu es en retard et la balle sort."],
-  ["ttop","pc","punch","flot","rapide","Frappe au picot court sur un top rapide : la balle repart à plat, presque sans rotation.","Bloquer très fermé : la balle flottante plonge dans le filet."],
-  ["pous","pc","pous","lcoupe","moyenne","Le picot court renvoie moins de coupé qu’un backside.","Ouvrir à fond comme sur une poussette backside : la balle sort."],
-  ["mort","pc","pous","flot","lente","Rien en entrée, presque rien en sortie : la poussette au picot court revient sans effet.","Ouvrir comme sur une coupée : la balle monte et sort."],
-  ["pous","pc","punch","flot","rapide","Le picot court frappe ta poussette à plat : la balle arrive vite mais presque sans rotation.","Fermer comme sur un top : filet."],
-  ["mort","pc","punch","flot","rapide","Frappe à plat sur une balle sans effet : vitesse, mais aucune rotation.","Fermer comme sur un top : filet."],
-  ["gtop","pl","bloc","coupe","moyenne","Le picot long garde le sens de rotation de ta balle : ton lift revient en coupé. Plus ton top est lourd, plus le retour est coupé.","Enchaîner un top tendu comme si la balle était liftée : filet."],
-  ["ttop","pl","bloc","lcoupe","moyenne","Moins de lift envoyé, moins de coupé reçu : le retour est seulement un peu coupé, souvent bas.","Contrer raquette fermée comme contre un backside : filet."],
-  ["gtop","pl","coupe","tcoupe","lente","Défense au picot long sur un gros top : ta rotation revient presque entière en coupé. Balle lourde et basse.","Frapper à plat : la balle s’écrase dans le filet."],
-  ["ttop","pl","coupe","coupe","lente","Ton top avait peu de rotation : le coupé qui revient est réel mais moyen.","Ouvrir comme sur une balle très coupée : la balle sort."],
-  ["gtop","pl","punch","flot","rapide","Quand le picot long attaque ton top, il écrase la rotation : la balle arrive vite, sans effet, et plonge.","Bloquer très fermé comme contre un top : filet."],
-  ["pous","pl","pous","llift","lente","Le grand piège : ta coupée revient en balle légèrement liftée. C’est une balle à attaquer, pas à remettre.","Remettre une poussette : la balle monte et il t’attaque."],
-  ["mort","pl","pous","flot","lente","Sans effet en entrée, le picot long ne peut rien inventer : la balle revient morte. C’est ta balle d’attaque.","Ouvrir comme sur une coupée : la balle passe au-dessus."],
-  ["pous","pl","punch","llift","rapide","Le picot long attaque ta poussette : ta rotation coupée devient une balle liftée, rapide et basse.","Ouvrir par réflexe en pensant à une balle coupée : la balle sort."],
-  ["mort","pl","punch","flot","rapide","Picot long qui frappe une balle sans effet : vitesse, mais toujours aucune rotation.","Fermer comme contre un top : filet."],
-  ["gtop","ox","bloc","tcoupe","lente","Sans mousse, l’inversion est encore plus nette, et la balle plus lente et plus courte : ton gros top revient très coupé.","Rester loin et topper à plat : filet."],
-  ["ttop","ox","bloc","coupe","lente","Même un top rapide revient coupé avec un OX. La balle est lente : avance et prends le temps de remonter.","Contrer fermé comme sur un top : filet."],
-  ["gtop","ox","coupe","tcoupe","lente","Défense OX sur un gros top : retour très coupé et flottant. Il faut beaucoup d’élévation.","Ouvrir seulement un peu : pas assez d’élévation, filet."],
-  ["ttop","ox","coupe","coupe","lente","Moins de rotation envoyée, retour moins coupé : ouverture normale.","Ouvrir comme sur une balle très coupée : la balle sort."],
-  ["pous","ox","pous","lift","lente","L’OX renvoie ta coupée avec presque toute sa rotation : elle arrive nettement liftée, lente et un peu haute.","Remettre une poussette ouverte : la balle sort."],
-  ["mort","ox","pous","flot","lente","L’OX n’a ni vitesse ni effet propre : sur une balle sans effet, il ne renvoie rien. Attaque.","Attendre la balle en reculant : elle tombe courte et morte."],
-  ["pous","ox","punch","llift","moyenne","L’OX qui attaque ta poussette te renvoie ta rotation en lift, sans grande vitesse.","Pousser par habitude : la balle liftée monte et sort."],
-  ["mort","ox","punch","flot","moyenne","Aucune rotation à renvoyer : l’attaque OX sur balle morte reste sans effet et assez lente.","Ouvrir comme sur une balle coupée : la balle sort."],
-  ["gtop","anti","bloc","lcoupe","lente","L’anti absorbe ta vitesse et renvoie une balle lente, courte et un peu coupée. C’est à toi de créer la vitesse.","Attendre la balle puis frapper à plat : filet."],
-  ["ttop","anti","bloc","flot","lente","Peu d’effet en entrée : l’anti renvoie une balle morte et lente. Profites-en.","Bloquer fermé comme contre un top : filet."],
-  ["gtop","anti","coupe","lcoupe","lente","Le geste de coupe est ample, mais l’anti accroche à peine : la balle est bien moins coupée qu’elle n’en a l’air.","Ouvrir comme sur une vraie défense coupée : la balle sort."],
-  ["ttop","anti","coupe","flot","lente","Top peu lifté + anti = défense sans effet, malgré le geste.","Croire le geste et ouvrir beaucoup : la balle sort."],
-  ["pous","anti","pous","llift","lente","Geste de poussette, mais l’anti te renvoie un peu de ta rotation : la balle flotte et remonte légèrement.","Remettre une poussette : la balle monte."],
-  ["mort","anti","pous","flot","lente","Balle sans effet dans l’anti : retour mort et lent. Attaque.","Ouvrir comme sur une coupée : la balle sort."],
-].map(r => ({ cat: r[0], rub: r[1], gest: r[2], eff: r[3], speed: r[4], why: r[5], err: r[6] }));
-
-const BSWHY = {
-  bloc: "Face backside : un bloc backside te renvoie ton lift. Balle liftée.",
-  punch: "Face backside : il attaque, la balle arrive liftée et rapide.",
-  coupe: "Face backside : vraie défense coupée. Plus ton top était lourd, plus elle est coupée.",
-  pous: "Face backside : vraie poussette, la balle est coupée.",
-};
-function bsReturn(cat, gest) {
-  if (gest === "bloc") return { eff: "lift", speed: "moyenne" };
-  if (gest === "punch") return { eff: "lift", speed: "rapide" };
-  if (gest === "coupe") return { eff: cat === "gtop" ? "tcoupe" : "coupe", speed: "lente" };
-  return { eff: cat === "mort" ? "lcoupe" : "coupe", speed: "lente" };
-}
+const SMASH = { a: 6.5, b: 2.0, maxNet: 0.45 };
+const GESTL = { bloc: "son bloc", coupe: "sa défense coupée", pous: "sa poussette", punch: "son attaque", serve: "son service" };
 
 const PROF = {
-  pl:   { name: "Le mur", rub: "pl", desc: "Picot long avec mousse, bloque collé à la table", dist: 0.45, picot: 0.75,
-          pTop: { bloc: .7, punch: .15, coupe: .15 }, pLow: { pous: .75, punch: .25 }, bTop: { bloc: .5, punch: .5 }, bLow: { punch: .5, pous: .5 }, shirt: 0x2e8a62,
+  pl:   { name: "Le mur", rub: "pl", desc: "Picot long avec mousse, bloque collé à la table", dist: 0.45, yLow: 0.06, early: true, picot: 0.75,
+          pTop: { bloc: .7, punch: .15, coupe: .15 }, pLow: { pous: .7, punch: .3 }, bTop: { bloc: .4, punch: .6 }, bLow: { punch: .5, pous: .5 }, shirt: 0x2e8a62,
           gold: "Top envoyé = coupé reçu. Coupé envoyé = lifté reçu. Rien envoyé = rien reçu." },
-  ox:   { name: "Le défenseur", rub: "ox", desc: "Picot long sans mousse, défend loin de la table", dist: 1.9, picot: 0.8,
-          pTop: { coupe: .85, bloc: .15 }, pLow: { pous: .8, punch: .2 }, bTop: { coupe: .6, punch: .4 }, bLow: { pous: .6, punch: .4 }, shirt: 0x8257c2,
+  ox:   { name: "Le défenseur", rub: "ox", desc: "Picot long sans mousse, défend loin de la table", dist: 1.6, yLow: -0.15, early: false, picot: 0.8,
+          pTop: { coupe: .85, bloc: .15 }, pLow: { pous: .6, coupe: .25, punch: .15 }, bTop: { coupe: .6, punch: .4 }, bLow: { pous: .5, punch: .5 }, shirt: 0x8257c2,
           gold: "Comme le picot long, en plus fort : ton gros top revient très coupé, ta poussette revient liftée. Crée toi-même la vitesse." },
-  pc:   { name: "Le frappeur", rub: "pc", desc: "Picot court, prend la balle tôt et frappe", dist: 0.6, picot: 0.7,
-          pTop: { bloc: .5, punch: .5 }, pLow: { punch: .6, pous: .4 }, bTop: { bloc: .4, punch: .6 }, bLow: { punch: .6, pous: .4 }, shirt: 0xd48a1a,
-          gold: "Il renvoie à peu près ton effet, en moins fort et plus vite. Ses balles coupées le sont peu." },
-  anti: { name: "L’endormeur", rub: "anti", desc: "Anti-top, casse le rythme", dist: 0.6, picot: 0.7,
-          pTop: { bloc: .7, coupe: .3 }, pLow: { pous: 1 }, bTop: { bloc: .5, punch: .5 }, bLow: { pous: .5, punch: .5 }, shirt: 0x2f74c0,
-          gold: "Son geste ment : regarde la balle, pas le bras. Presque tout revient lent, flottant ou à peine coupé." },
+  pc:   { name: "Le frappeur", rub: "pc", desc: "Picot court, prend la balle tôt et frappe", dist: 0.6, yLow: 0.06, early: true, picot: 0.7,
+          pTop: { bloc: .45, punch: .55 }, pLow: { punch: .6, pous: .4 }, bTop: { bloc: .4, punch: .6 }, bLow: { punch: .6, pous: .4 }, shirt: 0xd48a1a,
+          gold: "Son picot court accroche peu : il casse ton effet et renvoie des balles tendues, presque sans rotation." },
+  anti: { name: "L’endormeur", rub: "anti", desc: "Anti-top, casse le rythme", dist: 0.6, yLow: 0.06, early: true, picot: 0.7,
+          pTop: { bloc: .7, coupe: .3 }, pLow: { pous: .9, punch: .1 }, bTop: { bloc: .5, punch: .5 }, bLow: { pous: .5, punch: .5 }, shirt: 0x2f74c0,
+          gold: "Son geste ment : regarde la balle, pas le bras. L’anti absorbe ta vitesse et ton effet : presque tout revient lent et peu tourné." },
 };
 const LV = {
   decouverte:   { l: "Découverte", s: "Ralenti, la balle t’attend", ts: .42, freeze: true },
   entrainement: { l: "Entraînement", s: "Ralenti", ts: .62 },
-  match:        { l: "Match", s: "Presque la vraie vitesse", ts: .9 },
+  match:        { l: "Match", s: "Presque la vraie vitesse", ts: .88 },
 };
 
 /* ================= Réglages mémorisés ================= */
 const KEY = "faceaupicot.v1";
-let store = { prof: "pl", lvl: "decouverte", aide: true, best: {} };
+let store = { prof: "pl", lvl: "decouverte", aide: true, sound: true, best: {} };
 try { const d = JSON.parse(localStorage.getItem(KEY) || "null"); if (d && typeof d === "object") store = Object.assign(store, d); } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };
 if (!PROF[store.prof]) store.prof = "pl";
 if (!LV[store.lvl]) store.lvl = "decouverte";
+if (typeof store.sound !== "boolean") store.sound = true;
 
-/* ================= Physique simplifiée ================= */
-const G = 9.8, KM = 0.32, E = 0.86, KICK = 0.2, R = 0.032;
-const TY = 0.76, YB = TY + R, NETY = TY + 0.1525, L = 1.37, W = 0.7625;
-const Z_ME = 1.62;
-const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
-
-function accY(s, vz) { return Math.min(-2.8, -G - KM * s * Math.abs(vz)); }
-function toPoint(p0, tp, T, s) {
-  const vz = (tp.z - p0.z) / T, vx = (tp.x - p0.x) / T, ay = accY(s, vz);
-  const vy = (tp.y - p0.y - 0.5 * ay * T * T) / T;
-  return { t0: 0, p: p0.clone(), v: V3(vx, vy, vz), a: V3(0, ay, 0) };
+/* ================= Son ================= */
+let actx = null, master = null, noiseBuf = null;
+function audioOn() {
+  if (!store.sound) return;
+  try {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      actx = new AC(); master = actx.createGain(); master.gain.value = 0.7; master.connect(actx.destination);
+      noiseBuf = actx.createBuffer(1, Math.floor(actx.sampleRate * 0.2), actx.sampleRate);
+      const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (actx.state === "suspended") actx.resume();
+  } catch (e) { actx = null; }
 }
-function netY(seg) {
-  const tn = (0 - seg.p.z) / seg.v.z;
-  if (tn <= 0) return 99;
-  return seg.p.y + seg.v.y * tn + 0.5 * seg.a.y * tn * tn;
-}
-/* Coup qui rebondit en (xb, zb) avec un effet s, en passant le filet */
-function makeShot(p0, xb, zb, vH, s) {
-  const dz = zb - p0.z, dir = Math.sign(dz);
-  let T = Math.max(0.25, Math.hypot(dz, xb - p0.x) / vH), seg;
-  const crosses = Math.sign(p0.z) !== Math.sign(zb);
-  for (let k = 0; k < 80; k++) {
-    seg = toPoint(p0, V3(xb, YB, zb), T, s);
-    if (!crosses || netY(seg) > NETY + 0.035) break;
-    T += 0.025;
-  }
-  const vb = seg.v.y + seg.a.y * T;
-  let vz2 = seg.v.z + dir * KICK * s;
-  if (Math.abs(vz2) < 1.3) vz2 = dir * 1.3;
-  const v2 = V3(seg.v.x * 0.95, -E * vb, vz2);
-  const seg2 = { t0: T, p: V3(xb, YB, zb), v: v2, a: V3(0, Math.min(-3.5, -G - KM * 0.7 * s * Math.abs(vz2)), 0) };
-  return { segs: [seg, seg2], s };
-}
-function chain(segA, TA, rest) {
-  return { segs: [segA, ...rest.segs.map(g => Object.assign({}, g, { t0: g.t0 + TA }))], s: rest.s };
-}
-function toNet(cp, s, dir) {
-  const tp = V3(rnd(-0.45, 0.45), NETY - rnd(0.03, 0.07), 0);
-  const T = Math.max(0.28, Math.abs(cp.z) / 5.5);
-  const a = toPoint(cp, tp, T, s);
-  const b = { t0: T, p: tp, v: V3(a.v.x * 0.2, -0.2, -dir * 0.5), a: V3(0, -G, 0) };
-  return { segs: [a, b], s: s * 0.3 };
-}
-function toLong(cp, s, dir) {
-  const tp = V3(rnd(-0.6, 0.6), TY + 0.06, dir * (L + rnd(0.25, 0.6)));
-  let T = Math.max(0.3, Math.abs(tp.z - cp.z) / 6.5), seg;
-  for (let k = 0; k < 60; k++) { seg = toPoint(cp, tp, T, s); if (netY(seg) > NETY + 0.06) break; T += 0.03; }
-  return { segs: [seg], s };
-}
-function posAt(traj, t) {
-  const segs = traj.segs;
-  let g = segs[0];
-  for (const sg of segs) if (t >= sg.t0) g = sg;
-  const dt = Math.max(0, t - g.t0);
-  const p = V3(g.p.x + g.v.x * dt, g.p.y + g.v.y * dt + 0.5 * g.a.y * dt * dt, g.p.z + g.v.z * dt);
-  if (Math.abs(p.x) < W && Math.abs(p.z) < L && p.y < YB && t > segs[0].t0 + 0.05) p.y = YB;
-  if (p.y < R) p.y = R;
-  return p;
-}
-function velAt(traj, t) {
-  let g = traj.segs[0];
-  for (const sg of traj.segs) if (t >= sg.t0) g = sg;
-  return g.v.z;
-}
-/* Instant où le receveur touche la balle (plan z = zHit, ou balle trop basse) */
-function contactT(traj, zHit) {
-  const g = traj.segs[traj.segs.length - 1];
-  let t = g.t0 + (zHit - g.p.z) / g.v.z;
-  const yAt = tt => g.p.y + g.v.y * (tt - g.t0) + 0.5 * g.a.y * (tt - g.t0) ** 2;
-  if (yAt(t) < 0.5) {
-    const a = 0.5 * g.a.y, b = g.v.y, c = g.p.y - 0.5, disc = b * b - 4 * a * c;
-    if (disc > 0) t = g.t0 + (-b - Math.sqrt(disc)) / (2 * a);
-  }
-  return Math.max(t, g.t0 + 0.05);
+/* Timbres : le backside claque, le picot long fait un « tac » sec, l'OX sonne le bois, l'anti fait un « toc » sourd */
+const SND = {
+  table: { f: 1650, d: 0.045, q: 6, n: 0.5, g: 0.45 },
+  inv:   { f: 1050, d: 0.07, q: 3, n: 0.6, g: 0.7 },
+  pc:    { f: 1350, d: 0.05, q: 4, n: 0.5, g: 0.6 },
+  pl:    { f: 2300, d: 0.03, q: 8, n: 0.45, g: 0.6 },
+  ox:    { f: 1800, d: 0.035, q: 9, n: 0.3, g: 0.6, wood: 520 },
+  anti:  { f: 520, d: 0.06, q: 2, n: 0.7, g: 0.65 },
+  net:   { f: 240, d: 0.09, q: 1, n: 0.8, g: 0.35 },
+  floor: { f: 900, d: 0.04, q: 5, n: 0.4, g: 0.2 },
+};
+function sound(kind, strength) {
+  if (!actx || !store.sound || actx.state !== "running") return;
+  const p = SND[kind]; if (!p) return;
+  try {
+    const t = actx.currentTime, amp = p.g * Math.max(0.25, Math.min(1, strength || 0.6));
+    const g = actx.createGain();
+    g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(0.0008, t + p.d); g.connect(master);
+    const o = actx.createOscillator(); o.type = "sine";
+    o.frequency.setValueAtTime(p.f, t); o.frequency.exponentialRampToValueAtTime(p.f * 0.8, t + p.d);
+    o.connect(g); o.start(t); o.stop(t + p.d + 0.02);
+    const ns = actx.createBufferSource(); ns.buffer = noiseBuf;
+    const bp = actx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = p.f * 1.3; bp.Q.value = p.q;
+    const ng = actx.createGain(); ng.gain.value = p.n;
+    ns.connect(bp); bp.connect(ng); ng.connect(g); ns.start(t); ns.stop(t + p.d + 0.02);
+    if (p.wood) {
+      const o2 = actx.createOscillator(), g2 = actx.createGain(); o2.type = "triangle"; o2.frequency.value = p.wood;
+      g2.gain.setValueAtTime(amp * 0.5, t); g2.gain.exponentialRampToValueAtTime(0.0008, t + p.d * 1.5);
+      o2.connect(g2); g2.connect(master); o2.start(t); o2.stop(t + p.d * 1.6);
+    }
+  } catch (e) {}
 }
 
 /* ================= Scène 3D ================= */
@@ -496,7 +683,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x26364b);
 scene.fog = new THREE.Fog(0x26364b, 10, 26);
 const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 60);
-const CAMP = V3(0, 1.72, 3.0), CAML = V3(0, 0.72, -0.9);
+const CAMP = new THREE.Vector3(0, 1.72, 3.0), CAML = new THREE.Vector3(0, 0.72, -0.9);
 camera.position.copy(CAMP); camera.lookAt(CAML);
 scene.add(new THREE.HemisphereLight(0xe8efff, 0x5a3a32, 0.9));
 const sun = new THREE.DirectionalLight(0xffffff, 0.7); sun.position.set(1.5, 6, 2.5); scene.add(sun);
@@ -547,26 +734,29 @@ net.position.set(0, TY + 0.076, 0); scene.add(net);
 box(1.83, 0.014, 0.004, WH, 0, NETY - 0.007, 0);
 box(0.02, 0.17, 0.04, 0x1f262f, 0.915, TY + 0.085, 0); box(0.02, 0.17, 0.04, 0x1f262f, -0.915, TY + 0.085, 0);
 
-// Balle (bande orange pour voir la rotation)
-const bc = document.createElement("canvas"); bc.width = 256; bc.height = 128;
-const bx = bc.getContext("2d");
-bx.fillStyle = "#fbfaf4"; bx.fillRect(0, 0, 256, 128);
-bx.fillStyle = "#ff7a1a"; bx.fillRect(0, 0, 18, 128); bx.fillRect(238, 0, 18, 128); bx.fillRect(119, 0, 18, 128);
-const ballTex = new THREE.CanvasTexture(bc);
-const ballM = new THREE.Mesh(new THREE.SphereGeometry(R, 24, 16), new THREE.MeshLambertMaterial({ map: ballTex }));
+// Balle : bicolore (balle d'entraînement) avec l'aide, blanche avec un petit logo sans
+function ballTexture(twoTone) {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 128;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fbfaf4"; x.fillRect(0, 0, 256, 128);
+  if (twoTone) { x.fillStyle = "#ff7a1a"; x.fillRect(0, 0, 128, 128); }
+  else { x.fillStyle = "#c9a26b"; x.fillRect(60, 54, 16, 20); }
+  return new THREE.CanvasTexture(c);
+}
+const texTwo = ballTexture(true), texPlain = ballTexture(false);
+const ballMat = new THREE.MeshLambertMaterial({ map: texTwo });
+const ballM = new THREE.Mesh(new THREE.SphereGeometry(RV, 24, 16), ballMat);
 scene.add(ballM);
-const shadow = new THREE.Mesh(new THREE.CircleGeometry(R * 1.1, 20),
+const shadow = new THREE.Mesh(new THREE.CircleGeometry(RV * 1.1, 20),
   new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
 shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
-// Trace
-const TRAIL = 36;
+const TRAIL = 40;
 const trailPos = new Float32Array(TRAIL * 3);
 const trailGeo = new THREE.BufferGeometry(); trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPos, 3));
 const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xffb066, transparent: true, opacity: 0.55 }));
 trail.frustumCulled = false; scene.add(trail);
-let trailN = 0;
 
-// Raquettes
+// Raquettes : face A (z local +) et face B (z local −)
 const RED = 0xc62828, BLACK = 0x161616;
 function makeRacket() {
   const g = new THREE.Group(), rr = 0.1;
@@ -575,7 +765,7 @@ function makeRacket() {
   const fa = new THREE.Mesh(new THREE.CircleGeometry(rr * 0.97, 28), mat(RED)); fa.position.z = 0.0065; g.add(fa);
   const fb = new THREE.Mesh(new THREE.CircleGeometry(rr * 0.97, 28), mat(BLACK)); fb.position.z = -0.0065; fb.rotation.y = Math.PI; g.add(fb);
   const h = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.025), mat(0x8a6a44)); h.position.y = -(rr + 0.045); g.add(h);
-  g.rotation.order = "YXZ"; g.userData = { fa, fb };
+  g.userData = { fa, fb };
   scene.add(g); return g;
 }
 const oppRk = makeRacket(), meRk = makeRacket();
@@ -589,7 +779,7 @@ const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 0.6, 16), shi
 const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), mat(0xd9a77f)); head.position.y = 1.7; opp.add(head);
 const lArm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 10), shirtMat); lArm.position.set(-0.25, 1.22, 0.08); lArm.rotation.z = 0.2; opp.add(lArm);
 const rArm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1, 10), shirtMat); scene.add(rArm);
-const UP = V3(0, 1, 0);
+const UP = new THREE.Vector3(0, 1, 0);
 function setArm(a, b) {
   const d = b.clone().sub(a), len = d.length();
   rArm.position.copy(a).add(b).multiplyScalar(0.5);
@@ -597,40 +787,37 @@ function setArm(a, b) {
   rArm.quaternion.setFromUnitVectors(UP, d.normalize());
 }
 
-/* Gestes : offsets dans le repère « vers l'avant » (z négatif = armé) */
-const GA = {
-  bloc:  { s: [0, .02, -.10], e: [0, .03, .10], tilt: -15, dur: .25 },
-  coupe: { s: [.05, .38, -.12], e: [-.05, -.28, .22], tilt: 50, dur: .45 },
-  pous:  { s: [0, .06, -.14], e: [0, 0, .18], tilt: 45, dur: .3 },
-  punch: { s: [.1, -.08, -.35], e: [-.05, .18, .30], tilt: -10, dur: .35 },
-  serve: { s: [.05, .1, -.2], e: [0, -.05, .15], tilt: 40, dur: .3 },
-};
-const MA = {
-  tresouvert: { s: [0, -.30, -.22], e: [0, .42, .15], tilt: 55, dur: .35 },
-  ouvert:     { s: [0, -.22, -.25], e: [0, .34, .2], tilt: 35, dur: .35 },
-  plat:       { s: [0, -.02, -.35], e: [0, .12, .3], tilt: 0, dur: .3 },
-  bloc:       { s: [0, 0, -.1], e: [0, .02, .1], tilt: -25, dur: .2 },
-  pous:       { s: [0, .04, -.15], e: [0, -.01, .18], tilt: 60, dur: .3 },
-  morte:      { s: [0, .03, -.15], e: [0, 0, .15], tilt: 45, dur: .3 },
-};
-const DEG = Math.PI / 180;
-function animRacket(rk, stroke, spec, rest, restRY, fwd, c) {
-  let pos = rest.clone(), ry = restRY, tilt = 0, faceA = true;
-  if (stroke && spec) {
-    faceA = stroke.faceA;
-    const faceRY = fwd > 0 ? (faceA ? 0 : Math.PI) : (faceA ? Math.PI : 0);
-    const C = stroke.contact, tc = stroke.tc, prep = 0.3;
-    const S = C.clone().add(V3(spec.s[0], spec.s[1], spec.s[2] * fwd));
-    const Ep = C.clone().add(V3(spec.e[0], spec.e[1], spec.e[2] * fwd));
-    if (c < tc - spec.dur - prep) { /* au repos */ }
-    else if (c < tc - spec.dur) { const k = sm((c - (tc - spec.dur - prep)) / prep); pos.lerp(S, k); ry = restRY + (faceRY - restRY) * k; tilt = spec.tilt * k; }
-    else if (c < tc) { pos = S.lerp(C, sm((c - (tc - spec.dur)) / spec.dur)); ry = faceRY; tilt = spec.tilt; }
-    else if (c < tc + 0.3) { pos = C.clone().lerp(Ep, sm((c - tc) / 0.3)); ry = faceRY; tilt = spec.tilt; }
-    else if (c < tc + 0.8) { const k = sm((c - tc - 0.3) / 0.5); pos = Ep.lerp(rest, k); ry = faceRY + (restRY - faceRY) * k; tilt = spec.tilt * (1 - k); }
-  }
-  rk.position.copy(pos);
-  rk.rotation.y = ry;
-  rk.rotation.x = (faceA ? -1 : 1) * tilt * DEG;
+/* Orientation de la raquette : la face qui frappe regarde dans la direction n, manche vers le bas */
+const _m = new THREE.Matrix4(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3();
+function faceQuat(n, faceA) {
+  _z.set(n[0], n[1], n[2]).normalize(); if (!faceA) _z.negate();
+  _y.set(0, 1, 0).addScaledVector(_z, -_z.y);
+  if (_y.lengthSq() < 1e-6) _y.set(0, 0, 1);
+  _y.normalize(); _x.crossVectors(_y, _z).normalize(); _y.crossVectors(_z, _x);
+  _m.makeBasis(_x, _y, _z);
+  return new THREE.Quaternion().setFromRotationMatrix(_m);
+}
+const OPP_REST_Q = faceQuat([1, 0, 0], true), ME_REST_Q = faceQuat([0, 0, -1], true);
+
+/* Geste : armé → contact → accompagnement, dans la direction réelle de la raquette */
+function makeStroke(tc, ballP, n, V, faceA) {
+  const sp = Math.hypot(V[0], V[1], V[2]);
+  const dir = sp > 0.3 ? new THREE.Vector3(V[0] / sp, V[1] / sp, V[2] / sp) : new THREE.Vector3(n[0], n[1], n[2]);
+  const C = new THREE.Vector3(ballP[0] - n[0] * (RV + 0.008), ballP[1] - n[1] * (RV + 0.008) + (RV - PHYS.r), ballP[2] - n[2] * (RV + 0.008));
+  const sw = Math.max(0.08, Math.min(0.45, 0.05 + 0.045 * sp));
+  return { tc, C, q: faceQuat(n, faceA), dir, sw, fwd: Math.max(0.1, Math.min(0.28, 0.3 - 0.022 * sp)), faceA };
+}
+const _B = new THREE.Vector3(), _F = new THREE.Vector3(), _q = new THREE.Quaternion();
+function animRacket(rk, stroke, restP, restQ, c) {
+  if (!stroke) { rk.position.copy(restP); rk.quaternion.copy(restQ); return; }
+  const { tc, C, q, dir, sw, fwd } = stroke, prep = 0.32;
+  _B.copy(C).addScaledVector(dir, -sw); _F.copy(C).addScaledVector(dir, sw * 0.8);
+  if (c < tc - fwd - prep) { rk.position.copy(restP); rk.quaternion.copy(restQ); }
+  else if (c < tc - fwd) { const k = sm((c - (tc - fwd - prep)) / prep); rk.position.copy(restP).lerp(_B, k); _q.copy(restQ).slerp(q, k); rk.quaternion.copy(_q); }
+  else if (c < tc) { rk.position.copy(_B).lerp(C, sm((c - (tc - fwd)) / fwd)); rk.quaternion.copy(q); }
+  else if (c < tc + 0.25) { rk.position.copy(C).lerp(_F, sm((c - tc) / 0.25)); rk.quaternion.copy(q); }
+  else if (c < tc + 0.7) { const k = sm((c - tc - 0.25) / 0.45); rk.position.copy(_F).lerp(restP, k); _q.copy(q).slerp(restQ, k); rk.quaternion.copy(_q); }
+  else { rk.position.copy(restP); rk.quaternion.copy(restQ); }
 }
 
 /* ================= Caméra et taille ================= */
@@ -641,7 +828,7 @@ function resize() {
   const vh = h + ph;
   camera.aspect = w / vh;
   const hf = 46 * DEG;
-  let vf = 2 * Math.atan(Math.tan(hf / 2) / camera.aspect) / DEG;
+  const vf = 2 * Math.atan(Math.tan(hf / 2) / camera.aspect) / DEG;
   camera.fov = Math.max(42, Math.min(76, vf));
   camera.setViewOffset(w, vh, 0, ph * 0.85, w, h);
   camera.updateProjectionMatrix();
@@ -653,12 +840,54 @@ let clock = 0, frozen = false, paused = true, timeScale = .42;
 let P = PROF.pl, picotRed = true;
 let events = [];
 const at = (t, fn) => events.push({ t, fn });
-const ball = { traj: null, start: 0, s: 0, hold: "me" };
+const ball = { tr: null, start: 0, evI: 0, hold: "me" };
 let oppStroke = null, meStroke = null;
-const st = { score: [0, 0], phase: "menu", awaiting: false, choice: null, incoming: null, myTc: 0, rally: 0, log: [], lastMine: null, server: "me", info: null };
+const st = { score: [0, 0], phase: "menu", awaiting: false, choice: null, inc: null, myTc: 0, mySIn: null, myShot: null, rally: 0, log: [], lastMine: null, server: "me" };
 
-function oppZ() { return -(L + P.dist); }
-function launch(traj, start) { ball.traj = traj; ball.start = start; ball.s = traj.s; ball.hold = null; trailN = 0; }
+const oppZ = () => -(L + P.dist);
+function launch(tr, hitSound, strength) {
+  ball.tr = tr; ball.start = clock; ball.evI = 0; ball.hold = null; ball.handP = null;
+  if (hitSound) sound(hitSound, strength);
+}
+const tAt = (tr, i) => i * tr.dt;
+
+/* Classe un coup : dedans, filet, dehors, ou balle haute (side = signe du camp visé) */
+function classify(tr, side) {
+  const e = tr.events[0];
+  if (!e) return { res: "long" };
+  if (e.type === "net") return { res: "net" };
+  if (e.type === "table") {
+    if (Math.sign(e.z) !== side) return { res: "own" };
+    let apex = 0, netH = 0;
+    for (let i = 1; i <= e.i; i++) if (Math.sign(tr.P[i * 3 + 2]) === side && Math.sign(tr.P[(i - 1) * 3 + 2]) !== side) { netH = tr.P[i * 3 + 1] - TY; break; }
+    for (let i = e.i; i <= tr.n; i++) { if (Math.abs(tr.P[i * 3 + 2]) > L + 0.25) break; apex = Math.max(apex, tr.P[i * 3 + 1] - TY); }
+    return { res: apex > 0.42 || netH > 0.52 ? "haute" : "in", apex, netH };
+  }
+  if (e.type === "floor" && Math.abs(e.x) > W && side * e.z < L) return { res: "wide" };
+  return { res: "long" };
+}
+
+/* Ton coup : tu règles la raquette pour la rotation que tu as lue (fenêtre du coup choisi) */
+function computeMyShot(k, sIn, noise) {
+  const c = CH[k], cur = PHYS.topRps(sIn);
+  const assumed = Math.max(c.win[0], Math.min(c.win[1], cur));
+  const hyp = PHYS.clone(sIn); PHYS.setTop(hyp, assumed);
+  const shoot = (tgt, jitter) => {
+    const sol = PHYS.solveAuto(hyp, -1, c, RUBP.inv, tgt);
+    const hit = PHYS.hitWith(sIn, sol.d, sol.th + jitter, sol.st, RUBP.inv);
+    const tr = PHYS.fly(hit.s, 3);
+    return Object.assign({ k, assumed, cur, s: hit.s, n: hit.n, V: hit.V, tr }, classify(tr, -1));
+  };
+  const center = { x: 0, z: -(c.depth[0] + c.depth[1]) / 2 };
+  if (!noise) return shoot(center, 0);
+  const r = shoot({ x: rnd(-0.45, 0.45), z: -rnd(c.depth[0], c.depth[1]) }, gauss() * 0.25 * DEG);
+  // Bonne lecture : on n'entraîne pas l'exécution, la balle doit passer si c'est physiquement possible
+  if (r.res !== "in" && assumed === cur) { const r2 = shoot(center, 0); if (r2.res === "in") return r2; }
+  return r;
+}
+function worksList(sIn) {
+  return CH_ORDER.filter(k => computeMyShot(k, sIn, false).res === "in");
+}
 
 /* ================= Interface : coups ================= */
 function prompt(txt, cls) { const p = $("prompt"); p.textContent = txt; p.className = "prompt" + (cls ? " " + cls : ""); }
@@ -666,26 +895,26 @@ function showShots(enabled) {
   $("shots").classList.remove("serve");
   $("shots").innerHTML = CH_ORDER.map((k, i) =>
     `<button class="shot" id="shot-${k}" data-k="${k}"${enabled ? "" : " disabled"}><span>${esc(CH[k].l)} <span class="key">${i + 1}</span></span><small>${esc(CH[k].s)}</small></button>`).join("");
-  $("shots").querySelectorAll(".shot").forEach(b => b.addEventListener("click", () => choose(b.dataset.k)));
+  $("shots").querySelectorAll(".shot").forEach(b => b.addEventListener("click", () => { audioOn(); choose(b.dataset.k); }));
 }
 function setShotsEnabled(on) { $("shots").querySelectorAll(".shot").forEach(b => { b.disabled = !on; }); }
 function showServe() {
   $("shots").classList.add("serve");
   $("shots").innerHTML = Object.keys(SV).map((k, i) =>
     `<button class="shot" id="serve-${k}" data-k="${k}"><span>${esc(SV[k].l)} <span class="key">${i + 1}</span></span><small>${esc(SV[k].s)}</small></button>`).join("");
-  $("shots").querySelectorAll(".shot").forEach(b => b.addEventListener("click", () => myServe(b.dataset.k)));
+  $("shots").querySelectorAll(".shot").forEach(b => b.addEventListener("click", () => { audioOn(); myServe(b.dataset.k); }));
 }
 function updateHUD() {
   $("sMe").textContent = st.score[0]; $("sOpp").textContent = st.score[1];
   $("srvMe").classList.toggle("on", st.server === "me");
   $("srvOpp").classList.toggle("on", st.server === "opp");
-  $("oppName").innerHTML = `<b>${esc(P.name)}</b>${esc(RUB[P.rub].l)}`;
+  $("oppName").innerHTML = `<b>${esc(P.name)}</b>${esc(RUBL[P.rub])}`;
 }
 
 /* ================= Déroulement d'un point ================= */
 function newPoint() {
-  events = []; ball.traj = null; oppStroke = meStroke = null; frozen = false;
-  st.awaiting = false; st.choice = null; st.rally = 0; st.lastMine = null; st.incoming = null; st.phase = "play";
+  events = []; ball.tr = null; ball.handP = null; oppStroke = meStroke = null; frozen = false;
+  st.awaiting = false; st.choice = null; st.rally = 0; st.lastMine = null; st.inc = null; st.myShot = null; st.phase = "play";
   const tot = st.score[0] + st.score[1];
   st.server = (st.score[0] >= 10 && st.score[1] >= 10) ? (tot % 2 === 0 ? "me" : "opp") : (Math.floor(tot / 2) % 2 === 0 ? "me" : "opp");
   ball.hold = st.server;
@@ -695,48 +924,52 @@ function newPoint() {
   resize();
 }
 function myServe(k) {
-  if (st.phase !== "play" || ball.traj || meStroke) return;
+  if (st.phase !== "play" || ball.tr || meStroke) return;
   const sv = SV[k];
   showShots(false); prompt("");
-  const p0 = V3(rnd(-0.3, 0.3), 0.95, L + 0.12);
-  const tc = clock + 0.3;
-  meStroke = { tc, faceA: true, contact: p0.clone(), spec: MA[sv.anim] };
+  const p0 = [rnd(-0.25, 0.25), sv.y0, L + 0.13];
+  const s = PHYS.serve(p0, -1, sv.rps, sv.z1, sv.z2);
+  const tc = clock + 0.4;
+  ball.handP = p0;
+  const sp = Math.hypot(s.v[0], s.v[1], s.v[2]);
+  const n = [s.v[0] / sp, s.v[1] / sp, s.v[2] / sp];
+  meStroke = makeStroke(tc, p0, n, [s.v[0] * 0.6, s.v[1] * 0.6 + (sv.rps < 0 ? -1 : 1), s.v[2] * 0.6], true);
+  const tr = PHYS.fly(s, 3);
   at(tc, () => {
-    const own = V3(p0.x * 0.6, YB, rnd(0.55, 0.85));
-    const segA = toPoint(p0, own, 0.3, sv.sOut);
-    const traj = chain(segA, 0.3, makeShot(own, rnd(-0.5, 0.5), rnd(-1.0, -0.5), 4.2, sv.sOut));
-    launch(traj, clock);
-    st.lastMine = { cat: sv.cat, serve: true };
-    planOpp(traj, sv.cat);
+    launch(tr, "inv", 0.5);
+    st.lastMine = { k, serve: true, label: sv.my };
+    planOpp(tr, null);
   });
 }
 function oppServe() {
   const picot = Math.random() < 0.25;
-  const eff = picot ? pickW({ flot: .6, lcoupe: .4 }) : pickW({ coupe: .45, lcoupe: .15, flot: .25, llift: .15 });
-  const s = EFF[eff].v;
-  const p0 = V3(rnd(-0.3, 0.3), 0.95, -(L + 0.12));
-  opp.position.x = p0.x - 0.3;
+  const rps = picot ? pickW({ "0": .6, "-15": .4 }) : pickW({ "-55": .45, "-30": .15, "0": .25, "25": .15 });
+  const r = +rps, long = r > 0 || Math.random() < 0.2;
+  const p0 = [rnd(-0.25, 0.25), long ? 0.95 : 0.97, -(L + 0.13)];
+  const s = PHYS.serve(p0, 1, r, long ? 0.8 : 1.0, long ? 1.15 : rnd(0.45, 0.6));
+  const sp = Math.hypot(s.v[0], s.v[1], s.v[2]);
+  const n = [s.v[0] / sp, s.v[1] / sp, s.v[2] / sp];
   const tc = clock + 0.9;
-  oppStroke = { tc, faceA: picot, contact: p0.clone(), spec: GA.serve, gest: "serve" };
+  ball.hold = "opp"; ball.handP = p0;
+  oppStroke = makeStroke(tc, p0, n, [s.v[0] * 0.6, s.v[1] * 0.6 + (r < 0 ? -1 : 1), s.v[2] * 0.6], picot);
+  oppStroke.gest = "serve";
+  const tr = PHYS.fly(s, 3);
   at(tc, () => {
-    const own = V3(p0.x * 0.6, YB, -rnd(0.55, 0.85));
-    const segA = toPoint(p0, own, 0.3, s);
-    const traj = chain(segA, 0.3, makeShot(own, rnd(-0.45, 0.45), rnd(0.5, 0.95), 4.0, s));
-    launch(traj, clock);
-    st.incoming = {
-      face: picot ? "picot" : "bs", gest: "serve", eff, speed: "lente", serve: true,
-      why: picot
-        ? "Service avec la face picot : il ne peut presque pas donner d’effet. Balle flottante ou à peine coupée."
-        : "Service avec la face backside : l’effet est réel. Lis le geste (sous la balle = coupé) et la trajectoire.",
-    };
-    startDecision(traj);
+    launch(tr, picot ? P.rub : "inv", 0.5);
+    startDecision(tr, { serve: true, face: picot ? "picot" : "bs", gest: "serve", wOut: PHYS.topRps(s) });
   });
 }
-function startDecision(traj) {
-  st.awaiting = true; st.choice = null;
+function startDecision(tr, inc) {
+  const im = PHYS.contactIdx(tr, 1, Z_BACK, 0.08, true);
+  if (im < 0) { at(clock + 1.0, () => pointEnd("me", { type: "faute" })); return; }
+  st.awaiting = true; st.choice = null; st.myShot = null;
+  const sIn = PHYS.stateAt(tr, im);
+  st.mySIn = sIn;
+  inc.wMe = PHYS.topRps(sIn); inc.eff = effKey(inc.wMe); inc.kmh = kmh(sIn);
+  st.inc = inc;
+  st.myTc = ball.start + tAt(tr, im);
   showShots(true);
   prompt("Lis la balle…", "hot");
-  st.myTc = ball.start + contactT(traj, Z_ME);
   at(st.myTc, myContact);
 }
 function choose(k) {
@@ -744,101 +977,109 @@ function choose(k) {
   st.choice = k;
   const b = $("shot-" + k); if (b) b.classList.add("chosen");
   setShotsEnabled(false);
-  meStroke = { tc: st.myTc, faceA: true, contact: posAt(ball.traj, st.myTc - ball.start), spec: MA[k] };
+  st.myShot = computeMyShot(k, st.mySIn, true);
+  meStroke = makeStroke(st.myTc, st.mySIn.p, st.myShot.n, st.myShot.V, true);
   if (frozen) { frozen = false; myContact(); }
-}
-function judge(k, v, speed) {
-  const ch = CH[k];
-  if (ch.soft && speed === "rapide") return "dehors";
-  if (v > ch.ok[1]) return ch.soft ? "haute" : "dehors";
-  if (v < ch.ok[0]) return "filet";
-  return "ok";
 }
 function myContact() {
   if (st.phase !== "play" || !st.awaiting) return;
-  const inc = st.incoming, v = EFF[inc.eff].v;
+  const inc = st.inc;
   if (!st.choice) {
     if (LV[store.lvl].freeze) { frozen = true; prompt("Choisis ton coup", "hot"); return; }
     st.awaiting = false; setShotsEnabled(false);
-    st.log.push({ v, eff: inc.eff, face: inc.face, ok: false, type: "tard" });
+    st.log.push({ w: inc.wMe, ok: false, type: "tard" });
     prompt("Trop tard !", "bad");
     at(clock + 0.6, () => pointEnd("opp", { type: "tard" }));
     return;
   }
   st.awaiting = false;
-  const k = st.choice, ch = CH[k];
-  const res = judge(k, v, inc.speed);
-  st.log.push({ v, eff: inc.eff, face: inc.face, ok: res === "ok", type: res, choice: k });
-  const cp = posAt(ball.traj, clock - ball.start);
-  if (res === "ok") {
+  const sh = st.myShot, ok = sh.res === "in" || sh.res === "haute";
+  st.log.push({ w: inc.wMe, ok: sh.res === "in", type: sh.res, choice: sh.k });
+  launch(sh.tr, "inv", Math.hypot(sh.V[0], sh.V[1], sh.V[2]) / 6);
+  if (ok) {
     st.rally++;
-    prompt("Bien lu · " + EFF[inc.eff].l, "good");
-    const traj = makeShot(cp, rnd(-0.55, 0.55), rnd(-1.1, -0.5), ch.vH, ch.sOut);
-    launch(traj, clock);
-    st.lastMine = { cat: ch.cat, choice: k, attack: k === "plat" && inc.speed !== "rapide" && v >= 0 };
-    planOpp(traj, ch.cat);
-  } else if (res === "filet") {
-    prompt("Filet", "bad");
-    launch(toNet(cp, ch.sOut, -1), clock);
-    at(clock + 0.9, () => pointEnd("opp", { type: "filet" }));
-  } else if (res === "dehors") {
-    prompt("Dehors", "bad");
-    launch(toLong(cp, ch.sOut, -1), clock);
-    at(clock + 1.0, () => pointEnd("opp", { type: "dehors", soft: ch.soft }));
+    prompt(`${sh.res === "haute" ? "Balle haute…" : "Bien lu"} · ${EFF[inc.eff]} · ${Math.round(Math.abs(inc.wMe))} tr/s`, sh.res === "haute" ? "bad" : "good");
+    st.lastMine = { k: sh.k, label: CH[sh.k].my, attack: sh.k === "plat" && inc.wMe > -6 && inc.kmh < 26 };
+    planOpp(sh.tr, sh);
   } else {
-    prompt("Balle haute…", "bad");
-    const traj = makeShot(cp, rnd(-0.3, 0.3), -0.6, 2.3, -0.5);
-    launch(traj, clock);
-    const tc = clock + contactT(traj, -(L + 0.3));
-    const c2 = posAt(traj, tc - clock);
-    oppStroke = { tc, faceA: false, contact: c2, spec: GA.punch, gest: "punch" };
-    at(tc, () => {
-      prompt("Il smashe", "bad");
-      launch(makeShot(c2, rnd(-0.5, 0.5), rnd(0.8, 1.1), 12, 1), clock);
-      at(clock + 0.7, () => pointEnd("opp", { type: "haute" }));
-    });
+    prompt({ net: "Filet", own: "Filet", long: "Dehors", wide: "Dehors" }[sh.res] || "Faute", "bad");
+    at(clock + 1.0, () => pointEnd("opp", { type: sh.res }));
   }
 }
 function missProb() {
-  let p = 0.07 + 0.015 * st.rally;
+  let p = 0.06 + 0.015 * st.rally;
   const lm = st.lastMine;
   if (lm) {
     if (lm.serve) p = 0.05;
-    else if (lm.attack) p = 0.45;
-    else if (lm.choice === "plat") p += 0.1;
-    else if (lm.choice === "tresouvert" || lm.choice === "ouvert") p += 0.04;
+    else if (lm.attack) p = 0.42;
+    else if (lm.k === "plat") p += 0.08;
+    else if (lm.k === "tresouvert" || lm.k === "ouvert") p += 0.04;
   }
   return Math.min(p, 0.6);
 }
-function oppDecide(cat) {
+/* Réponse de l'adversaire : face, geste, puis visée physique avec son revêtement */
+function oppRespond(sh) {
+  const wHis = PHYS.topRps(sh), top = wHis > 8;
   const usePicot = Math.random() < P.picot;
-  const top = CATSPIN[cat] === "top";
-  let gest = pickW(usePicot ? (top ? P.pTop : P.pLow) : (top ? P.bTop : P.bLow));
-  if (usePicot) {
-    let row = SC.find(r => r.cat === cat && r.rub === P.rub && r.gest === gest);
-    if (!row) { gest = top ? "bloc" : "pous"; row = SC.find(r => r.cat === cat && r.rub === P.rub && r.gest === gest); }
-    return { face: "picot", gest, eff: row.eff, speed: row.speed, why: row.why, err: row.err, cat };
+  const rubKey = usePicot ? P.rub : "inv";
+  const first = pickW(usePicot ? (top ? P.pTop : P.pLow) : (top ? P.bTop : P.bLow));
+  const order = [first].concat((top ? ["bloc", "punch", "coupe", "pous"] : ["pous", "punch", "coupe", "bloc"]).filter(g => g !== first));
+  for (const gest of order) {
+    const og = OG[gest], st0 = usePicot ? og.picot : og.bs;
+    const tgt = { x: rnd(-0.5, 0.5), z: rnd(og.depth[0], og.depth[1]) };
+    const sol = PHYS.solveAuto(sh, 1, st0, RUBP[rubKey], tgt);
+    if (sol.ok) return { face: usePicot ? "picot" : "bs", rubKey, gest, wHis, sol };
   }
-  const b = bsReturn(cat, gest);
-  return { face: "bs", gest, eff: b.eff, speed: b.speed, why: BSWHY[gest], cat };
+  return null;
 }
-function planOpp(traj, cat) {
-  const tc = ball.start + contactT(traj, oppZ());
-  const cp = posAt(traj, tc - ball.start);
-  const miss = Math.random() < missProb();
-  const dec = oppDecide(cat);
-  oppStroke = { tc, faceA: dec.face === "picot", contact: cp, spec: GA[dec.gest], gest: dec.gest };
+function planOpp(tr, myShot) {
+  const io = PHYS.contactIdx(tr, -1, oppZ(), P.yLow, P.early);
+  if (io < 0) { at(clock + 1.0, () => pointEnd("opp", { type: "long" })); return; }
+  const tc = ball.start + tAt(tr, io), sh = PHYS.stateAt(tr, io);
+  // Balle haute : il smashe
+  if (myShot && myShot.res === "haute" && Math.random() < 0.85) {
+    const sol = PHYS.solveAuto(sh, 1, SMASH, RUBP.inv, { x: rnd(-0.5, 0.5), z: 1.0 });
+    const hit = PHYS.hitWith(sh, sol.d, sol.th, sol.st, RUBP.inv);
+    oppStroke = makeStroke(tc, sh.p, hit.n, hit.V, false);
+    oppStroke.gest = "punch";
+    const tr2 = PHYS.fly(hit.s, 3);
+    at(tc, () => {
+      launch(tr2, "inv", 1); prompt("Il smashe", "bad");
+      at(clock + 0.8, () => pointEnd("opp", { type: "haute", apex: myShot.apex }));
+    });
+    return;
+  }
+  let resp = oppRespond(sh);
+  const miss = !resp || Math.random() < missProb();
+  if (!resp) resp = { face: "picot", rubKey: P.rub, gest: "bloc", wHis: PHYS.topRps(sh), sol: PHYS.solveAuto(sh, 1, OG.bloc.picot, RUBP[P.rub], { x: 0, z: 1 }) };
+  let th = resp.sol.th, hit, tr2;
+  const sol = resp.sol;
+  if (miss) {
+    const sgn = Math.random() < 0.5 ? -1 : 1;
+    for (let k = 0; k < 6; k++) {
+      th = sol.th + sgn * (10 + 4 * k) * DEG;
+      hit = PHYS.hitWith(sh, sol.d, th, sol.st, RUBP[resp.rubKey]);
+      tr2 = PHYS.fly(hit.s, 3);
+      if (classify(tr2, 1).res !== "in") break;
+    }
+    if (classify(tr2, 1).res === "in") { th = sol.th - 35 * DEG; hit = PHYS.hitWith(sh, sol.d, th, sol.st, RUBP[resp.rubKey]); tr2 = PHYS.fly(hit.s, 3); }
+  } else {
+    th += gauss() * 0.3 * DEG;
+    hit = PHYS.hitWith(sh, sol.d, th, sol.st, RUBP[resp.rubKey]);
+    tr2 = PHYS.fly(hit.s, 3);
+    if (classify(tr2, 1).res !== "in") { hit = PHYS.hitWith(sh, sol.d, sol.th, sol.st, RUBP[resp.rubKey]); tr2 = PHYS.fly(hit.s, 3); }
+  }
+  const faceA = resp.face === "picot";
+  oppStroke = makeStroke(tc, sh.p, hit.n, hit.V, faceA);
+  oppStroke.gest = resp.gest;
+  const inc = { face: resp.face, gest: resp.gest, wHis: resp.wHis, wOut: PHYS.topRps(hit.s), outKmh: kmh(hit.s), prev: st.lastMine };
   at(tc, () => {
+    launch(tr2, resp.rubKey, Math.hypot(hit.V[0], hit.V[1], hit.V[2]) / 5 + 0.3);
     if (miss) {
-      const s = EFF[dec.eff].v;
-      launch(Math.random() < 0.6 ? toNet(cp, s, 1) : toLong(cp, s, 1), clock);
       at(clock + 1.0, () => pointEnd("me", { type: "faute", attack: st.lastMine && st.lastMine.attack }));
       return;
     }
-    const traj2 = makeShot(cp, rnd(-0.55, 0.55), rnd(0.45, 1.05), VH[dec.speed], EFF[dec.eff].v);
-    launch(traj2, clock);
-    st.incoming = dec;
-    startDecision(traj2);
+    startDecision(tr2, inc);
   });
 }
 
@@ -846,33 +1087,84 @@ function planOpp(traj, cat) {
 function faceLabel(face) {
   const picotCol = picotRed ? "rouge" : "noire", bsCol = picotRed ? "noire" : "rouge";
   return face === "picot"
-    ? { t: `Face ${RUB[P.rub].l.toLowerCase()} · ${picotCol}`, cls: picotRed ? "red" : "black" }
+    ? { t: `Face ${RUBN[P.rub]} · ${picotCol}`, cls: picotRed ? "red" : "black" }
     : { t: `Face backside · ${bsCol}`, cls: picotRed ? "black" : "red" };
+}
+function explainIncoming(inc) {
+  const out = [];
+  const rub = RUBN[P.rub];
+  if (inc.serve) {
+    out.push(inc.face === "picot"
+      ? `Il sert avec sa face ${rub} : elle ne peut presque pas donner d’effet. Départ : ${spinTxt(inc.wOut)}.`
+      : `Il sert avec sa face backside : l’effet est réel. Départ : ${spinTxt(inc.wOut)}.`);
+  } else if (inc.face === "picot") {
+    const a = Math.abs(inc.wHis), from = inc.prev ? inc.prev.label : "ta balle";
+    if (a < 8) out.push(`${cap(from)} arrivait chez lui presque sans effet. Son ${rub} ne crée presque rien : elle repart avec ${spinTxt(inc.wOut)}.`);
+    else if (inc.wHis * inc.wOut < 0) {
+      const pct = Math.round(100 * Math.abs(inc.wOut) / a);
+      out.push(`${cap(from)} arrivait chez lui avec ${spinTxt(inc.wHis)}. Son ${rub} glisse sur la balle : elle garde ${pct} % de sa rotation, dans le même sens. Pour toi, elle repart en ${inc.wOut < 0 ? "coupé" : "lift"} : ${Math.round(Math.abs(inc.wOut))} tours/s.`);
+    } else out.push(`${cap(from)} arrivait chez lui avec ${spinTxt(inc.wHis)}. Son ${rub} accroche un peu et casse l’effet : elle repart avec ${spinTxt(inc.wOut)}.`);
+  } else {
+    out.push(`Il a joué avec sa face backside : elle accroche la balle, l’effet vient de son geste (${GESTL[inc.gest]}). Elle repart avec ${spinTxt(inc.wOut)}.`);
+  }
+  const d = inc.wMe - inc.wOut;
+  if (Math.abs(d) >= 4) {
+    out.push(inc.wOut < -4 && inc.wMe > 2
+      ? `Au rebond sur ta table, le frottement a mangé tout le coupé et lui a même donné du lift : ${spinTxt(inc.wMe)} quand tu frappes.`
+      : inc.wOut < -4
+        ? `Au rebond sur ta table, le frottement a mangé une partie du coupé : ${spinTxt(inc.wMe)} quand tu frappes.`
+        : `Au rebond sur ta table, le frottement lui a donné du lift : ${spinTxt(inc.wMe)} quand tu frappes.`);
+  }
+  return out;
+}
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+function classicTip(inc, type) {
+  if (inc.face === "bs") return "Face backside : l’effet est normal, c’est son geste qui compte. Face picot : c’est ton coup d’avant qui compte.";
+  const prev = inc.prev && inc.prev.k;
+  if ((type === "net" || type === "own") && inc.wMe < -5 && (prev === "tresouvert" || prev === "ouvert" || prev === "plat"))
+    return "Enchaîner comme contre un backside : ton top dans son picot revient coupé. Il faut ouvrir et remonter la balle.";
+  if ((type === "long" || type === "haute") && inc.wMe > 0 && (prev === "pous" || prev === "morte" || (inc.prev && /service/.test(inc.prev.label))))
+    return "Remettre une poussette sur la balle qui remonte : ta coupée revient en lift, il faut l’attaquer raquette fermée.";
+  if ((type === "net" || type === "own") && Math.abs(inc.wMe) < 8) return "Une balle sans effet tombe plus qu’une balle liftée : raquette plus verticale, pousse vers l’avant.";
+  if (type === "long" && inc.wMe < 0) return "Son geste exagère l’effet : la balle était moins coupée qu’elle n’en avait l’air. Ouvre moins.";
+  return "";
 }
 function pointEnd(winner, info) {
   if (st.phase !== "play") return;
   st.phase = "sheet"; events = []; st.awaiting = false; frozen = false;
   st.score[winner === "me" ? 0 : 1]++;
   updateHUD(); setShotsEnabled(false);
-  const inc = st.incoming;
+  const inc = st.inc, sh = st.myShot;
   const reasons = {
-    faute: "Il fait la faute." + (info.attack ? " Ta frappe sur sa balle sans effet l’a mis sous pression : c’est exactement le plan contre un picot." : ""),
-    filet: "Filet : ta raquette était trop fermée pour cette balle.",
-    dehors: info.soft ? "Dehors : une poussette sur une balle rapide ou liftée ne se contrôle pas." : "Dehors : ta raquette était trop ouverte pour cette balle.",
-    haute: "Ta remise sur une balle qui remonte est partie haute : il smashe.",
+    faute: "Il fait la faute." + (info.attack ? " Ta frappe sur sa balle peu tournée l’a mis sous pression : c’est le plan contre un picot." : ""),
+    net: "Filet.", own: "Filet : la balle est descendue dans ton camp.",
+    long: "Dehors : la balle est partie trop long.", wide: "Dehors : la balle est sortie sur le côté.",
+    haute: `Ta balle passe mais elle monte trop (rebond à ${Math.round(100 * (info.apex || 0.45))} cm) : il smashe.`,
     tard: "Trop tard. Décide dès que tu as vu la face au contact et le geste.",
   };
   let html = `<p class="verdict ${winner === "me" ? "ok" : "ko"}">${winner === "me" ? "Point pour toi" : "Point pour lui"}</p>
-    <p class="reason">${esc(reasons[info.type])}</p>`;
-  if (winner === "opp" && inc) {
-    const v = EFF[inc.eff].v, fl = faceLabel(inc.face);
-    const head = inc.serve ? "Son service" : `${CATL[inc.cat] || "Ta balle"}, puis ${GESTL[inc.gest]}`;
+    <p class="reason">${esc(reasons[info.type] || "")}</p>`;
+  if (winner === "opp" && inc && inc.wMe != null) {
+    const fl = faceLabel(inc.face);
+    const head = inc.serve ? "Son service" : `${cap(inc.prev ? inc.prev.label : "ta balle")}, puis ${GESTL[inc.gest]}`;
+    const lines = explainIncoming(inc);
+    let mine = "";
+    if (sh && info.type !== "tard") {
+      const c = CH[sh.k], d = Math.round(inc.wMe - sh.assumed);
+      if (Math.abs(d) < 3) mine = `Ta lecture était bonne, mais cette balle-là ne passait pas avec « ${c.l} ».`;
+      else if (info.type === "net" || info.type === "own") mine = `Avec « ${c.l} », tu règles ta raquette pour une balle ${c.read}. Elle avait ${Math.abs(d)} tours/s de coupé de plus que ça : elle est descendue.`;
+      else if (info.type === "long" || info.type === "wide") mine = `Avec « ${c.l} », tu règles ta raquette pour une balle ${c.read}. Elle avait ${Math.abs(d)} tours/s de lift de plus que ça : elle est montée.`;
+      else if (info.type === "haute") mine = `Avec « ${c.l} », tu règles ta raquette pour une balle ${c.read}. Elle était plus liftée : ta balle est partie haute.`;
+    }
+    const works = st.mySIn ? worksList(st.mySIn) : [];
+    const tip = classicTip(inc, info.type);
     html += `<div class="read">
       <span class="eyebrow">La balle qui arrivait · ${esc(head)}</span>
-      <div class="pills"><span class="pill eff">${esc(EFF[inc.eff].l)}</span><span class="pill">${esc(SPEED[inc.speed])}</span><span class="pill ${fl.cls}">${esc(fl.t)}</span></div>
-      <p>${esc(inc.why)}</p>
-      <p class="best-line">Il fallait : ${esc(BEST[String(v)])}</p>
-      ${inc.face === "picot" && inc.err ? `<p class="trap"><b>Erreur classique :</b> ${esc(inc.err)}</p>` : ""}
+      <div class="pills"><span class="pill eff">${esc(EFF[inc.eff])}</span><span class="pill">${Math.round(Math.abs(inc.wMe))} tr/s</span><span class="pill">${inc.kmh} km/h</span><span class="pill ${fl.cls}">${esc(fl.t)}</span></div>
+      ${lines.map(t => `<p>${esc(t)}</p>`).join("")}
+      ${mine ? `<p>${esc(mine)}</p>` : ""}
+      <p class="best-line">${works.length ? "Ce qui passait : " + esc(works.map(k => CH[k].l).join(", ")) : "Balle très difficile : aucun coup ne passait proprement."}</p>
+      ${tip ? `<p class="trap"><b>Erreur classique :</b> ${esc(tip)}</p>` : ""}
     </div>`;
   }
   const over = isOver();
@@ -896,25 +1188,25 @@ function endMatch() {
   if (prev == null || pct > prev) store.best[store.prof] = pct;
   save();
   const groups = [
-    { l: "Balles coupées", f: d => d.v < 0 },
-    { l: "Balles sans effet", f: d => d.v === 0 },
-    { l: "Balles liftées", f: d => d.v > 0 },
+    { l: "Balles coupées", f: d => d.w <= -6 },
+    { l: "Balles sans effet", f: d => d.w > -6 && d.w < 6 },
+    { l: "Balles liftées", f: d => d.w >= 6 },
   ].map(g => { const all = dec.filter(g.f); return { l: g.l, n: all.length, ok: all.filter(d => d.ok).length }; }).filter(g => g.n);
   const tips = [];
-  const filetCut = dec.filter(d => d.type === "filet" && d.v < 0).length;
-  const openFlat = dec.filter(d => (d.type === "dehors" || d.type === "haute") && d.v >= 0).length;
-  const tooOpen = dec.filter(d => d.type === "dehors" && d.v < 0).length;
-  const filetFlat = dec.filter(d => d.type === "filet" && d.v >= 0).length;
+  const filetCut = dec.filter(d => (d.type === "net" || d.type === "own") && d.w <= -6).length;
+  const openFlat = dec.filter(d => (d.type === "long" || d.type === "haute") && d.w > -6).length;
+  const tooOpen = dec.filter(d => d.type === "long" && d.w <= -6).length;
+  const filetFlat = dec.filter(d => (d.type === "net" || d.type === "own") && d.w > -6).length;
   const late = dec.filter(d => d.type === "tard").length;
   if (filetCut) tips.push(`${filetCut} fois au filet sur une balle coupée. Après ton top dans son picot, la balle revient coupée : ouvre et relance vers le haut.`);
   if (openFlat) tips.push(`${openFlat} fois trop ouvert (ou en poussette) sur une balle sans effet ou liftée. Après ta poussette dans le picot, la balle remonte : attaque-la, raquette plus fermée.`);
-  if (tooOpen) tips.push(`${tooOpen} fois trop ouvert sur une balle peu coupée. Son geste exagère l’effet : ouvre moins.`);
-  if (filetFlat) tips.push(`${filetFlat} fois au filet sur une balle sans effet. Une balle flottante tombe : raquette plus verticale, pousse vers l’avant.`);
+  if (tooOpen) tips.push(`${tooOpen} fois trop ouvert sur une balle moins coupée que prévu. Son geste exagère l’effet : ouvre moins.`);
+  if (filetFlat) tips.push(`${filetFlat} fois au filet sur une balle sans effet ou liftée. Raquette plus verticale, ou plus fermée si elle est liftée.`);
   if (late) tips.push(`${late} balle${late > 1 ? "s" : ""} jouée${late > 1 ? "s" : ""} trop tard. Décide dès le contact, en regardant la face de sa raquette.`);
   if (!tips.length) tips.push("Lecture propre. Passe au niveau supérieur ou change d’adversaire.");
   tips.push("Ton arme contre le picot : la balle sans effet (balle morte, service sans effet). Il ne peut rien créer, et tu frappes le retour.");
   $("endBody").innerHTML = `
-    <span class="eyebrow">${esc(P.name)} · ${esc(RUB[P.rub].l)} · ${esc(LV[store.lvl].l)}</span>
+    <span class="eyebrow">${esc(P.name)} · ${esc(RUBL[P.rub])} · ${esc(LV[store.lvl].l)}</span>
     <p class="verdict ${won ? "ok" : "ko"}">${won ? "Victoire" : "Défaite"}</p>
     <div class="big-score">${a} – ${b}</div>
     <div class="stats">
@@ -943,14 +1235,17 @@ function renderMenu() {
     `<button class="card" id="lvl-${k}" data-k="${k}" aria-pressed="${store.lvl === k}"><b>${esc(LV[k].l)}</b><small>${esc(LV[k].s)}</small></button>`).join("");
   $("lvlCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => { store.lvl = c.dataset.k; save(); renderMenu(); }));
   $("aide").checked = !!store.aide;
+  $("son").checked = !!store.sound;
 }
-$("aide").addEventListener("change", e => { store.aide = e.target.checked; save(); });
+$("aide").addEventListener("change", e => { store.aide = e.target.checked; save(); applyAide(); });
+$("son").addEventListener("change", e => { store.sound = e.target.checked; save(); if (store.sound) audioOn(); });
+function applyAide() { ballMat.map = store.aide ? texTwo : texPlain; ballMat.needsUpdate = true; }
 function previewOpp() {
   P = PROF[store.prof]; shirtMat.color.setHex(P.shirt);
   opp.position.set(0, 0, oppZ() - 0.3); updateHUD();
 }
 function openMenu() {
-  paused = true; st.phase = "menu"; ball.traj = null; ball.hold = "me"; oppStroke = meStroke = null; events = [];
+  paused = true; st.phase = "menu"; ball.tr = null; ball.handP = null; ball.hold = "me"; oppStroke = meStroke = null; events = [];
   renderMenu(); previewOpp(); showShots(false); prompt("Choisis ton adversaire");
   $("menu").hidden = false;
 }
@@ -966,21 +1261,19 @@ function racketSVG(color, label, sub) {
 }
 function openCheck() {
   P = PROF[store.prof];
-  newMatchPrep();
-  const pc = picotRed ? "rouge" : "noire", bc = picotRed ? "noire" : "rouge";
-  $("racketView").innerHTML = racketSVG(pc, "picot", RUB[P.rub].l) + racketSVG(bc, "bs", "Backside classique");
-  $("checkGold").textContent = P.gold;
-  $("check").hidden = false;
-}
-function newMatchPrep() {
   picotRed = Math.random() < 0.5;
   oppRk.userData.fa.material.color.setHex(picotRed ? RED : BLACK);
   oppRk.userData.fb.material.color.setHex(picotRed ? BLACK : RED);
   shirtMat.color.setHex(P.shirt);
   opp.position.set(0, 0, oppZ() - 0.3);
+  const pc = picotRed ? "rouge" : "noire", bc = picotRed ? "noire" : "rouge";
+  $("racketView").innerHTML = racketSVG(pc, "picot", RUBL[P.rub]) + racketSVG(bc, "bs", "Backside classique");
+  $("checkGold").textContent = P.gold;
+  $("check").hidden = false;
 }
-$("playBtn").addEventListener("click", () => { $("menu").hidden = true; openCheck(); });
+$("playBtn").addEventListener("click", () => { audioOn(); $("menu").hidden = true; openCheck(); });
 $("goBtn").addEventListener("click", () => {
+  audioOn();
   $("check").hidden = true;
   timeScale = LV[store.lvl].ts;
   st.score = [0, 0]; st.log = [];
@@ -996,13 +1289,20 @@ $("quitBtn").addEventListener("click", () => { $("pause").hidden = true; openMen
 window.addEventListener("keydown", e => {
   const n = parseInt(e.key, 10);
   if (!(n >= 1)) return;
+  audioOn();
   if (st.phase === "play" && st.awaiting && CH_ORDER[n - 1]) choose(CH_ORDER[n - 1]);
-  else if (st.phase === "play" && st.server === "me" && !ball.traj && !meStroke) { const k = Object.keys(SV)[n - 1]; if (k) myServe(k); }
+  else if (st.phase === "play" && st.server === "me" && !ball.tr && !meStroke) { const k = Object.keys(SV)[n - 1]; if (k) myServe(k); }
 });
 
 /* ================= Boucle ================= */
 const tagEl = $("faceTag");
-const tmpV = V3(0, 0, 0);
+const tmpV = new THREE.Vector3(), bp = new THREE.Vector3(), _qs = new THREE.Quaternion(), _ax = new THREE.Vector3();
+const smp = { p: [0, 0, 0], w: [0, 0, 0] };
+function sample(tr, t) {
+  const f = Math.max(0, Math.min(tr.n, t / tr.dt)), i = Math.floor(f), j = Math.min(tr.n, i + 1), a = f - i;
+  for (let k = 0; k < 3; k++) { smp.p[k] = tr.P[i * 3 + k] * (1 - a) + tr.P[j * 3 + k] * a; smp.w[k] = tr.W[i * 3 + k]; }
+  return smp;
+}
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -1011,19 +1311,25 @@ function frame(now) {
   for (;;) { const i = events.findIndex(e => e.t <= clock); if (i < 0) break; events.splice(i, 1)[0].fn(); }
 
   // Balle
-  let bp;
-  if (ball.traj) {
-    const t = clock - ball.start;
-    bp = posAt(ball.traj, t);
-    if (ball.s === 0 && !frozen) { bp.x += Math.sin(clock * 13) * 0.012; bp.y += Math.cos(clock * 17) * 0.006; }
-    const dir = Math.sign(velAt(ball.traj, t)) || 1;
-    if (ball.s === 0) ballM.rotation.x = Math.sin(clock * 9) * 0.4;
-    else ballM.rotation.x += sdt * ball.s * 16 * dir;
+  if (ball.tr) {
+    const t = clock - ball.start, tr = ball.tr;
+    sample(tr, t);
+    bp.set(smp.p[0], smp.p[1] + (RV - PHYS.r), smp.p[2]);
+    const wn = Math.hypot(smp.w[0], smp.w[1], smp.w[2]);
+    if (wn > 1e-3 && sdt > 0) {
+      _ax.set(smp.w[0] / wn, smp.w[1] / wn, smp.w[2] / wn);
+      _qs.setFromAxisAngle(_ax, wn * 0.12 * sdt);       // rotation affichée ralentie (×0,12) pour rester lisible
+      ballM.quaternion.premultiply(_qs);
+    }
+    while (ball.evI < tr.events.length && tr.events[ball.evI].t <= t) {
+      const e = tr.events[ball.evI++];
+      sound(e.type, e.sp / 5);
+    }
   } else {
     const bob = Math.abs(Math.sin(now / 380)) * 0.12;
-    const hand = ball.hold === "opp" ? oppStroke : meStroke;
-    bp = hand ? hand.contact.clone().add(V3(0, bob, 0))
-      : ball.hold === "opp" ? V3(opp.position.x + 0.3, 0.95 + bob, opp.position.z + 0.3) : V3(0.15, 0.95 + bob, L + 0.15);
+    if (ball.handP) bp.set(ball.handP[0], ball.handP[1] + (RV - PHYS.r) + bob * 0.25, ball.handP[2]);
+    else if (ball.hold === "opp") bp.set(opp.position.x + 0.3, 0.95 + bob, opp.position.z + 0.3);
+    else bp.set(0.15, 0.95 + bob, L + 0.15);
   }
   ballM.position.copy(bp);
   const overTable = Math.abs(bp.x) < W && Math.abs(bp.z) < L;
@@ -1032,37 +1338,39 @@ function frame(now) {
   shadow.material.opacity = Math.max(0.05, 0.4 - hgt * 0.5);
   shadow.scale.setScalar(1 + hgt * 0.8);
 
-  // Trace (aide)
-  trail.visible = !!store.aide && !!ball.traj;
-  if (trail.visible && sdt > 0) {
-    if (trailN < TRAIL) trailN++;
-    trailPos.copyWithin(3, 0, (TRAIL - 1) * 3);
-    trailPos[0] = bp.x; trailPos[1] = bp.y; trailPos[2] = bp.z;
-    if (trailN === 1) for (let i = 1; i < TRAIL; i++) { trailPos[i * 3] = bp.x; trailPos[i * 3 + 1] = bp.y; trailPos[i * 3 + 2] = bp.z; }
+  // Trace (aide) : les 0,3 dernières secondes de la trajectoire
+  trail.visible = !!store.aide && !!ball.tr;
+  if (trail.visible) {
+    const t = clock - ball.start;
+    for (let k = 0; k < TRAIL; k++) {
+      const s2 = sample(ball.tr, Math.max(0, t - k * 0.008));
+      trailPos[k * 3] = s2.p[0]; trailPos[k * 3 + 1] = s2.p[1] + (RV - PHYS.r); trailPos[k * 3 + 2] = s2.p[2];
+    }
     trailGeo.attributes.position.needsUpdate = true;
   }
 
   // Adversaire
-  const tx = oppStroke ? oppStroke.contact.x - 0.3 : 0;
-  const tz = oppStroke ? oppStroke.contact.z - 0.3 : oppZ() - 0.3;
+  const tx = oppStroke ? oppStroke.C.x - 0.3 : 0;
+  const tz = oppStroke && clock < oppStroke.tc + 0.8 ? Math.min(oppStroke.C.z - 0.35, -L - 0.25) : oppZ() - 0.3;
   opp.position.x += (tx - opp.position.x) * Math.min(1, dt * 4);
   opp.position.z += (tz - opp.position.z) * Math.min(1, dt * 3);
-  const oRest = V3(opp.position.x + 0.32, 1.0, opp.position.z + 0.3);
-  animRacket(oppRk, oppStroke, oppStroke && oppStroke.spec, oRest, Math.PI / 2, 1, clock);
-  setArm(V3(opp.position.x + 0.2, 1.48, opp.position.z + 0.02), oppRk.position.clone().add(V3(0, -0.12, 0)));
+  const oRest = tmpV.set(opp.position.x + 0.32, 1.0, opp.position.z + 0.3).clone();
+  animRacket(oppRk, oppStroke, oRest, OPP_REST_Q, clock);
+  _x.set(0, -0.13, 0).applyQuaternion(oppRk.quaternion);
+  setArm(new THREE.Vector3(opp.position.x + 0.2, 1.48, opp.position.z + 0.02), oppRk.position.clone().add(_x));
 
   // Toi
-  animRacket(meRk, meStroke, meStroke && meStroke.spec, V3(0.32, 0.9, Z_ME + 0.25), Math.PI, -1, clock);
+  animRacket(meRk, meStroke, tmpV.set(0.32, 0.9, Z_ME + 0.25).clone(), ME_REST_Q, clock);
 
   // Étiquette de face au contact
   if (store.aide && oppStroke && oppStroke.gest && Math.abs(clock - oppStroke.tc) < 0.45 && st.phase === "play") {
-    tmpV.copy(oppRk.position).add(V3(0, 0.14, 0)).project(camera);
+    tmpV.copy(oppRk.position).add(new THREE.Vector3(0, 0.14, 0)).project(camera);
     const r = renderer.domElement.getBoundingClientRect();
     tagEl.style.left = ((tmpV.x + 1) / 2 * r.width) + "px";
     tagEl.style.top = ((1 - tmpV.y) / 2 * r.height) + "px";
-    const fl = oppStroke.faceA;
-    tagEl.textContent = fl ? RUB[P.rub].l : "Backside";
-    tagEl.className = "face-tag " + ((fl === picotRed) ? "red" : "black");
+    const fa = oppStroke.faceA;
+    tagEl.textContent = fa ? RUBL[P.rub] : "Backside";
+    tagEl.className = "face-tag " + ((fa === picotRed) ? "red" : "black");
     tagEl.hidden = false;
   } else tagEl.hidden = true;
 
@@ -1074,9 +1382,10 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-renderMenu(); previewOpp(); showShots(false); resize();
+renderMenu(); applyAide(); previewOpp(); showShots(false); resize();
 requestAnimationFrame(frame);
 })();
+
 </script>
 <!-- APP:END -->
 </body>
