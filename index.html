@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c5491">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lire le picot">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<!-- APP:START -->
+<title>Lire le picot</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Big+Shoulders+Display:wght@700;800&display=swap">
+<style>
+/* Layout : appli téléphone en une colonne, bandeau bleu « table » texturé de picots, barre d'onglets en bas */
+:root {
+  --bg: #eef3f8;
+  --surface: #ffffff;
+  --ink: #0e2033;
+  --muted: #566a7f;
+  --line: #d3dde8;
+  --chip: #e3ebf4;
+  --sel: #1c5491;
+  --table: #1c5491;
+  --table-ink: #ffffff;
+  --pip: rgba(255, 255, 255, .16);
+  --rubber: #cf3229;
+  --good: #1b7a45;
+  --good-bg: #e2f3e9;
+  --bad: #b4441a;
+  --bad-bg: #fbe8de;
+  --ball: #fbfaf5;
+  --f-display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r: 14px;
+  --tabs-h: 64px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #081624; --surface: #10233a; --ink: #e6eef6; --muted: #98aabd; --line: #22405f; --chip: #18314d; --sel: #6aa6ea;
+    --table: #174a80; --table-ink: #ffffff; --pip: rgba(255, 255, 255, .10);
+    --rubber: #f2665f; --good: #52c88a; --good-bg: #113222; --bad: #f2925f; --bad-bg: #3b1e12; --ball: #f4f2ea;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #081624; --surface: #10233a; --ink: #e6eef6; --muted: #98aabd; --line: #22405f; --chip: #18314d; --sel: #6aa6ea;
+  --table: #174a80; --table-ink: #ffffff; --pip: rgba(255, 255, 255, .10);
+  --rubber: #f2665f; --good: #52c88a; --good-bg: #113222; --bad: #f2925f; --bad-bg: #3b1e12; --ball: #f4f2ea;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 var(--f-body);
+  -webkit-tap-highlight-color: transparent;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  z-index: 10; background: var(--table);
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--rubber); outline-offset: 2px; }
+
+/* Bandeau */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background-color: var(--table);
+  background-image: radial-gradient(circle, var(--pip) 1.6px, transparent 2px);
+  background-size: 9px 9px;
+  color: var(--table-ink);
+  border-bottom: 3px solid var(--table-ink);
+}
+.top-in {
+  max-width: 560px; margin: 0 auto;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.eyebrow { display: block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; opacity: .85; }
+.top h1 {
+  margin: 0; font: 800 34px/0.95 var(--f-display); letter-spacing: .01em; text-transform: uppercase;
+}
+.top h1 span { color: var(--table); background: var(--table-ink); padding: 0 6px; border-radius: 4px; }
+.hdr-score {
+  font: 700 13px/1.2 var(--f-body); text-align: right; font-variant-numeric: tabular-nums;
+  background: rgba(0, 0, 0, .22); padding: 6px 10px; border-radius: 999px; white-space: nowrap;
+}
+
+/* Contenu */
+.wrap {
+  max-width: 560px; margin: 0 auto;
+  padding-block: 18px calc(var(--tabs-h) + 28px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.view { display: flex; flex-direction: column; gap: 16px; }
+.lede { margin: 0; font-size: 17px; color: var(--ink); max-width: 60ch; }
+.h {
+  margin: 8px 0 -6px; font: 700 13px/1.2 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+.muted { color: var(--muted); }
+
+.btn {
+  appearance: none; border: 2px solid var(--line); background: var(--surface);
+  border-radius: 12px; padding: 13px 16px; font-weight: 700; font-size: 16px; cursor: pointer;
+  min-height: 50px; text-align: center;
+}
+.btn.primary { background: var(--table); border-color: var(--table); color: var(--table-ink); }
+.btn:active { transform: translateY(1px); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row > .btn { flex: 1 1 140px; }
+
+/* Puces de choix */
+.chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.chip {
+  appearance: none; border: 2px solid var(--line); background: var(--surface); border-radius: 12px;
+  padding: 10px 12px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.chip b { font-size: 15px; }
+.chip small { color: var(--muted); font-size: 12.5px; line-height: 1.3; }
+.chip[aria-pressed="true"] { border-color: var(--sel); background: var(--chip); box-shadow: inset 0 0 0 1px var(--sel); }
+.chip[disabled] { opacity: .38; cursor: not-allowed; }
+
+.switch {
+  display: flex; gap: 12px; align-items: center; background: var(--surface); border: 2px solid var(--line);
+  border-radius: 12px; padding: 12px 14px; cursor: pointer;
+}
+.switch input { width: 22px; height: 22px; accent-color: var(--table); flex: none; margin: 0; }
+.switch span { display: flex; flex-direction: column; }
+.switch small { color: var(--muted); }
+
+/* Statistiques */
+.stats { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+.stat { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: baseline; font-size: 14.5px; }
+.stat .meter { grid-column: 1 / -1; height: 8px; border-radius: 99px; background: var(--chip); overflow: hidden; }
+.stat .meter i { display: block; height: 100%; background: var(--table); border-radius: 99px; }
+.stat .val { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13.5px; }
+
+/* Partie */
+.progress { display: flex; justify-content: space-between; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--muted); }
+.bar { height: 6px; background: var(--chip); border-radius: 99px; overflow: hidden; margin-top: -10px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--table); transition: width .3s; }
+
+.rally { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.rally-row { padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.rally-row + .rally-row { border-top: 1px dashed var(--line); }
+.who { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.rally-row strong { font: 800 26px/1.05 var(--f-display); text-transform: uppercase; letter-spacing: .01em; }
+.rally-row small { color: var(--muted); font-size: 14px; }
+.rally-row.opp .who { color: var(--rubber); }
+.tag {
+  display: inline-block; font-size: 11px; letter-spacing: .06em; padding: 2px 7px; border-radius: 99px;
+  background: var(--rubber); color: var(--surface); font-weight: 700;
+}
+
+.timer { height: 5px; background: var(--chip); border-radius: 99px; overflow: hidden; }
+.timer i { display: block; height: 100%; background: var(--rubber); width: 100%; transform-origin: left; }
+
+.q { margin: 0; font: 700 18px/1.3 var(--f-body); }
+.step { display: flex; flex-direction: column; gap: 10px; }
+.opts { display: flex; flex-direction: column; gap: 8px; }
+.opt {
+  appearance: none; text-align: left; border: 2px solid var(--line); background: var(--surface);
+  border-radius: 12px; padding: 12px 14px; cursor: pointer; font-size: 16px; line-height: 1.35; min-height: 52px;
+  display: flex; gap: 10px; align-items: center;
+}
+.opt small { display: block; color: var(--muted); font-size: 13px; }
+.opt .k {
+  flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line);
+  display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--muted);
+}
+.opt.ok { border-color: var(--good); background: var(--good-bg); }
+.opt.ok .k { border-color: var(--good); background: var(--good); color: var(--surface); }
+.opt.ko { border-color: var(--bad); background: var(--bad-bg); }
+.opt.ko .k { border-color: var(--bad); background: var(--bad); color: var(--surface); }
+.opt[disabled] { cursor: default; }
+.opt[disabled]:not(.ok):not(.ko) { opacity: .55; }
+
+/* Retour et labo */
+.result {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 14px; display: flex; flex-direction: column; gap: 12px;
+}
+.verdict { font: 800 22px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+.verdict.ok { color: var(--good); }
+.verdict.ko { color: var(--bad); }
+.traj { width: 100%; height: auto; display: block; background: var(--bg); border-radius: 10px; cursor: pointer; }
+.traj .tbl { stroke: var(--table); stroke-width: 4; stroke-linecap: round; }
+.traj .net { stroke: var(--muted); stroke-width: 2; }
+.traj .path { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 4; opacity: .7; }
+.traj text { fill: var(--muted); font: 700 10px var(--f-body); letter-spacing: .08em; text-transform: uppercase; }
+.traj .b { fill: var(--ball); stroke: var(--ink); stroke-width: 1.5; }
+.traj .s { stroke: var(--rubber); stroke-width: 2.5; stroke-linecap: round; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { font-size: 13px; font-weight: 700; padding: 5px 10px; border-radius: 99px; background: var(--chip); }
+.pill.eff { background: var(--table); color: var(--table-ink); }
+.kv { display: flex; flex-direction: column; gap: 3px; }
+.kv > span { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.kv > p { margin: 0; }
+.answer { font-weight: 700; font-size: 17px; }
+.naive { margin: 0; font-size: 14.5px; padding: 10px 12px; border-radius: 10px; background: var(--chip); }
+.trap { margin: 0; font-size: 14.5px; padding: 10px 12px; border-radius: 10px; background: var(--bad-bg); }
+.trap b { color: var(--bad); }
+
+/* Fin de série */
+.end { display: flex; align-items: baseline; gap: 8px; }
+.end .big { font: 800 84px/0.9 var(--f-display); color: var(--table); font-variant-numeric: tabular-nums; }
+.end span:last-child { font: 800 30px var(--f-display); color: var(--muted); }
+.miss { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.miss li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14.5px; }
+.miss li b { display: block; }
+
+/* Fiches */
+.rules { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; }
+.rules h3 { margin: 0 0 8px; font: 800 22px/1.1 var(--f-display); text-transform: uppercase; }
+.rules ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.fiche { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.fiche summary {
+  list-style: none; cursor: pointer; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.fiche summary::-webkit-details-marker { display: none; }
+.fiche summary h3 { margin: 0; font: 800 24px/1.05 var(--f-display); text-transform: uppercase; }
+.fiche summary small { display: block; color: var(--muted); font-size: 13.5px; }
+.fiche summary .chev { flex: none; transition: transform .2s; color: var(--muted); }
+.fiche[open] summary .chev { transform: rotate(180deg); }
+.fiche .body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.fiche .gold {
+  margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--table); color: var(--table-ink); font-weight: 700;
+  background-image: radial-gradient(circle, var(--pip) 1.4px, transparent 1.8px); background-size: 8px 8px;
+}
+.fiche ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 5px; }
+.fiche p { margin: 0; }
+
+/* Onglets */
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: max(8px, env(safe-area-inset-left, 0px));
+  padding-right: max(8px, env(safe-area-inset-right, 0px));
+}
+.tabs-in { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); }
+.tab {
+  appearance: none; border: 0; background: none; height: var(--tabs-h); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 12.5px; font-weight: 700; color: var(--muted);
+}
+.tab svg { width: 24px; height: 24px; }
+.tab[aria-current="page"] { color: var(--sel); }
+.tab[aria-current="page"] svg { color: var(--rubber); }
+
+@media (min-width: 520px) { .chips.three { grid-template-columns: repeat(3, 1fr); } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div>
+      <span class="eyebrow">Picots &amp; anti-top</span>
+      <h1>Lire le <span>picot</span></h1>
+    </div>
+    <div class="hdr-score" id="hdrScore">Record —</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- Entraînement -->
+  <section class="view" id="view-train">
+    <div id="train-setup" class="view">
+      <p class="lede">On te décrit l’échange : ton coup, puis la réponse de ton adversaire avec son picot ou son anti-top. Tu lis l’effet qui arrive, puis tu choisis quoi jouer.</p>
+      <h2 class="h">Revêtements à travailler</h2>
+      <div class="chips" id="rubChips"></div>
+      <label class="switch" for="reflex">
+        <input type="checkbox" id="reflex">
+        <span><b>Mode réflexe</b><small>6 secondes par décision, comme à la table</small></span>
+      </label>
+      <button class="btn primary" id="startBtn">Commencer · 10 balles</button>
+      <h2 class="h">Ta lecture par revêtement</h2>
+      <div class="stats" id="statsList"></div>
+    </div>
+
+    <div id="train-play" class="view" hidden>
+      <div class="progress"><span id="qNum">Balle 1 / 10</span><span id="qScore">0 pt</span></div>
+      <div class="bar"><i id="progBar"></i></div>
+      <article class="rally">
+        <div class="rally-row you">
+          <span class="who">Tu joues</span>
+          <strong id="qShot"></strong>
+          <small id="qShotSub"></small>
+        </div>
+        <div class="rally-row opp">
+          <span class="who">Il répond <span class="tag" id="qRub"></span></span>
+          <strong id="qGest"></strong>
+        </div>
+      </article>
+      <div class="timer" id="timer" hidden><i id="timerBar"></i></div>
+      <div class="step" id="step1">
+        <h2 class="q">1. Quel effet arrive sur toi ?</h2>
+        <div class="opts" id="opts1"></div>
+      </div>
+      <div class="step" id="step2" hidden>
+        <h2 class="q">2. Que joues-tu ?</h2>
+        <div class="opts" id="opts2"></div>
+      </div>
+      <div id="fb" hidden></div>
+      <button class="btn primary" id="nextBtn" hidden>Balle suivante</button>
+    </div>
+
+    <div id="train-end" class="view" hidden>
+      <h2 class="h">Fin de la série</h2>
+      <div class="end"><span class="big" id="endScore">0</span><span>/ 20</span></div>
+      <p class="lede" id="endMsg"></p>
+      <div class="stats" id="endBreak"></div>
+      <h2 class="h" id="missTitle">À revoir</h2>
+      <ul class="miss" id="endMiss"></ul>
+      <div class="row">
+        <button class="btn primary" id="againBtn">Nouvelle série</button>
+        <button class="btn" id="setupBtn">Changer les réglages</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Labo -->
+  <section class="view" id="view-lab" hidden>
+    <p class="lede">Compose l’échange et regarde ce qui revient. Change un seul paramètre à la fois pour sentir la logique.</p>
+    <h2 class="h">Ton coup</h2>
+    <div class="chips" id="labShot"></div>
+    <h2 class="h">Son revêtement</h2>
+    <div class="chips" id="labRub"></div>
+    <h2 class="h">Son geste</h2>
+    <div class="chips" id="labGest"></div>
+    <article class="result" id="labOut"></article>
+  </section>
+
+  <!-- Fiches -->
+  <section class="view" id="view-fiches" hidden>
+    <div class="rules">
+      <h3>Avant et pendant le match</h3>
+      <ol>
+        <li><b>Demande à voir sa raquette</b> avant de jouer, c’est ton droit. Repère la couleur de la face picot ou anti.</li>
+        <li><b>Regarde la face au contact, pas le bras.</b> Beaucoup de joueurs tournent la raquette en cours d’échange.</li>
+        <li><b>Écoute le son.</b> Picot long : sec. Anti-top : sourd, « toc ». Backside : claquement plein.</li>
+        <li><b>Souviens-toi de ce que tu viens d’envoyer.</b> Contre un picot long ou un anti, l’effet qui revient dépend d’abord de ton coup.</li>
+      </ol>
+    </div>
+    <div id="fichesList" class="view"></div>
+  </section>
+</main>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="tabs-in">
+    <button class="tab" data-view="train" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M13.5 13.5 20 20"/><circle cx="19" cy="5" r="2" fill="currentColor" stroke="none"/></svg>
+      Entraînement
+    </button>
+    <button class="tab" data-view="lab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18"/><path d="M12 18v-3"/><path d="M4 12c3-7 9-7 13-1"/><circle cx="19" cy="13" r="2" fill="currentColor" stroke="none"/></svg>
+      Labo
+    </button>
+    <button class="tab" data-view="fiches">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+      Fiches
+    </button>
+  </div>
+</nav>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- Données ---------- */
+const SHOTS = {
+  gtop: { l: "Gros top lifté", s: "Beaucoup de rotation, vitesse moyenne", spin: "top" },
+  ttop: { l: "Top rapide", s: "Beaucoup de vitesse, peu de rotation", spin: "top" },
+  pous: { l: "Poussette coupée", s: "Ou service coupé", spin: "back" },
+  mort: { l: "Balle sans effet", s: "Poussette « morte », service sans effet", spin: "none" },
+};
+const RUB = {
+  pc:   { l: "Picot court", n: "ce picot court", tag: "Picot court", s: "Balle tendue, peu d’effet" },
+  pl:   { l: "Picot long", n: "ce picot long", tag: "Picot long", s: "Avec mousse, inverse l’effet" },
+  ox:   { l: "Picot long OX", n: "ce picot long OX", tag: "Picot long OX", s: "Sans mousse, inversion maximale" },
+  anti: { l: "Anti-top", n: "cet anti-top", tag: "Anti-top", s: "Lisse, balle lente et morte" },
+};
+const GEST = {
+  bloc:  { l: "Bloc / contre", s: "Près de la table" },
+  coupe: { l: "Défense coupée", s: "Geste de haut en bas, à distance" },
+  pous:  { l: "Poussette", s: "Remise sous la balle" },
+  punch: { l: "Attaque / punch", s: "Frappe vers l’avant" },
+};
+const VALID = { top: ["bloc", "coupe", "punch"], back: ["pous", "punch"], none: ["pous", "punch"] };
+const EFF = {
+  lift:   { l: "Lifté", v: 2 },
+  llift:  { l: "Légèrement lifté", d: "La balle « remonte »", v: 1 },
+  flot:   { l: "Sans effet", d: "Balle flottante", v: 0 },
+  lcoupe: { l: "Légèrement coupé", v: -1 },
+  coupe:  { l: "Coupé", v: -2 },
+  tcoupe: { l: "Très coupé", v: -3 },
+};
+const SPEED = { lente: "Balle lente", moyenne: "Vitesse moyenne", rapide: "Balle rapide" };
+const RESP = {
+  ouvert:     "Top d’ouverture : raquette ouverte, geste vers le haut",
+  tresouvert: "Top très ouvert en accélérant vers le haut, ou poussette longue",
+  ferme:      "Top ou frappe raquette fermée, vers l’avant",
+  plat:       "Frappe ou top tendu, raquette presque verticale",
+  blocferme:  "Bloc court, raquette fermée, sans geste",
+  blocvert:   "Bloc raquette plus verticale, en poussant vers l’avant",
+  poussette:  "Poussette : raquette ouverte, sous la balle",
+  topcourt:   "Top court et compact, peu d’élévation, près de la table",
+};
+/* Ce qu'un backside classique renverrait avec le même geste */
+function naive(shot, gest) {
+  const sp = SHOTS[shot].spin;
+  if (gest === "bloc") return "lift";
+  if (gest === "coupe") return "coupe";
+  if (gest === "punch") return "lift";
+  if (gest === "pous") return sp === "none" ? "lcoupe" : "coupe";
+  return "flot";
+}
+
+/* [coup, revêtement, geste, effet, vitesse, bonne réponse, piège, pourquoi, erreur classique] */
+const SC = [
+  // Picot court
+  ["gtop","pc","bloc","llift","rapide","topcourt","ouvert",
+    "Le picot court accroche peu : il te renvoie une partie de ton lift, mais la balle arrive tendue, rapide et basse.",
+    "Ouvrir la raquette comme sur une balle coupée : la balle sort en longueur."],
+  ["ttop","pc","bloc","flot","rapide","blocvert","blocferme",
+    "Peu de rotation en entrée et un revêtement qui accroche peu : la balle revient vite et sans effet.",
+    "Fermer comme sur un top : une balle sans effet tombe plus que tu ne crois, elle part dans le filet."],
+  ["gtop","pc","coupe","lcoupe","moyenne","ouvert","tresouvert",
+    "En défense, le picot court coupe beaucoup moins qu’un backside. La balle est moins coupée que le geste le laisse croire.",
+    "Trop ouvrir comme sur une vraie coupe de défenseur : la balle sort."],
+  ["ttop","pc","coupe","flot","lente","plat","tresouvert",
+    "Ton top rapide a peu de rotation, et le picot court n’en crée presque pas : la défense revient flottante.",
+    "Lever la balle comme sur une coupe lourde : elle passe au-dessus de la table."],
+  ["gtop","pc","punch","llift","rapide","blocferme","ouvert",
+    "Le picot court frappe ton top à plat : balle très rapide et tendue, avec un peu de lift. Pas le temps de faire un geste.",
+    "Ouvrir ou armer un grand geste : tu es en retard et la balle sort."],
+  ["ttop","pc","punch","flot","rapide","blocvert","blocferme",
+    "Frappe au picot court sur un top rapide : la balle repart à plat, très vite, presque sans rotation.",
+    "Bloquer raquette très fermée : la balle flottante plonge dans le filet."],
+  ["pous","pc","pous","lcoupe","moyenne","ouvert","tresouvert",
+    "Le picot court renvoie moins de coupé qu’un backside. Ton top d’ouverture n’a pas besoin d’être très ouvert.",
+    "Ouvrir à fond comme sur une poussette backside : la balle sort en longueur."],
+  ["mort","pc","pous","flot","lente","plat","ouvert",
+    "Rien en entrée, presque rien en sortie : la poussette au picot court revient sans effet.",
+    "Ouvrir comme sur une coupée : la balle monte et sort."],
+  ["pous","pc","punch","flot","rapide","blocvert","blocferme",
+    "Le picot court frappe ta poussette à plat : la balle arrive vite mais presque sans rotation. Elle descend plus qu’un top.",
+    "Fermer comme sur un top : filet."],
+  ["mort","pc","punch","flot","rapide","blocvert","blocferme",
+    "Frappe à plat sur une balle sans effet : vitesse, mais aucune rotation.",
+    "Fermer comme sur un top : la balle tombe dans le filet."],
+
+  // Picot long avec mousse
+  ["gtop","pl","bloc","coupe","moyenne","ouvert","plat",
+    "Le picot long garde le sens de rotation de ta balle : ton lift revient en coupé. Plus ton top est lourd, plus le retour est coupé.",
+    "Enchaîner un top tendu comme si la balle était liftée : filet."],
+  ["ttop","pl","bloc","lcoupe","moyenne","ouvert","blocferme",
+    "Moins de lift envoyé, moins de coupé reçu : le retour est seulement un peu coupé, souvent bas.",
+    "Bloquer ou contrer raquette fermée comme contre un backside : filet."],
+  ["gtop","pl","coupe","tcoupe","lente","tresouvert","plat",
+    "Défense au picot long sur un gros top : ton énorme rotation revient presque entière en coupé. Balle lourde et basse.",
+    "Frapper ou topper à plat : la balle s’écrase dans le filet."],
+  ["ttop","pl","coupe","coupe","lente","ouvert","tresouvert",
+    "Ton top avait peu de rotation : le coupé qui revient est réel mais moyen. Ouverture normale.",
+    "Ouvrir comme sur une balle très coupée : la balle sort."],
+  ["gtop","pl","punch","flot","rapide","blocvert","blocferme",
+    "Quand le picot long attaque ton top, il écrase la rotation : la balle arrive vite, sans effet, et plonge en fin de course.",
+    "Bloquer très fermé comme contre un top : la balle plonge dans le filet."],
+  ["pous","pl","pous","llift","lente","ferme","poussette",
+    "Le grand piège : ta coupée revient en balle légèrement liftée. C’est une balle à attaquer, pas à remettre.",
+    "Remettre une poussette : la balle monte et sort, ou il t’attaque derrière."],
+  ["mort","pl","pous","flot","lente","plat","ouvert",
+    "Sans effet en entrée, le picot long ne peut rien inventer : la balle revient morte. C’est ta balle d’attaque.",
+    "Ouvrir comme sur une coupée : la balle passe au-dessus."],
+  ["pous","pl","punch","llift","rapide","blocferme","ouvert",
+    "Le picot long attaque ta poussette : ta rotation coupée devient une balle liftée, rapide et basse.",
+    "Ouvrir la raquette par réflexe en pensant à une balle coupée : la balle sort."],
+  ["mort","pl","punch","flot","rapide","blocvert","blocferme",
+    "Picot long qui frappe une balle sans effet : vitesse, mais toujours aucune rotation.",
+    "Fermer comme contre un top : filet."],
+
+  // Picot long sans mousse
+  ["gtop","ox","bloc","tcoupe","lente","tresouvert","plat",
+    "Sans mousse, l’inversion est encore plus nette, et la balle plus lente et plus courte : ton gros top revient très coupé.",
+    "Rester loin et topper à plat : la balle courte et coupée finit dans le filet."],
+  ["ttop","ox","bloc","coupe","lente","ouvert","blocferme",
+    "Même un top rapide revient coupé avec un OX. La balle est lente : avance et prends le temps de remonter.",
+    "Contrer fermé comme sur un top : filet."],
+  ["gtop","ox","coupe","tcoupe","lente","tresouvert","ouvert",
+    "Défense OX sur un gros top : retour très coupé et flottant. Il faut beaucoup d’élévation, ou une poussette longue pour patienter.",
+    "Ouvrir seulement un peu : pas assez d’élévation, filet."],
+  ["ttop","ox","coupe","coupe","lente","ouvert","tresouvert",
+    "Moins de rotation envoyée, retour moins coupé : ouverture normale, en avançant.",
+    "Ouvrir comme sur une balle très coupée : la balle sort."],
+  ["pous","ox","pous","lift","lente","ferme","poussette",
+    "L’OX renvoie ta coupée avec presque toute sa rotation : elle arrive nettement liftée, lente et un peu haute.",
+    "Remettre une poussette ouverte : la balle sort à coup sûr."],
+  ["mort","ox","pous","flot","lente","plat","ouvert",
+    "L’OX n’a ni vitesse ni effet propre : sur une balle sans effet, il ne renvoie rien. Attaque.",
+    "Attendre la balle en reculant : elle tombe courte et morte, tu arrives trop tard."],
+  ["pous","ox","punch","llift","moyenne","ferme","poussette",
+    "L’OX qui attaque ta poussette te renvoie ta rotation en lift, sans grande vitesse.",
+    "Pousser par habitude : la balle liftée monte et sort."],
+  ["mort","ox","punch","flot","moyenne","plat","ouvert",
+    "Aucune rotation à renvoyer : l’attaque OX sur balle morte reste sans effet et assez lente.",
+    "Ouvrir comme sur une balle coupée : la balle sort."],
+
+  // Anti-top
+  ["gtop","anti","bloc","lcoupe","lente","ouvert","plat",
+    "L’anti absorbe ta vitesse et renvoie une balle lente, courte et un peu coupée. C’est à toi de créer la vitesse.",
+    "Attendre la balle puis frapper à plat : elle est courte et coupée, filet."],
+  ["ttop","anti","bloc","flot","lente","plat","blocferme",
+    "Peu d’effet en entrée : l’anti renvoie une balle morte et lente. Profites-en.",
+    "Bloquer fermé comme contre un top : la balle tombe dans le filet."],
+  ["gtop","anti","coupe","lcoupe","lente","ouvert","tresouvert",
+    "Le geste de coupe est ample, mais l’anti accroche à peine : la balle est bien moins coupée qu’elle n’en a l’air.",
+    "Ouvrir comme sur une vraie défense coupée : la balle sort."],
+  ["ttop","anti","coupe","flot","lente","plat","tresouvert",
+    "Top peu lifté + anti = défense sans effet, malgré le geste.",
+    "Croire le geste et ouvrir beaucoup : la balle sort."],
+  ["pous","anti","pous","llift","lente","ferme","poussette",
+    "Geste de poussette, mais l’anti te renvoie un peu de ta rotation : la balle flotte et remonte légèrement.",
+    "Remettre une poussette : la balle monte."],
+  ["mort","anti","pous","flot","lente","plat","ouvert",
+    "Balle sans effet dans l’anti : retour mort et lent. Attaque.",
+    "Ouvrir comme sur une coupée : la balle sort."],
+].map(r => ({ shot: r[0], rub: r[1], gest: r[2], eff: r[3], speed: r[4], ans: r[5], trap: r[6], why: r[7], err: r[8] }));
+
+const RARE = {
+  anti_punch: "Avec un anti-top, l’attaque est rare : le revêtement n’a presque pas de vitesse. Attends-toi plutôt à un bloc ou une poussette, et surveille quand il tourne sa raquette pour attaquer avec l’autre face.",
+};
+
+const FICHES = [
+  { id: "pc", t: "Picot court", s: "Balle tendue, peu d’effet, beaucoup de frappes",
+    how: "Picots courts et larges : peu d’adhérence au contact, la balle part vite et tendue. Il est moins sensible à ton effet qu’un backside, mais il n’inverse pas la rotation.",
+    see: ["Balles tendues et basses, frappes à plat sur tes poussettes.", "De temps en temps une balle sans effet qui flotte et tombe.", "Joueur souvent collé à la table, qui prend la balle tôt."],
+    gold: "Ce qu’il renvoie ressemble à ce que tu envoies, avec moins d’effet et plus de vitesse.",
+    tac: ["Tops lourds et lents : il a du mal à les contrôler à plat.", "Joue long, vers son coude, pour le gêner dans ses frappes.", "Varie la longueur : balle courte, puis longue.", "Sur ses frappes : bloc court, raquette fermée, sans geste."],
+    err: "Trop ouvrir sur ses balles coupées : elles le sont beaucoup moins qu’avec un backside." },
+  { id: "pl", t: "Picot long", s: "Avec mousse : inverse l’effet que tu donnes",
+    how: "Picots longs et souples : ils se couchent au contact et la balle glisse. Le picot crée très peu d’effet, il garde la rotation de ta balle. Pour toi, l’effet revient donc inversé.",
+    see: ["Trajectoire bizarre : la balle flotte puis plonge.", "Le geste ne correspond pas à l’effet reçu.", "Son plus sec que le backside.", "Souvent un bloqueur collé à la table en revers, ou un défenseur loin."],
+    gold: "Top envoyé = coupé reçu. Coupé envoyé = lifté reçu. Rien envoyé = rien reçu.",
+    tac: ["Après un top bloqué, la balle suivante est coupée : ouvre et relance vers le haut.", "Joue des balles sans effet (poussette morte, service sans effet) : il ne peut rien créer, tu attaques le retour.", "Alterne top lourd et lent puis top rapide peu lifté : c’est toi qui choisis l’effet qui revient.", "Joue dans le coude et sur son côté backside, pour l’obliger à changer de face.", "Évite de pousser dans le picot : tu reçois une balle qui remonte."],
+    err: "Enchaîner les tops à fond comme contre un backside : plus tu liftes, plus ça revient coupé, et la balle finit dans le filet." },
+  { id: "ox", t: "Picot long OX", s: "Sans mousse : inversion maximale, balle lente",
+    how: "Même principe que le picot long avec mousse, en plus fort : l’inversion est plus nette, la balle plus lente, plus basse et plus courte.",
+    see: ["Balles très lentes et courtes, rebond bas.", "La balle semble « mourir » sur la table.", "Son très sec : la balle touche le bois à travers le picot."],
+    gold: "Même règle que le picot long, en plus marqué. Et c’est toi qui dois créer toute la vitesse.",
+    tac: ["Avance-toi : les balles tombent courtes.", "Top lent et très lifté pour obtenir un retour coupé prévisible, puis ouvre beaucoup.", "Balles sans effet longues : il n’a pas la vitesse pour te mettre en difficulté.", "Patience : ne force pas le point sur une balle très coupée."],
+    err: "Rester loin de la table : la balle tombe courte et morte, tu arrives trop tard." },
+  { id: "anti", t: "Anti-top", s: "Lisse, absorbe ta vitesse et ton effet",
+    how: "Revêtement lisse presque sans adhérence : il absorbe ta vitesse et ton effet. Il te renvoie une petite partie de ta rotation, inversée, et surtout une balle lente et morte.",
+    see: ["Surface mate, sans brillance.", "Son sourd, « toc ».", "Balles lentes et sans effet, même sur un geste ample.", "Il remet tes services sans difficulté, quel que soit l’effet."],
+    gold: "Son geste ment : regarde la balle, pas le bras. La plupart de ses balles sont flottantes ou très peu coupées.",
+    tac: ["Tops longs dans l’anti, puis attaque la balle morte qui revient.", "Change de rythme : l’anti ne peut pas accélérer, c’est toi qui fixes le tempo.", "Sur ses défenses, n’ouvre pas trop : c’est peu coupé.", "Le danger vient de son autre face : surveille quand il tourne la raquette.", "Au service, mise sur le placement et la longueur plutôt que sur l’effet."],
+    err: "Trop ouvrir sur ses coupes qui n’en sont pas, ou attendre la balle : elle est lente, va la chercher." },
+];
+
+/* ---------- Stockage ---------- */
+const KEY = "lirelepicot.v1";
+function load() {
+  try { const d = JSON.parse(localStorage.getItem(KEY) || "null"); if (d && typeof d === "object") return d; } catch (e) {}
+  return { best: null, rub: {}, sel: ["pc", "pl", "ox", "anti"], reflex: false };
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
+const store = load();
+if (!Array.isArray(store.sel) || !store.sel.length) store.sel = ["pc", "pl", "ox", "anti"];
+store.rub = store.rub || {};
+
+/* ---------- Outils ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- Trajectoire animée ---------- */
+const anims = new WeakMap();
+function trajSVG() {
+  return `<svg class="traj" viewBox="0 0 320 130" role="img" aria-label="Trajectoire de la balle, de l’adversaire vers toi. Touche pour rejouer.">
+    <path class="path" d=""/>
+    <line class="tbl" x1="10" y1="110" x2="310" y2="110"/>
+    <line class="net" x1="160" y1="110" x2="160" y2="90"/>
+    <text x="12" y="126">Adversaire</text><text x="308" y="126" text-anchor="end">Toi</text>
+    <g class="ball"><circle class="b" r="7"/><line class="s" x1="-6.5" y1="0" x2="6.5" y2="0"/></g>
+  </svg>`;
+}
+function pathFor(v) {
+  if (v > 0) return `M24 78 Q 128 ${32 - v * 4} 226 106 Q 266 ${88 - v} 312 ${92 - v}`;
+  if (v === 0) return "M24 78 Q 128 44 236 106 Q 272 74 312 72";
+  return `M24 78 Q 132 54 244 106 Q ${268 + v * 2} ${62 + v * 3} ${298 + v * 3} ${60 + v * 3}`;
+}
+function playTraj(svg, effKey, speed) {
+  const v = EFF[effKey].v;
+  const path = svg.querySelector(".path");
+  const ball = svg.querySelector(".ball");
+  path.setAttribute("d", pathFor(v));
+  const len = path.getTotalLength();
+  const dur = { rapide: 1000, moyenne: 1500, lente: 2100 }[speed] || 1500;
+  const prev = anims.get(svg); if (prev) cancelAnimationFrame(prev);
+  if (reduceMotion) {
+    const p = path.getPointAtLength(len * 0.55);
+    ball.setAttribute("transform", `translate(${p.x} ${p.y}) rotate(${v * 30})`);
+    return;
+  }
+  let t0 = null;
+  const step = ts => {
+    if (!svg.isConnected) return;
+    if (t0 === null) t0 = ts;
+    const el = ts - t0;
+    const t = Math.min(el / dur, 1);
+    const p = path.getPointAtLength(len * t);
+    let rot, jx = 0, jy = 0;
+    if (v === 0) { rot = Math.sin(el / 45) * 9; jx = Math.sin(el / 33) * 1.2; jy = Math.cos(el / 41) * 1.2; }
+    else rot = (el / 1000) * v * 520;
+    ball.setAttribute("transform", `translate(${(p.x + jx).toFixed(1)} ${(p.y + jy).toFixed(1)}) rotate(${rot.toFixed(1)})`);
+    if (el > dur + 700) t0 = ts;
+    anims.set(svg, requestAnimationFrame(step));
+  };
+  anims.set(svg, requestAnimationFrame(step));
+  svg.onclick = () => { t0 = null; };
+}
+
+function resultHTML(sc, mode) {
+  const nv = naive(sc.shot, sc.gest);
+  const naiveLine = nv !== sc.eff
+    ? `<p class="naive">Contre un backside, ce geste t’aurait renvoyé : <b>${esc(EFF[nv].l)}</b>. Avec ${esc(RUB[sc.rub].n)} : <b>${esc(EFF[sc.eff].l)}</b>.</p>`
+    : "";
+  return `
+    ${trajSVG()}
+    <div class="pills"><span class="pill eff">${esc(EFF[sc.eff].l)}</span><span class="pill">${esc(SPEED[sc.speed])}</span>${EFF[sc.eff].d ? `<span class="pill">${esc(EFF[sc.eff].d)}</span>` : ""}</div>
+    <div class="kv"><span>${mode === "lab" ? "Ta réponse" : "La bonne réponse"}</span><p class="answer">${esc(RESP[sc.ans])}</p></div>
+    <div class="kv"><span>Pourquoi</span><p>${esc(sc.why)}</p></div>
+    ${naiveLine}
+    <p class="trap"><b>Erreur classique :</b> ${esc(sc.err)}</p>`;
+}
+
+/* ---------- Onglets ---------- */
+const VIEWS = ["train", "lab", "fiches"];
+function show(view) {
+  VIEWS.forEach(v => { $("view-" + v).hidden = v !== view; });
+  document.querySelectorAll(".tab").forEach(b => b.toggleAttribute("aria-current", b.dataset.view === view));
+  document.querySelectorAll(".tab[aria-current]").forEach(b => b.setAttribute("aria-current", "page"));
+  window.scrollTo(0, 0);
+  if (view === "lab") renderLab();
+}
+document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
+
+/* ---------- Réglages ---------- */
+function renderHeader() {
+  $("hdrScore").textContent = store.best == null ? "Record —" : `Record ${store.best} / 20`;
+}
+function renderSetup() {
+  $("rubChips").innerHTML = Object.keys(RUB).map(k =>
+    `<button class="chip" id="rub-${k}" data-k="${k}" aria-pressed="${store.sel.includes(k)}"><b>${esc(RUB[k].l)}</b><small>${esc(RUB[k].s)}</small></button>`).join("");
+  $("rubChips").querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.k;
+    if (store.sel.includes(k)) { if (store.sel.length > 1) store.sel = store.sel.filter(x => x !== k); }
+    else store.sel.push(k);
+    save(); renderSetup();
+  }));
+  $("reflex").checked = !!store.reflex;
+  const rows = Object.keys(RUB).map(k => {
+    const r = store.rub[k];
+    if (!r || !r.n) return `<div class="stat"><span>${esc(RUB[k].l)}</span><span class="val">Pas encore joué</span><div class="meter"><i style="width:0"></i></div></div>`;
+    const pct = Math.round(100 * r.ok / r.n);
+    return `<div class="stat"><span>${esc(RUB[k].l)}</span><span class="val">${pct} % · ${r.n} décisions</span><div class="meter"><i style="width:${pct}%"></i></div></div>`;
+  });
+  $("statsList").innerHTML = rows.join("");
+  renderHeader();
+}
+$("reflex").addEventListener("change", e => { store.reflex = e.target.checked; save(); });
+
+/* ---------- Partie ---------- */
+const N = 10, TIME = 6000;
+let game = null, timerRAF = null;
+
+function startGame() {
+  const pool = SC.filter(s => store.sel.includes(s.rub));
+  let list = [];
+  while (list.length < N) list = list.concat(shuffle(pool));
+  game = { list: list.slice(0, N), i: 0, pts: 0, per: {}, miss: [] };
+  $("train-setup").hidden = true; $("train-end").hidden = true; $("train-play").hidden = false;
+  ask();
+}
+function ask() {
+  const sc = game.list[game.i];
+  game.cur = { sc, step: 1, ok1: false, ok2: false };
+  $("qNum").textContent = `Balle ${game.i + 1} / ${N}`;
+  $("qScore").textContent = `${game.pts} pt${game.pts > 1 ? "s" : ""}`;
+  $("progBar").style.width = (100 * game.i / N) + "%";
+  $("qShot").textContent = SHOTS[sc.shot].l;
+  $("qShotSub").textContent = SHOTS[sc.shot].s;
+  $("qRub").textContent = RUB[sc.rub].tag;
+  $("qGest").textContent = GEST[sc.gest].l;
+  $("step2").hidden = true; $("fb").hidden = true; $("nextBtn").hidden = true;
+  $("fb").innerHTML = "";
+
+  // Effets proposés : le bon, celui qu'aurait donné un backside, et les plus proches
+  const nv = naive(sc.shot, sc.gest);
+  const set = [sc.eff];
+  if (nv !== sc.eff) set.push(nv);
+  Object.keys(EFF).filter(k => !set.includes(k))
+    .sort((a, b) => Math.abs(EFF[a].v - EFF[sc.eff].v) - Math.abs(EFF[b].v - EFF[sc.eff].v) || Math.random() - .5)
+    .slice(0, 4 - set.length).forEach(k => set.push(k));
+  renderOpts("opts1", shuffle(set).map(k => ({ k, l: EFF[k].l, d: EFF[k].d })), sc.eff, 1);
+  startTimer();
+  window.scrollTo(0, 0);
+}
+function renderOpts(id, opts, good, step) {
+  const box = $(id);
+  box.innerHTML = opts.map((o, i) =>
+    `<button class="opt" id="${id}-${o.k}" data-k="${o.k}"><span class="k">${"ABCD"[i]}</span><span>${esc(o.l)}${o.d ? `<small>${esc(o.d)}</small>` : ""}</span></button>`).join("");
+  box.querySelectorAll(".opt").forEach(b => b.addEventListener("click", () => pick(step, b.dataset.k, good)));
+}
+function lockOpts(id, chosen, good) {
+  $(id).querySelectorAll(".opt").forEach(b => {
+    b.disabled = true;
+    if (b.dataset.k === good) b.classList.add("ok");
+    else if (b.dataset.k === chosen) b.classList.add("ko");
+  });
+}
+function pick(step, k, good) {
+  const cur = game.cur;
+  if (cur.step !== step) return;
+  stopTimer();
+  const ok = k === good;
+  lockOpts(step === 1 ? "opts1" : "opts2", k, good);
+  const r = game.per[cur.sc.rub] || (game.per[cur.sc.rub] = { ok: 0, n: 0 });
+  r.n++; if (ok) { r.ok++; game.pts++; }
+  const s = store.rub[cur.sc.rub] || (store.rub[cur.sc.rub] = { ok: 0, n: 0 });
+  s.n++; if (ok) s.ok++;
+  save();
+  $("qScore").textContent = `${game.pts} pt${game.pts > 1 ? "s" : ""}`;
+  if (step === 1) {
+    cur.ok1 = ok; cur.step = 2;
+    const sc = cur.sc;
+    const others = shuffle(Object.keys(RESP).filter(x => x !== sc.ans && x !== sc.trap)).slice(0, 1);
+    renderOpts("opts2", shuffle([sc.ans, sc.trap, ...others]).map(x => ({ k: x, l: RESP[x] })), sc.ans, 2);
+    $("step2").hidden = false;
+    startTimer();
+    $("step2").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  } else {
+    cur.ok2 = ok; cur.step = 3;
+    if (!cur.ok1 || !cur.ok2) game.miss.push(cur.sc);
+    const both = cur.ok1 && cur.ok2;
+    const fb = $("fb");
+    fb.className = "result";
+    fb.innerHTML = `<p class="verdict ${both ? "ok" : "ko"}">${both ? "Bien lu" : cur.ok1 || cur.ok2 ? "À moitié" : "Raté"}</p>` + resultHTML(cur.sc, "game");
+    fb.hidden = false;
+    playTraj(fb.querySelector(".traj"), cur.sc.eff, cur.sc.speed);
+    $("nextBtn").hidden = false;
+    $("nextBtn").textContent = game.i + 1 < N ? "Balle suivante" : "Voir mon score";
+    fb.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  }
+}
+function startTimer() {
+  stopTimer();
+  if (!store.reflex) { $("timer").hidden = true; return; }
+  $("timer").hidden = false;
+  const bar = $("timerBar"), t0 = performance.now(), step = game.cur.step;
+  const tick = now => {
+    const left = Math.max(0, 1 - (now - t0) / TIME);
+    bar.style.transform = `scaleX(${left})`;
+    if (left <= 0) { timeout(step); return; }
+    timerRAF = requestAnimationFrame(tick);
+  };
+  timerRAF = requestAnimationFrame(tick);
+}
+function stopTimer() { if (timerRAF) cancelAnimationFrame(timerRAF); timerRAF = null; }
+function timeout(step) {
+  const sc = game.cur.sc;
+  pick(step, "__temps", step === 1 ? sc.eff : sc.ans);
+}
+$("nextBtn").addEventListener("click", () => {
+  game.i++;
+  if (game.i < N) ask(); else endGame();
+});
+function endGame() {
+  stopTimer();
+  const total = game.pts;
+  if (store.best == null || total > store.best) store.best = total;
+  save();
+  $("train-play").hidden = true; $("train-end").hidden = false;
+  $("endScore").textContent = total;
+  $("endMsg").textContent =
+    total >= 18 ? "Lecture de pro. Passe en mode réflexe si ce n’est pas déjà fait." :
+    total >= 14 ? "Bonne lecture. Revois les balles ratées ci-dessous, ce sont tes pièges en match." :
+    total >= 10 ? "Tu lis une balle sur deux. Relis la règle d’or de chaque revêtement dans les Fiches." :
+    "Le picot te piège encore. Passe par le Labo : change un paramètre à la fois et observe.";
+  $("endBreak").innerHTML = Object.keys(game.per).map(k => {
+    const r = game.per[k], pct = Math.round(100 * r.ok / r.n);
+    return `<div class="stat"><span>${esc(RUB[k].l)}</span><span class="val">${r.ok} / ${r.n}</span><div class="meter"><i style="width:${pct}%"></i></div></div>`;
+  }).join("");
+  const seen = new Set();
+  const miss = game.miss.filter(s => { const id = s.shot + s.rub + s.gest; if (seen.has(id)) return false; seen.add(id); return true; });
+  $("missTitle").hidden = !miss.length;
+  $("endMiss").innerHTML = miss.map(s =>
+    `<li><b>${esc(SHOTS[s.shot].l)} → ${esc(RUB[s.rub].l)}, ${esc(GEST[s.gest].l.toLowerCase())}</b>Arrive ${esc(EFF[s.eff].l.toLowerCase())}. ${esc(RESP[s.ans])}.</li>`).join("");
+  renderHeader();
+  window.scrollTo(0, 0);
+}
+$("startBtn").addEventListener("click", startGame);
+$("againBtn").addEventListener("click", startGame);
+$("setupBtn").addEventListener("click", () => { $("train-end").hidden = true; $("train-setup").hidden = false; renderSetup(); });
+
+/* ---------- Labo ---------- */
+const lab = { shot: "gtop", rub: "pl", gest: "bloc" };
+function chipRow(id, data, key, valid) {
+  $(id).innerHTML = Object.keys(data).map(k => {
+    const off = valid && !valid.includes(k);
+    return `<button class="chip" id="${id}-${k}" data-k="${k}" aria-pressed="${lab[key] === k}"${off ? " disabled" : ""}><b>${esc(data[k].l)}</b><small>${esc(data[k].s)}</small></button>`;
+  }).join("");
+  $(id).querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => { lab[key] = b.dataset.k; renderLab(); }));
+}
+function renderLab() {
+  const valid = VALID[SHOTS[lab.shot].spin];
+  if (!valid.includes(lab.gest)) lab.gest = valid[0];
+  chipRow("labShot", SHOTS, "shot");
+  chipRow("labRub", RUB, "rub");
+  chipRow("labGest", GEST, "gest", valid);
+  const sc = SC.find(s => s.shot === lab.shot && s.rub === lab.rub && s.gest === lab.gest);
+  const out = $("labOut");
+  if (!sc) {
+    out.innerHTML = `<p class="verdict">Coup rare</p><p>${esc(RARE[lab.rub + "_" + lab.gest] || "Combinaison peu courante en match.")}</p>`;
+    return;
+  }
+  out.innerHTML = `<p class="verdict">Ce qui revient</p>` + resultHTML(sc, "lab");
+  playTraj(out.querySelector(".traj"), sc.eff, sc.speed);
+}
+
+/* ---------- Fiches ---------- */
+function renderFiches() {
+  const chev = `<svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
+  $("fichesList").innerHTML = FICHES.map(f => `
+    <details class="fiche" id="fiche-${f.id}">
+      <summary><div><h3>${esc(f.t)}</h3><small>${esc(f.s)}</small></div>${chev}</summary>
+      <div class="body">
+        <p class="gold">${esc(f.gold)}</p>
+        <div class="kv"><span>Comment ça marche</span><p>${esc(f.how)}</p></div>
+        <div class="kv"><span>Le reconnaître</span><ul>${f.see.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
+        <div class="kv"><span>Ton plan de topspinner</span><ul>${f.tac.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
+        <p class="trap"><b>Erreur classique :</b> ${esc(f.err)}</p>
+      </div>
+    </details>`).join("");
+}
+
+renderSetup();
+renderFiches();
+})();
+</script>
+<!-- APP:END -->
+</body>
+</html>
