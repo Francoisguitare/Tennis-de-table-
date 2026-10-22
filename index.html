@@ -109,6 +109,56 @@ button { font: inherit; color: inherit; }
 .shot[disabled] { opacity: .38; cursor: default; }
 .shot.chosen { border-color: var(--accent); background: var(--accent-bg); opacity: 1; }
 .shots { min-height: 134px; grid-auto-rows: minmax(64px, auto); }
+/* Carte de lecture (mode Découverte) : en haut de l'écran, au-dessus de l'adversaire, quand la balle t'attend */
+.lecture {
+  position: fixed; z-index: 4; top: calc(env(safe-area-inset-top, 0px) + 62px);
+  left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
+  max-width: 600px; margin: 0 auto; max-height: 46vh; overflow: auto;
+  background: rgba(9, 18, 31, .94); border: 1px solid var(--line); border-radius: 14px;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.35;
+}
+.lecture p { margin: 0; }
+/* Ligne compacte dans le panneau du bas */
+.lec-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-height: 34px; font-size: 13px; line-height: 1.3; }
+.lec-line .lec-gold { font-size: 12.5px; color: var(--muted); }
+.lec-line .lec-gold b { color: var(--ink); }
+.lec-eff-s { font: 800 17px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; }
+.lec-eff-s.cut { color: #8ab8ff; }
+.lec-eff-s.top { color: #ffab66; }
+.lec-line button {
+  margin-left: auto; appearance: none; border: 1px solid var(--line); background: var(--tile); border-radius: 8px;
+  padding: 4px 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; min-height: 30px;
+}
+.lec-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.lec-k { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.lec-muted { color: var(--muted); }
+.face-chip { padding: 1px 8px; border-radius: 99px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; border: 1.5px solid #fff; color: #fff; }
+.face-chip.red { background: #c62828; }
+.face-chip.black { background: #121212; }
+.lec-ball { display: flex; gap: 10px; align-items: center; }
+.lec-ball > div { min-width: 0; }
+.lec-ball svg { width: 62px; height: 62px; flex: none; }
+.lec-eff { font: 800 22px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; }
+.lec-eff.cut { color: #8ab8ff; }
+.lec-eff.top { color: #ffab66; }
+.lec-num { font-weight: 700; }
+.lec-chain { font-size: 12.5px; }
+.lec-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.lec-actions button {
+  appearance: none; border: 1px solid var(--line); background: var(--tile); border-radius: 8px;
+  padding: 5px 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; min-height: 34px;
+}
+.lec-actions button[disabled] { opacity: .4; cursor: default; }
+.lec-hint { font-size: 13px; padding: 6px 8px; border-radius: 8px; background: rgba(82, 200, 138, .14); }
+.lec-hint b { color: var(--good); }
+.spin .sp-tbl { stroke: #5b9be6; stroke-width: 3; }
+.spin .sp-w { fill: #fbfaf4; }
+.spin .sp-o { fill: #ff7a1a; }
+.spin .sp-arc { fill: none; stroke: #f3f6fa; stroke-width: 2.2; }
+.spin .sp-t { fill: #a9b8ca; font: 700 7.5px var(--f-body); }
+.spin.lift .sp-ccw, .spin.cut .sp-cw, .spin.flat .sp-arc { display: none; }
+
 .shots.serve .shot { grid-row: span 2; }
 .shot .key { display: none; }
 @media (hover: hover) and (pointer: fine) {
@@ -209,9 +259,12 @@ button { font: inherit; color: inherit; }
   </div>
 </div>
 
+<div class="lecture" id="lecture" hidden></div>
+
 <div class="panel" id="panel">
   <div class="panel-in">
     <div class="prompt" id="prompt">Choisis ton adversaire</div>
+    <div class="lec-line" id="lecLine" hidden></div>
     <div class="shots" id="shots"></div>
   </div>
 </div>
@@ -479,17 +532,19 @@ const PHYS = (() => {
     return best;
   }
 
-  /* Comme solve, en augmentant la puissance du coup si la balle n'arrive pas sur la table (joueur loin, balle lente) */
-  function solveAuto(sIn, side, st, rub, tgt) {
-    let res = null;
-    for (const k of [1, 0.65, 1.35, 0.4, 1.8, 2.4]) {
+  /* Comme solve, en dosant la puissance du coup : on garde le dosage qui fait tomber la balle le plus près de la profondeur visée */
+  function solveAuto(sIn, side, st, rub, tgt, tol) {
+    const want = side * tgt.z, tl = tol || 0.15;
+    let best = null, bestErr = 1e9;
+    for (const k of [1, 1.35, 0.7, 1.8, 0.45, 2.4]) {
       const st2 = { a: st.a * k, b: st.b, maxNet: st.maxNet };
       const r = solve(sIn, side, st2, rub, tgt);
       r.st = st2;
-      if (!res || (r.ok && !res.ok)) res = r;
-      if (r.ok) break;
+      const err = r.ok ? Math.abs(reach(r.out, side) - want) : 50;
+      if (err < bestErr) { best = r; bestErr = err; }
+      if (err < tl) break;
     }
-    return res;
+    return best;
   }
 
   /* Service : premier rebond dans son camp (z1), second dans le camp adverse (z2) */
@@ -523,15 +578,25 @@ const PHYS = (() => {
     return res;
   }
 
-  /* Instant de frappe du receveur (camp de signe side) : au sommet du rebond (early, ou balle courte), au plan zPlane, ou quand elle redescend sous yLow */
-  function contactIdx(tr, side, zPlane, yLow, early) {
+  /* Instant de frappe du receveur (camp de signe side) :
+     - balle courte (sommet du rebond au-dessus de la table) : au sommet ;
+     - sinon, avec zNear (le joueur) : quand elle arrive à sa ligne de fond (zNear), après le sommet ;
+       si le sommet est plus loin, au sommet ; au plus tard au plan zPlane ;
+     - early (bloqueur collé à la table) : au sommet ;
+     - dans tous les cas, avant qu'elle ne redescende sous yLow. */
+  function contactIdx(tr, side, zPlane, yLow, early, zNear) {
     const ev = tr.events.find(e => e.type === "table" && Math.sign(e.z) === side);
     if (!ev) return -1;
     let apex = -1;
     for (let i = ev.i + 1; i <= tr.n; i++) {
-      const y = tr.P[i * 3 + 1], z = tr.P[i * 3 + 2], vy = tr.V[i * 3 + 1];
-      if (side * z >= Math.abs(zPlane)) return i;
-      if (apex < 0 && vy <= 0) { apex = i; if (early || side * z < L - 0.3) return i; }
+      const y = tr.P[i * 3 + 1], z = side * tr.P[i * 3 + 2], vy = tr.V[i * 3 + 1];
+      if (z >= Math.abs(zPlane)) return i;
+      if (apex < 0 && vy <= 0) {
+        apex = i;
+        if (z < L - 0.35) return i;
+        if (zNear == null ? early : z >= zNear) return i;
+      }
+      if (apex >= 0 && zNear != null && z >= zNear) return i;
       if (apex >= 0 && y <= TY + r + yLow) return i;
     }
     return -1;
@@ -541,7 +606,7 @@ const PHYS = (() => {
 })();
 
 const TY = PHYS.TY, L = PHYS.L, W = PHYS.W, NETY = PHYS.NETY, DEG = Math.PI / 180;
-const RV = 0.03;            // rayon d'affichage de la balle (rayon réel : 2 cm)
+const RV = 0.026;           // rayon d'affichage de la balle (rayon réel : 2 cm), un peu grossie pour rester visible
 const Z_ME = L + 0.25;      // position de repos du joueur
 const Z_BACK = L + 0.95;    // il recule au plus jusque-là pour prendre la balle au sommet du rebond
 
@@ -608,7 +673,7 @@ const PROF = {
           gold: "Son geste ment : regarde la balle, pas le bras. L’anti absorbe ta vitesse et ton effet : presque tout revient lent et peu tourné." },
 };
 const LV = {
-  decouverte:   { l: "Découverte", s: "Ralenti, la balle t’attend", ts: .42, freeze: true },
+  decouverte:   { l: "Découverte", s: "Ralenti, carte de lecture, la balle t’attend", ts: .42, freeze: true, guided: true },
   entrainement: { l: "Entraînement", s: "Ralenti", ts: .62 },
   match:        { l: "Match", s: "Presque la vraie vitesse", ts: .88 },
 };
@@ -747,9 +812,28 @@ const texTwo = ballTexture(true), texPlain = ballTexture(false);
 const ballMat = new THREE.MeshLambertMaterial({ map: texTwo });
 const ballM = new THREE.Mesh(new THREE.SphereGeometry(RV, 24, 16), ballMat);
 scene.add(ballM);
-const shadow = new THREE.Mesh(new THREE.CircleGeometry(RV * 1.1, 20),
-  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
+// Ombre douce sous la balle : c'est elle qui donne la position réelle sur la table
+const shc = document.createElement("canvas"); shc.width = shc.height = 64;
+const shx = shc.getContext("2d"), grd = shx.createRadialGradient(32, 32, 0, 32, 32, 32);
+grd.addColorStop(0, "rgba(0,0,0,1)"); grd.addColorStop(0.5, "rgba(0,0,0,0.8)"); grd.addColorStop(1, "rgba(0,0,0,0)");
+shx.fillStyle = grd; shx.fillRect(0, 0, 64, 64);
+const shadow = new THREE.Mesh(new THREE.PlaneGeometry(RV * 3, RV * 3),
+  new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shc), transparent: true, opacity: 0.6, depthWrite: false }));
 shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
+// Repères de rebond (aide) : un anneau à l'endroit exact où la balle touche la table
+const MARKS = [];
+for (let i = 0; i < 4; i++) {
+  const m = new THREE.Mesh(new THREE.RingGeometry(0.028, 0.044, 28),
+    new THREE.MeshBasicMaterial({ color: 0xffb066, transparent: true, opacity: 0, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m); MARKS.push({ m, t: -1e9 });
+}
+let markI = 0;
+function spawnMark(x, z) { const k = MARKS[markI++ % MARKS.length]; k.m.position.set(x, TY + 0.003, z); k.t = performance.now(); k.m.visible = true; }
+// Trait vertical entre la balle et son ombre (aide)
+const dropPos = new Float32Array(6);
+const dropGeo = new THREE.BufferGeometry(); dropGeo.setAttribute("position", new THREE.BufferAttribute(dropPos, 3));
+const dropLine = new THREE.Line(dropGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 }));
+dropLine.frustumCulled = false; scene.add(dropLine);
 const TRAIL = 40;
 const trailPos = new Float32Array(TRAIL * 3);
 const trailGeo = new THREE.BufferGeometry(); trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPos, 3));
@@ -769,6 +853,14 @@ function makeRacket() {
   scene.add(g); return g;
 }
 const oppRk = makeRacket(), meRk = makeRacket();
+meRk.scale.setScalar(0.8);
+// Effet stroboscope (aide) : positions successives de sa raquette pendant le geste
+const GHOSTS = 7, ghosts = [], rkHist = [];
+for (let i = 0; i < GHOSTS; i++) {
+  const g = new THREE.Mesh(new THREE.CircleGeometry(0.07, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+  g.visible = false; scene.add(g); ghosts.push(g);
+}
 
 // Adversaire
 const opp = new THREE.Group(); scene.add(opp);
@@ -800,20 +892,21 @@ function faceQuat(n, faceA) {
 const OPP_REST_Q = faceQuat([1, 0, 0], true), ME_REST_Q = faceQuat([0, 0, -1], true);
 
 /* Geste : armé → contact → accompagnement, dans la direction réelle de la raquette */
-function makeStroke(tc, ballP, n, V, faceA) {
+function makeStroke(tc, ballP, n, V, faceA, amp) {
   const sp = Math.hypot(V[0], V[1], V[2]);
   const dir = sp > 0.3 ? new THREE.Vector3(V[0] / sp, V[1] / sp, V[2] / sp) : new THREE.Vector3(n[0], n[1], n[2]);
   const C = new THREE.Vector3(ballP[0] - n[0] * (RV + 0.008), ballP[1] - n[1] * (RV + 0.008) + (RV - PHYS.r), ballP[2] - n[2] * (RV + 0.008));
-  const sw = Math.max(0.08, Math.min(0.45, 0.05 + 0.045 * sp));
-  return { tc, C, q: faceQuat(n, faceA), dir, sw, fwd: Math.max(0.1, Math.min(0.28, 0.3 - 0.022 * sp)), faceA };
+  const sw = Math.max(0.15, Math.min(0.7, 0.12 + 0.07 * sp)) * (amp || 1);
+  return { tc, C, q: faceQuat(n, faceA), dir, sw, fwd: Math.max(0.12, Math.min(0.3, 0.32 - 0.02 * sp)), faceA, V: V.slice() };
 }
 const _B = new THREE.Vector3(), _F = new THREE.Vector3(), _q = new THREE.Quaternion();
 function animRacket(rk, stroke, restP, restQ, c) {
   if (!stroke) { rk.position.copy(restP); rk.quaternion.copy(restQ); return; }
-  const { tc, C, q, dir, sw, fwd } = stroke, prep = 0.32;
+  const { tc, C, q, dir, sw, fwd } = stroke, prep = 0.3, pause = 0.08;
   _B.copy(C).addScaledVector(dir, -sw); _F.copy(C).addScaledVector(dir, sw * 0.8);
-  if (c < tc - fwd - prep) { rk.position.copy(restP); rk.quaternion.copy(restQ); }
-  else if (c < tc - fwd) { const k = sm((c - (tc - fwd - prep)) / prep); rk.position.copy(restP).lerp(_B, k); _q.copy(restQ).slerp(q, k); rk.quaternion.copy(_q); }
+  if (c < tc - fwd - pause - prep) { rk.position.copy(restP); rk.quaternion.copy(restQ); }
+  else if (c < tc - fwd - pause) { const k = sm((c - (tc - fwd - pause - prep)) / prep); rk.position.copy(restP).lerp(_B, k); _q.copy(restQ).slerp(q, k); rk.quaternion.copy(_q); }
+  else if (c < tc - fwd) { rk.position.copy(_B); rk.quaternion.copy(q); }
   else if (c < tc) { rk.position.copy(_B).lerp(C, sm((c - (tc - fwd)) / fwd)); rk.quaternion.copy(q); }
   else if (c < tc + 0.25) { rk.position.copy(C).lerp(_F, sm((c - tc) / 0.25)); rk.quaternion.copy(q); }
   else if (c < tc + 0.7) { const k = sm((c - tc - 0.25) / 0.45); rk.position.copy(_F).lerp(restP, k); _q.copy(q).slerp(restQ, k); rk.quaternion.copy(_q); }
@@ -821,6 +914,8 @@ function animRacket(rk, stroke, restP, restQ, c) {
 }
 
 /* ================= Caméra et taille ================= */
+let baseFov = 60, focus = 0;
+const _look = new THREE.Vector3();
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   const ph = Math.min($("panel").offsetHeight, h * 0.45);
@@ -829,14 +924,16 @@ function resize() {
   camera.aspect = w / vh;
   const hf = 46 * DEG;
   const vf = 2 * Math.atan(Math.tan(hf / 2) / camera.aspect) / DEG;
-  camera.fov = Math.max(42, Math.min(76, vf));
+  baseFov = Math.max(42, Math.min(76, vf));
+  camera.fov = baseFov;
   camera.setViewOffset(w, vh, 0, ph * 0.85, w, h);
   camera.updateProjectionMatrix();
 }
 window.addEventListener("resize", resize);
 
 /* ================= État du jeu ================= */
-let clock = 0, frozen = false, paused = true, timeScale = .42;
+let clock = 0, frozen = false, paused = true, timeScale = .42, hold = 0;
+const guided = () => !!LV[store.lvl].guided;
 let P = PROF.pl, picotRed = true;
 let events = [];
 const at = (t, fn) => events.push({ t, fn });
@@ -872,17 +969,18 @@ function computeMyShot(k, sIn, noise) {
   const c = CH[k], cur = PHYS.topRps(sIn);
   const assumed = Math.max(c.win[0], Math.min(c.win[1], cur));
   const hyp = PHYS.clone(sIn); PHYS.setTop(hyp, assumed);
-  const shoot = (tgt, jitter) => {
-    const sol = PHYS.solveAuto(hyp, -1, c, RUBP.inv, tgt);
+  const shoot = (tgt, jitter, tol) => {
+    const sol = PHYS.solveAuto(hyp, -1, c, RUBP.inv, tgt, tol);
     const hit = PHYS.hitWith(sIn, sol.d, sol.th + jitter, sol.st, RUBP.inv);
     const tr = PHYS.fly(hit.s, 3);
     return Object.assign({ k, assumed, cur, s: hit.s, n: hit.n, V: hit.V, tr }, classify(tr, -1));
   };
   const center = { x: 0, z: -(c.depth[0] + c.depth[1]) / 2 };
-  if (!noise) return shoot(center, 0);
+  // Vérification rapide (sans viser une profondeur précise) : sert pour « Ce qui passait » et le conseil
+  if (!noise) return shoot(center, 0, 0.5);
   const r = shoot({ x: rnd(-0.45, 0.45), z: -rnd(c.depth[0], c.depth[1]) }, gauss() * 0.25 * DEG);
-  // Bonne lecture : on n'entraîne pas l'exécution, la balle doit passer si c'est physiquement possible
-  if (r.res !== "in" && assumed === cur) { const r2 = shoot(center, 0); if (r2.res === "in") return r2; }
+  // On n'entraîne pas l'exécution : si ce coup passe sur cette balle, il passe (même calcul que « Ce qui passait »)
+  if (r.res !== "in") { const r2 = shoot(center, 0, 0.5); if (r2.res === "in") return r2; }
   return r;
 }
 function worksList(sIn) {
@@ -918,7 +1016,9 @@ function newPoint() {
   const tot = st.score[0] + st.score[1];
   st.server = (st.score[0] >= 10 && st.score[1] >= 10) ? (tot % 2 === 0 ? "me" : "opp") : (Math.floor(tot / 2) % 2 === 0 ? "me" : "opp");
   ball.hold = st.server;
+  hold = 0; rkHist.length = 0;
   updateHUD();
+  if (guided()) renderLecturePlaceholder();
   if (st.server === "me") { showServe(); prompt("À toi de servir", "hot"); }
   else { showShots(false); prompt("Il sert…"); oppServe(); }
   resize();
@@ -933,7 +1033,7 @@ function myServe(k) {
   ball.handP = p0;
   const sp = Math.hypot(s.v[0], s.v[1], s.v[2]);
   const n = [s.v[0] / sp, s.v[1] / sp, s.v[2] / sp];
-  meStroke = makeStroke(tc, p0, n, [s.v[0] * 0.6, s.v[1] * 0.6 + (sv.rps < 0 ? -1 : 1), s.v[2] * 0.6], true);
+  meStroke = makeStroke(tc, p0, n, [s.v[0] * 0.6, s.v[1] * 0.6 + (sv.rps < 0 ? -1 : 1), s.v[2] * 0.6], true, 0.5);
   const tr = PHYS.fly(s, 3);
   at(tc, () => {
     launch(tr, "inv", 0.5);
@@ -951,25 +1051,31 @@ function oppServe() {
   const n = [s.v[0] / sp, s.v[1] / sp, s.v[2] / sp];
   const tc = clock + 0.9;
   ball.hold = "opp"; ball.handP = p0;
-  oppStroke = makeStroke(tc, p0, n, [s.v[0] * 0.6, s.v[1] * 0.6 + (r < 0 ? -1 : 1), s.v[2] * 0.6], picot);
+  const Vs = [s.v[0] * 0.6, s.v[1] * 0.6 + (r < 0 ? -1 : 1), s.v[2] * 0.6];
+  oppStroke = makeStroke(tc, p0, n, Vs, picot);
   oppStroke.gest = "serve";
   const tr = PHYS.fly(s, 3);
   at(tc, () => {
     launch(tr, picot ? P.rub : "inv", 0.5);
-    startDecision(tr, { serve: true, face: picot ? "picot" : "bs", gest: "serve", wOut: PHYS.topRps(s) });
+    startDecision(tr, { serve: true, face: picot ? "picot" : "bs", gest: "serve", wOut: PHYS.topRps(s), n, V: Vs, snd: picot ? P.rub : "inv" });
+    if (guided()) at(clock + 0.12, () => { hold = 1.1; });
   });
 }
 function startDecision(tr, inc) {
-  const im = PHYS.contactIdx(tr, 1, Z_BACK, 0.08, true);
+  const im = PHYS.contactIdx(tr, 1, Z_BACK, 0.13, true, L + 0.1);
   if (im < 0) { at(clock + 1.0, () => pointEnd("me", { type: "faute" })); return; }
   st.awaiting = true; st.choice = null; st.myShot = null;
   const sIn = PHYS.stateAt(tr, im);
   st.mySIn = sIn;
   inc.wMe = PHYS.topRps(sIn); inc.eff = effKey(inc.wMe); inc.kmh = kmh(sIn);
+  const evB = tr.events.find(e => e.type === "table" && e.z > 0);
+  inc.bz = evB ? evB.z : null; inc.h = sIn.p[1] - TY;
+  inc.works = null;
   st.inc = inc;
   st.myTc = ball.start + tAt(tr, im);
   showShots(true);
-  prompt("Lis la balle…", "hot");
+  if (guided()) { renderLecture(inc); prompt("Lis la carte, puis choisis ton coup", "hot"); }
+  else prompt("Lis la balle…", "hot");
   at(st.myTc, myContact);
 }
 function choose(k) {
@@ -978,14 +1084,16 @@ function choose(k) {
   const b = $("shot-" + k); if (b) b.classList.add("chosen");
   setShotsEnabled(false);
   st.myShot = computeMyShot(k, st.mySIn, true);
-  meStroke = makeStroke(st.myTc, st.mySIn.p, st.myShot.n, st.myShot.V, true);
+  meStroke = makeStroke(st.myTc, st.mySIn.p, st.myShot.n, st.myShot.V, true, 0.45);
+  const rb = $("replayBtn"); if (rb) rb.disabled = true;
+  if (guided()) showLecture(false);
   if (frozen) { frozen = false; myContact(); }
 }
 function myContact() {
   if (st.phase !== "play" || !st.awaiting) return;
   const inc = st.inc;
   if (!st.choice) {
-    if (LV[store.lvl].freeze) { frozen = true; prompt("Choisis ton coup", "hot"); return; }
+    if (LV[store.lvl].freeze) { frozen = true; prompt("Choisis ton coup", "hot"); if (guided()) showLecture(true); return; }
     st.awaiting = false; setShotsEnabled(false);
     st.log.push({ w: inc.wMe, ok: false, type: "tard" });
     prompt("Trop tard !", "bad");
@@ -1072,7 +1180,7 @@ function planOpp(tr, myShot) {
   const faceA = resp.face === "picot";
   oppStroke = makeStroke(tc, sh.p, hit.n, hit.V, faceA);
   oppStroke.gest = resp.gest;
-  const inc = { face: resp.face, gest: resp.gest, wHis: resp.wHis, wOut: PHYS.topRps(hit.s), outKmh: kmh(hit.s), prev: st.lastMine };
+  const inc = { face: resp.face, gest: resp.gest, wHis: resp.wHis, wOut: PHYS.topRps(hit.s), outKmh: kmh(hit.s), prev: st.lastMine, n: hit.n, V: hit.V, snd: resp.rubKey };
   at(tc, () => {
     launch(tr2, resp.rubKey, Math.hypot(hit.V[0], hit.V[1], hit.V[2]) / 5 + 0.3);
     if (miss) {
@@ -1080,7 +1188,121 @@ function planOpp(tr, myShot) {
       return;
     }
     startDecision(tr2, inc);
+    if (guided()) at(clock + 0.12, () => { hold = 1.1; });
   });
+}
+
+/* ================= Carte de lecture (mode Découverte) ================= */
+const lecEl = $("lecture"), lecLine = $("lecLine");
+let lecRate = 0, lecAng = 0;
+function showLecture(on) { lecEl.hidden = !on; const b = $("lecMore"); if (b) b.textContent = on ? "Masquer" : "Détails"; }
+const GESTN = { bloc: "Bloc", coupe: "Défense coupée", pous: "Poussette", punch: "Attaque", serve: "Service" };
+const spinS = w => { const a = Math.round(Math.abs(w)); return a < 3 ? "pas de rotation" : `${a} tr/s de ${w > 0 ? "lift" : "coupé"}`; };
+function gestArrow(V) {
+  const sp = Math.hypot(V[0], V[1], V[2]) || 1, vy = V[1] / sp;
+  return vy > 0.45 ? { a: "↗", t: "de bas en haut" } : vy < -0.45 ? { a: "↘", t: "de haut en bas" } : { a: "→", t: "vers l’avant" };
+}
+function racketDesc(n, V) {
+  const ny = n[1];
+  const ang = ny >= 0.5 ? "raquette très ouverte" : ny >= 0.2 ? "raquette ouverte" : ny > -0.2 ? "raquette verticale" : "raquette fermée";
+  const sp = Math.hypot(V[0], V[1], V[2]);
+  return `${ang}, geste ${sp < 1.6 ? "court" : gestArrow(V).t}`;
+}
+function placeDesc(inc) {
+  const parts = [];
+  if (inc.bz != null) parts.push(inc.bz < 0.6 ? "courte" : inc.bz < 1.0 ? "mi-longue" : "longue");
+  parts.push(inc.h < 0.15 ? "basse" : inc.h < 0.32 ? "à mi-hauteur" : "haute");
+  return parts.join(", ");
+}
+const BALLDESC = {
+  lift: "Le haut de la balle tourne vers toi : elle plonge, file au rebond et pousse ta raquette vers le haut.",
+  llift: "Un peu de lift : le haut de la balle tourne vers toi.",
+  flot: "Elle ne tourne presque pas : elle tombe plus qu’une balle liftée et ne tire pas sur ta raquette.",
+  lcoupe: "Un peu de coupé : le bas de la balle tourne vers toi.",
+  coupe: "Le bas de la balle tourne vers toi : elle freine au rebond et tire ta raquette vers le bas.",
+  tcoupe: "Beaucoup de coupé : le bas de la balle tourne vers toi, elle tire fort ta raquette vers le bas.",
+};
+function chainTxt(inc) {
+  const rubn = RUBN[P.rub];
+  const after = Math.abs(inc.wMe - inc.wOut) >= 4 ? ` → après le rebond chez toi : ${spinS(inc.wMe)}` : "";
+  if (inc.serve) return `${inc.face === "picot" ? `Service avec sa face ${rubn} : elle ne crée presque pas d’effet.` : "Service avec sa face backside : l’effet vient de son geste."} Départ : ${spinS(inc.wOut)}${after}.`;
+  if (inc.face === "bs") return `Face backside : elle accroche, c’est son geste qui décide. Départ : ${spinS(inc.wOut)}${after}.`;
+  const from = cap(inc.prev ? inc.prev.label : "ta balle");
+  if (Math.abs(inc.wHis) < 8) return `Face ${rubn} : c’est ton coup d’avant qui décide. ${from} arrivait presque sans effet → son picot ne crée rien → départ : ${spinS(inc.wOut)}${after}.`;
+  if (inc.wHis * inc.wOut < 0) {
+    const pct = Math.round(100 * Math.abs(inc.wOut) / Math.abs(inc.wHis));
+    return `Face ${rubn} : c’est ton coup d’avant qui décide. ${from} arrivait avec ${spinS(inc.wHis)} → son picot glisse et garde ${pct} % de la rotation, dans le même sens → pour toi : ${spinS(inc.wOut)}${after}.`;
+  }
+  return `Face ${rubn} : il casse ton effet. ${from} arrivait avec ${spinS(inc.wHis)} → départ : ${spinS(inc.wOut)}${after}.`;
+}
+function spinSVG(w) {
+  const cls = Math.abs(w) < 3 ? "flat" : w > 0 ? "lift" : "cut";
+  return `<svg class="spin ${cls}" viewBox="-32 -32 64 66" aria-hidden="true">
+    <defs><marker id="spinArrow" viewBox="0 0 8 8" refX="5" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#f3f6fa"/></marker></defs>
+    <line class="sp-tbl" x1="-30" y1="24" x2="30" y2="24"/>
+    <g id="spinG"><circle r="15" class="sp-w"/><path class="sp-o" d="M0 -15 A15 15 0 0 1 0 15 Z"/></g>
+    <path class="sp-arc sp-cw" d="M-17.3 -10 A20 20 0 0 1 17.3 -10" marker-end="url(#spinArrow)"/>
+    <path class="sp-arc sp-ccw" d="M17.3 -10 A20 20 0 0 0 -17.3 -10" marker-end="url(#spinArrow)"/>
+    <text class="sp-t" x="31" y="33" text-anchor="end">vers toi →</text>
+  </svg>`;
+}
+const PREF = { tcoupe: ["tresouvert", "ouvert", "pous"], coupe: ["ouvert", "tresouvert", "pous"], lcoupe: ["ouvert", "morte", "plat", "pous"], flot: ["plat", "morte", "ouvert"], llift: ["plat", "bloc"], lift: ["plat", "bloc"] };
+function hintHTML(inc) {
+  if (!inc.works) inc.works = worksList(st.mySIn);
+  const works = inc.works;
+  if (!works.length) return "Balle très difficile : aucun coup ne passe proprement.";
+  let pref = PREF[inc.eff].slice();
+  if (inc.eff === "lift" && inc.kmh >= 15) pref = ["bloc", "plat"];
+  const best = pref.find(k => works.includes(k)) || works[0];
+  const others = works.filter(k => k !== best);
+  return `Conseil : <b>${esc(CH[best].l)}</b> (${esc(CH[best].s.toLowerCase())}).${others.length ? ` Passe aussi : ${esc(others.map(k => CH[k].l).join(", "))}.` : ""}`;
+}
+function renderLecture(inc) {
+  const fl = faceLabel(inc.face);
+  const w = inc.wMe;
+  lecRate = Math.abs(w) < 3 ? 0 : Math.sign(w) * Math.min(720, 120 + Math.abs(w) * 10);
+  lecAng = 0;
+  lecEl.innerHTML = `
+    <div class="lec-top"><span class="lec-k">Il vient de jouer</span><span class="face-chip ${fl.cls}">${esc(inc.face === "picot" ? RUBL[P.rub] : "Backside")}</span><b>${esc(GESTN[inc.gest])}</b><span class="lec-muted">${esc(racketDesc(inc.n, inc.V))}</span></div>
+    <div class="lec-ball">${spinSVG(w)}<div>
+      <div class="lec-eff ${w <= -6 ? "cut" : w >= 6 ? "top" : ""}">${esc(EFF[inc.eff])}</div>
+      <div class="lec-num">${esc(spinS(w))} · ${inc.kmh} km/h · ${esc(placeDesc(inc))}</div>
+      <div class="lec-muted">${esc(BALLDESC[inc.eff])}</div>
+    </div></div>
+    <div class="lec-chain">${esc(chainTxt(inc))}</div>
+    <div class="lec-actions"><button type="button" id="replayBtn">↺ Revoir son coup</button><button type="button" id="hintBtn">Voir le conseil</button><button type="button" id="lecClose">Masquer</button></div>
+    <div class="lec-hint" id="hintBox" hidden></div>`;
+  $("replayBtn").addEventListener("click", replayOpp);
+  $("hintBtn").addEventListener("click", () => {
+    const box = $("hintBox");
+    box.innerHTML = hintHTML(inc); box.hidden = false;
+    $("hintBtn").hidden = true;
+  });
+  $("lecClose").addEventListener("click", () => showLecture(false));
+  const ga = gestArrow(inc.V);
+  lecLine.innerHTML = `<span class="face-chip ${fl.cls}">${esc(inc.face === "picot" ? RUBL[P.rub] : "Backside")}</span><b>${esc(GESTN[inc.gest])}${ga.a === "→" ? "" : " " + ga.a}</b><span class="lec-muted">· balle</span><span class="lec-eff-s ${w <= -6 ? "cut" : w >= 6 ? "top" : ""}">${esc(EFF[inc.eff])}</span><span class="lec-muted">${Math.round(Math.abs(w))} tr/s</span><button type="button" id="lecMore">Détails</button>`;
+  $("lecMore").addEventListener("click", () => showLecture(lecEl.hidden));
+  showLecture(false);
+}
+function renderLecturePlaceholder() {
+  lecRate = 0;
+  showLecture(false);
+  lecLine.innerHTML = `<span class="lec-gold"><b>Règle d’or :</b> ${esc(P.gold)}</span>`;
+}
+/* Revoir son coup : on rejoue sa frappe au ralenti, tout le reste du point est décalé d'autant */
+function replayOpp() {
+  if (!st.awaiting || st.choice || !ball.tr || !oppStroke) return;
+  const delta = clock + 0.8 - ball.start;
+  ball.start += delta; ball.evI = 0;
+  oppStroke.tc += delta; st.myTc += delta;
+  events.forEach(e => { e.t += delta; });
+  if (frozen) { frozen = false; at(st.myTc, myContact); }
+  hold = 0; rkHist.length = 0;
+  showLecture(false);
+  const snd = st.inc && st.inc.snd;
+  at(oppStroke.tc, () => sound(snd || "inv", 0.6));
+  at(oppStroke.tc + 0.12, () => { if (guided()) hold = 1.1; });
+  prompt("Regarde son geste…", "hot");
 }
 
 /* ================= Bilan du point ================= */
@@ -1132,6 +1354,7 @@ function classicTip(inc, type) {
 function pointEnd(winner, info) {
   if (st.phase !== "play") return;
   st.phase = "sheet"; events = []; st.awaiting = false; frozen = false;
+  if (guided()) showLecture(false);
   st.score[winner === "me" ? 0 : 1]++;
   updateHUD(); setShotsEnabled(false);
   const inc = st.inc, sh = st.myShot;
@@ -1247,6 +1470,7 @@ function previewOpp() {
 function openMenu() {
   paused = true; st.phase = "menu"; ball.tr = null; ball.handP = null; ball.hold = "me"; oppStroke = meStroke = null; events = [];
   renderMenu(); previewOpp(); showShots(false); prompt("Choisis ton adversaire");
+  $("panel").classList.remove("guided"); lecLine.hidden = true; showLecture(false); lecRate = 0; resize();
   $("menu").hidden = false;
 }
 function racketSVG(color, label, sub) {
@@ -1277,6 +1501,8 @@ $("goBtn").addEventListener("click", () => {
   $("check").hidden = true;
   timeScale = LV[store.lvl].ts;
   st.score = [0, 0]; st.log = [];
+  $("panel").classList.toggle("guided", guided());
+  lecLine.hidden = !guided(); showLecture(false);
   paused = false;
   newPoint();
 });
@@ -1306,7 +1532,11 @@ function sample(tr, t) {
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  const sdt = paused || frozen ? 0 : dt * timeScale;
+  if (hold > 0 && !paused) hold -= dt;
+  let ts = timeScale;
+  // Découverte : ralenti supplémentaire pendant son geste
+  if (guided() && oppStroke && oppStroke.gest && clock > oppStroke.tc - oppStroke.fwd - 0.4 && clock < oppStroke.tc + 0.12) ts *= 0.5;
+  const sdt = paused || frozen || hold > 0 ? 0 : dt * ts;
   clock += sdt;
   for (;;) { const i = events.findIndex(e => e.t <= clock); if (i < 0) break; events.splice(i, 1)[0].fn(); }
 
@@ -1316,14 +1546,17 @@ function frame(now) {
     sample(tr, t);
     bp.set(smp.p[0], smp.p[1] + (RV - PHYS.r), smp.p[2]);
     const wn = Math.hypot(smp.w[0], smp.w[1], smp.w[2]);
-    if (wn > 1e-3 && sdt > 0) {
+    // rotation affichée ralentie (×0,12) pour rester lisible ; elle continue doucement pendant les arrêts
+    const rdt = sdt > 0 ? sdt : (frozen || hold > 0) && !paused ? dt * 0.3 : 0;
+    if (wn > 1e-3 && rdt > 0) {
       _ax.set(smp.w[0] / wn, smp.w[1] / wn, smp.w[2] / wn);
-      _qs.setFromAxisAngle(_ax, wn * 0.12 * sdt);       // rotation affichée ralentie (×0,12) pour rester lisible
+      _qs.setFromAxisAngle(_ax, wn * 0.12 * rdt);
       ballM.quaternion.premultiply(_qs);
     }
     while (ball.evI < tr.events.length && tr.events[ball.evI].t <= t) {
       const e = tr.events[ball.evI++];
       sound(e.type, e.sp / 5);
+      if (e.type === "table" && store.aide) spawnMark(e.x, e.z);
     }
   } else {
     const bob = Math.abs(Math.sin(now / 380)) * 0.12;
@@ -1335,8 +1568,21 @@ function frame(now) {
   const overTable = Math.abs(bp.x) < W && Math.abs(bp.z) < L;
   shadow.position.set(bp.x, overTable ? TY + 0.002 : 0.003, bp.z);
   const hgt = bp.y - (overTable ? TY : 0);
-  shadow.material.opacity = Math.max(0.05, 0.4 - hgt * 0.5);
-  shadow.scale.setScalar(1 + hgt * 0.8);
+  shadow.material.opacity = Math.max(0.18, 0.7 - hgt * 0.9);
+  shadow.scale.setScalar(1 + hgt * 1.2);
+  dropLine.visible = !!store.aide && !!ball.tr && hgt > 0.03;
+  if (dropLine.visible) {
+    dropPos[0] = bp.x; dropPos[1] = bp.y - RV; dropPos[2] = bp.z;
+    dropPos[3] = bp.x; dropPos[4] = shadow.position.y; dropPos[5] = bp.z;
+    dropGeo.attributes.position.needsUpdate = true;
+  }
+  for (const k of MARKS) {
+    if (!k.m.visible) continue;
+    const age = (now - k.t) / 1000;
+    if (age > 1.8 || !store.aide) { k.m.visible = false; continue; }
+    k.m.material.opacity = 0.9 * (1 - age / 1.8);
+    k.m.scale.setScalar(1 + age * 0.5);
+  }
 
   // Trace (aide) : les 0,3 dernières secondes de la trajectoire
   trail.visible = !!store.aide && !!ball.tr;
@@ -1356,6 +1602,26 @@ function frame(now) {
   opp.position.z += (tz - opp.position.z) * Math.min(1, dt * 3);
   const oRest = tmpV.set(opp.position.x + 0.32, 1.0, opp.position.z + 0.3).clone();
   animRacket(oppRk, oppStroke, oRest, OPP_REST_Q, clock);
+  // Stroboscope : on garde la trace de sa raquette pendant le geste
+  if (sdt > 0) {
+    rkHist.push({ c: clock, p: oppRk.position.clone(), q: oppRk.quaternion.clone() });
+    while (rkHist.length && rkHist[0].c < clock - 0.8) rkHist.shift();
+  }
+  const showG = store.aide && oppStroke && oppStroke.gest && st.phase === "play" &&
+    clock > oppStroke.tc - oppStroke.fwd - 0.02 && clock < oppStroke.tc + 0.6;
+  for (let k = 0; k < GHOSTS; k++) {
+    const g = ghosts[k];
+    g.visible = false;
+    if (!showG) continue;
+    const tk = Math.min(clock, oppStroke.tc + 0.2) - (k + 1) * 0.045;
+    if (tk < oppStroke.tc - oppStroke.fwd - 0.03) continue;
+    let e = null;
+    for (let i = rkHist.length - 1; i >= 0; i--) if (rkHist[i].c <= tk) { e = rkHist[i]; break; }
+    if (!e) continue;
+    g.position.copy(e.p); g.quaternion.copy(e.q);
+    g.material.opacity = 0.45 * (1 - k / GHOSTS) * Math.min(1, (oppStroke.tc + 0.6 - clock) / 0.25);
+    g.visible = true;
+  }
   _x.set(0, -0.13, 0).applyQuaternion(oppRk.quaternion);
   setArm(new THREE.Vector3(opp.position.x + 0.2, 1.48, opp.position.z + 0.02), oppRk.position.clone().add(_x));
 
@@ -1369,14 +1635,29 @@ function frame(now) {
     tagEl.style.left = ((tmpV.x + 1) / 2 * r.width) + "px";
     tagEl.style.top = ((1 - tmpV.y) / 2 * r.height) + "px";
     const fa = oppStroke.faceA;
-    tagEl.textContent = fa ? RUBL[P.rub] : "Backside";
+    tagEl.textContent = `${fa ? RUBL[P.rub] : "Backside"} · ${GESTN[oppStroke.gest] || ""} ${gestArrow(oppStroke.V).a}`;
     tagEl.className = "face-tag " + ((fa === picotRed) ? "red" : "black");
     tagEl.hidden = false;
   } else tagEl.hidden = true;
 
+  // Carte de lecture : la petite balle de profil tourne comme la vraie
+  if (lecRate && !lecEl.hidden && st.phase === "play") {
+    lecAng = (lecAng + lecRate * dt) % 360;
+    const g = $("spinG"); if (g) g.setAttribute("transform", `rotate(${lecAng.toFixed(1)})`);
+  }
+
   // Caméra : léger suivi de la balle
   camera.position.x += ((bp.x * 0.25) - camera.position.x) * Math.min(1, dt * 2);
-  camera.lookAt(CAML.x + camera.position.x * 0.5, CAML.y, CAML.z);
+  // Découverte : la caméra se rapproche de son geste, puis revient sur la balle
+  const fT = guided() && st.phase === "play" && oppStroke && oppStroke.gest &&
+    clock > oppStroke.tc - oppStroke.fwd - 0.5 && clock < oppStroke.tc + 0.18 ? 1 : 0;
+  focus += (fT - focus) * Math.min(1, dt * 3);
+  if (focus < 0.002) focus = 0;
+  _look.set(CAML.x + camera.position.x * 0.5, CAML.y, CAML.z);
+  if (focus > 0 && oppStroke) _look.lerp(oppStroke.C, 0.55 * focus);
+  camera.lookAt(_look);
+  const fov = baseFov * (1 - 0.38 * focus);
+  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
 
   renderer.render(scene, camera);
   requestAnimationFrame(frame);

@@ -12,8 +12,9 @@ Tu es au bout de la table, en vue joueur. En face, un adversaire picot ou anti-t
 Une mauvaise lecture donne une balle au filet, dehors ou trop haute. Le bilan du point explique, chiffres à l'appui, ce qui est arrivé : la rotation de ta balle quand elle est arrivée chez lui, ce que son revêtement en a fait, ce que le rebond sur ta table a changé, et les coups qui passaient.
 
 - 4 adversaires : **Le mur** (picot long, bloqueur), **Le défenseur** (picot long sans mousse, défend loin), **Le frappeur** (picot court), **L'endormeur** (anti-top).
-- 3 niveaux : Découverte (ralenti, la balle t'attend), Entraînement (ralenti), Match (presque la vraie vitesse).
-- Aide visuelle : balle bicolore pour voir la rotation, nom de la face au contact, trace de la balle.
+- 3 niveaux : Découverte (guidé), Entraînement (ralenti, tu lis seul), Match (presque la vraie vitesse).
+- **Découverte** : la caméra se rapproche et ralentit sur son geste, puis marque une pause au contact. Une ligne en bas résume la face, le geste et l'effet. Quand la balle t'attend, une carte de lecture s'ouvre : ce qu'il a fait (face, geste, angle de raquette), comment la balle tourne (petite balle animée de profil, tours/s, km/h, longueur et hauteur) et pourquoi (la chaîne ton coup → son revêtement → rebond). Tu peux revoir son coup au ralenti et demander le conseil.
+- Aide visuelle : balle bicolore pour voir la rotation, nom de la face et direction du geste au contact, positions successives de sa raquette (stroboscope), trace de la balle, repère au point de rebond, trait vertical entre la balle et son ombre.
 - Son : chaque revêtement a son bruit (le picot long claque sec, l'anti fait un « toc » sourd).
 
 ### La physique
@@ -24,6 +25,7 @@ Le jeu ne tire pas les effets d'un tableau : il simule la balle.
 - Rebond sur la table avec frottement (coefficient 0,25, valeur mesurée dans les études sur le tennis de table) : le rebond freine une balle coupée et lui retire une partie de sa rotation, et il donne un peu de lift à une balle sans effet.
 - Contact raquette selon l'adhérence du revêtement : le backside accroche et c'est son geste qui crée l'effet ; le picot long et l'anti glissent et gardent la rotation de ta balle, qui revient donc inversée pour toi ; le picot court accroche un peu et casse l'effet.
 - Ton coup règle la raquette pour la rotation que tu as lue. Si la balle tourne plus ou moins que ce que tu as lu, c'est la physique qui l'envoie au filet ou dehors.
+- Tu prends les balles normales à ta ligne de fond (au sommet du rebond si elle est courte, en reculant si elle est longue et rapide), comme à la table.
 
 C'est un modèle simplifié (pas d'effet latéral, revêtements décrits par trois valeurs) : il donne les bons sens et les bons ordres de grandeur, pas la balle exacte de ton adversaire.
 
