@@ -1,22 +1,26 @@
-# Lire le picot
+# Face au picot
 
-Petite appli d'entraînement, faite pour le téléphone, pour apprendre à lire le jeu d'un adversaire qui joue **picot court, picot long (avec ou sans mousse) ou anti-top**, et à choisir la bonne réponse quand on est un joueur de top.
+Entraînement sur téléphone pour apprendre à lire le jeu d'un adversaire qui joue **picot court, picot long (avec ou sans mousse) ou anti-top**, quand on est un joueur de top.
 
-## Ce qu'il y a dedans
+## Le jeu 3D : `index.html`
 
-- **Entraînement** : séries de 10 balles. On te décrit l'échange (ton coup, puis le revêtement et le geste de l'adversaire). Tu dois :
-  1. lire l'effet qui arrive (lifté, sans effet, coupé…) ;
-  2. choisir ta réponse.
-  Chaque balle est corrigée avec la trajectoire animée, l'explication, ce qu'un backside aurait renvoyé, et l'erreur classique à éviter.
-  Le **mode réflexe** laisse 6 secondes par décision. Tu peux cibler un seul revêtement (par exemple ton adversaire de samedi).
-- **Labo** : tu combines ton coup, son revêtement et son geste, et tu vois ce qui revient.
-- **Fiches** : pour chaque revêtement, comment il fonctionne, comment le reconnaître, la règle d'or et le plan de jeu pour un topspinner.
+Tu es au bout de la table, en vue joueur. En face, un adversaire picot ou anti-top. Pour chaque balle :
 
-Les scores et le pourcentage de bonne lecture par revêtement sont enregistrés sur le téléphone (stockage local du navigateur).
+1. tu regardes **la face qui touche la balle** (sa couleur), **son geste** (bloc, défense coupée, poussette, attaque) et **la trajectoire** ;
+2. tu choisis ton coup avant que la balle arrive : top très ouvert, top d'ouverture, top tendu, bloc fermé, poussette ou balle morte.
+
+L'effet qui revient dépend de ce que tu as joué juste avant : ton top dans le picot long revient coupé, ta poussette revient liftée, ta balle sans effet revient sans effet. Une mauvaise lecture donne une balle au filet, dehors ou trop haute, et un bilan explique ce qui arrivait et ce qu'il fallait jouer.
+
+- 4 adversaires : **Le mur** (picot long, bloqueur), **Le défenseur** (picot long sans mousse, défend loin), **Le frappeur** (picot court), **L'endormeur** (anti-top).
+- 3 niveaux : Découverte (ralenti, la balle t'attend), Entraînement (ralenti), Match (presque la vraie vitesse).
+- Aide visuelle : nom de la face au contact et trace de la balle.
+- Avant chaque match, tu vois sa raquette : la couleur du picot change d'un match à l'autre.
+- Bilan de fin de match : pourcentage de lecture juste et erreurs à corriger.
+
+## Le quiz : `quiz.html`
+
+Quiz en deux temps (effet reçu, puis ta réponse), labo de combinaisons et fiches par revêtement.
 
 ## Utilisation
 
-Tout tient dans `index.html` : aucune installation.
-
-- Ouvre le fichier dans le navigateur du téléphone, ou
-- active GitHub Pages (Settings → Pages → branche, dossier `/`) et ouvre l'adresse donnée, puis « Ajouter à l'écran d'accueil » pour l'avoir comme une appli.
+Aucune installation : ouvre `index.html` dans le navigateur du téléphone (connexion nécessaire pour charger la 3D), ou active GitHub Pages (Settings → Pages) et ajoute la page à l'écran d'accueil.
