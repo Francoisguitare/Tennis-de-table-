@@ -1251,8 +1251,11 @@ function readBall(inc, sIn) {
   if (inc.eff === "lift" && inc.kmh >= 15) pref = ["bloc", "plat"];
   inc.best = pref.find(k => inc.works.includes(k)) || inc.works[0] || null;
   const dx = -sIn.p[0], dz = -0.8 - sIn.p[2], h = Math.hypot(dx, dz) || 1;
-  const hit = PHYS.hitWith(sIn, [dx / h, 0, dz / h], 0, { a: 1.5, b: 0 }, RUBP.inv);
-  inc.still = classify(PHYS.fly(hit.s, 3), -1).res;
+  // Ce qui compte ici, c'est l'effet de la rotation : on compare l'angle de départ avec celui d'une même balle sans effet
+  const d = [dx / h, 0, dz / h], flat = PHYS.clone(sIn); PHYS.setTop(flat, 0);
+  const ang = s0 => { const o = PHYS.hitWith(s0, d, 0, { a: 1.5, b: 0 }, RUBP.inv).s.v; return Math.atan2(o[1], Math.hypot(o[0], o[2])) / DEG; };
+  const delta = ang(sIn) - ang(flat);
+  inc.still = delta > 4 ? "up" : delta < -4 ? "down" : "flat";
 }
 
 /* ===== Animations de lecture, de profil : lui à gauche, toi à droite =====
@@ -1262,6 +1265,7 @@ const AN_SPIN = 300;
 const anCol = w => w <= -6 ? "#8ab8ff" : w >= 6 ? "#ffab66" : "#e3e9f0";
 const anSgn = w => w <= -6 ? -1 : w >= 6 ? 1 : 0;   // à l'écran, pour une balle qui vient vers toi : + = sens horaire = lift
 const RESV = { in: "in", haute: "high", net: "net", own: "net", long: "long", wide: "long" };
+const STILLT = { up: { t: "Monte", c: "#ffab66", path: "long" }, down: { t: "Descend", c: "#8ab8ff", path: "net" }, flat: { t: "Tout droit", c: "#e3e9f0", path: "in" } };
 const REST = { in: { t: "Passe", c: "#52c88a" }, net: { t: "Filet", c: "#f2925f" }, long: { t: "Dehors", c: "#f2925f" }, high: { t: "Balle haute", c: "#f2c94c" } };
 /* Ton geste pour chaque coup, de profil : angle (+ = raquette ouverte), départ et fin du geste, rotation donnée */
 const SHA = {
@@ -1368,7 +1372,7 @@ const AH = { hr: [22, 44], mr: [322, 42], hs: [-14, 20], ms: [358, 20] };
 function anStrip(D, time) {
   const t = time % 4.6, m = D.his, n = anNHim(m.ang), k = [0.55, 0.8, 1.1, 1.8, 2.3];
   const Hc = [AH.hr[0] + (m.from[0] + m.to[0]) / 2 + n[0] * 10.5, AH.hr[1] + (m.from[1] + m.to[1]) / 2 + n[1] * 10.5];
-  const Cm = [AH.mr[0] - 8.5, AH.mr[1]], r = D.still, R = REST[r];
+  const Cm = [AH.mr[0] - 8.5, AH.mr[1]], R = STILLT[D.still], r = R.path;
   const dy = D.oSign2 < 0 ? 6 : D.oSign2 > 0 ? -6 : 0, X = [Cm[0], Cm[1] + dy];
   const A = D.serve ? [[Hc[0] - 2, Hc[1] - 26], [Hc[0] - 2, Hc[1] - 30], [Hc[0] - 1, Hc[1] - 12]] : [[296, 30], [196, 6], [104, 68.5]];
   const B = D.serve ? [[Hc[0] - 1, Hc[1] - 12], [Hc[0], Hc[1] - 6], Hc] : [[104, 68.5], [64, 30], Hc];
@@ -1477,7 +1481,7 @@ function revealShots() {
 function renderLecture(inc) {
   const fl = faceLabel(inc.face), w = inc.wMe;
   const word = v => v <= -6 ? "coupé" : v >= 6 ? "lifté" : "sans effet";
-  const still = RESV[inc.still] || "net";
+  const still = inc.still || "flat";
   // Son geste vu de profil : angle de sa raquette et sens du mouvement
   const hz = Math.hypot(inc.n[0], inc.n[2]) || 1;
   const ang = anCl(Math.atan2(-inc.n[1], hz) / DEG, -60, 60);
@@ -1497,7 +1501,7 @@ function renderLecture(inc) {
   lecEl.innerHTML = `
     <div class="lec-head"><span class="lec-eff ${w <= -6 ? "cut" : w >= 6 ? "top" : ""}">${esc(EFF[inc.eff])}</span><span class="face-chip ${fl.cls}">${esc(inc.face === "picot" ? RUBL[P.rub] : "Backside")}</span><b>${esc(gest)}</b><button type="button" id="lecClose">Masquer</button></div>
     <svg class="lec-strip" viewBox="0 0 344 88" role="img" aria-label="${esc(chainTxt(inc))}" font-family="Atkinson Hyperlegible, sans-serif">${STRIP_SVG}</svg>
-    <div class="lec-steps"><div><span>1 · Il a joué</span><b>${esc(gest)}</b></div><div><span>2 · Elle arrive</span><b style="color:${anCol(w)}">${esc(EFF[inc.eff])}</b></div><div><span>3 · Raquette droite</span><b style="color:${REST[still].c}">${esc(REST[still].t)}</b></div></div>
+    <div class="lec-steps"><div><span>1 · Il a joué</span><b>${esc(gest)}</b></div><div><span>2 · Elle arrive</span><b style="color:${anCol(w)}">${esc(EFF[inc.eff])}</b></div><div><span>3 · Raquette droite</span><b style="color:${STILLT[still].c}">${esc(STILLT[still].t)}</b></div></div>
     <div class="lec-actions"><button type="button" id="replayBtn">↺ Revoir son coup</button>
       <div class="lec-speed" role="group" aria-label="Vitesse des animations"><span>Vitesse</span>${[[0.25, "Très lent"], [0.5, "Lent"], [1, "Normal"]].map(([v, l]) => `<button type="button" data-sp="${v}" aria-pressed="${store.animSp === v}">${l}</button>`).join("")}<button type="button" id="animPause" aria-label="${anim.paused ? "Relancer les animations" : "Mettre les animations en pause"}">${anim.paused ? "▶" : "❚❚"}</button></div>
     </div>`;
