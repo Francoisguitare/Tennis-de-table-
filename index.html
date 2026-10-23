@@ -112,7 +112,7 @@ button { font: inherit; color: inherit; }
 .lecture {
   position: fixed; z-index: 4; top: calc(env(safe-area-inset-top, 0px) + 62px);
   left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
-  max-width: 600px; margin: 0 auto; max-height: 46vh; overflow: auto;
+  max-width: 600px; margin: 0 auto; max-height: 58vh; overflow: auto;
   background: rgba(9, 18, 31, .96); border: 1px solid var(--line); border-radius: 14px;
   padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.35;
 }
@@ -142,7 +142,7 @@ button { font: inherit; color: inherit; }
   padding: 4px 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; min-height: 32px;
 }
 .lec-actions button[disabled] { opacity: .4; cursor: default; }
-.lec-strip { display: block; width: 100%; height: auto; max-height: 150px; }
+.lec-strip { display: block; flex: none; width: 100%; height: auto; max-height: 150px; }
 .lec-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .lec-steps > div {
   display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px; border-radius: 10px;
@@ -151,6 +151,16 @@ button { font: inherit; color: inherit; }
 .lec-steps > div.on { opacity: 1; background: rgba(255, 255, 255, .1); }
 .lec-steps span { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .lec-steps b { font-size: 13px; line-height: 1.15; }
+/* Les chiffres : rotation et vitesse à chaque étape, la ligne en cours s'allume avec le film */
+.lec-nums { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.lec-nums td { padding: 3px 4px; vertical-align: top; }
+.lec-nums td:first-child { color: var(--muted); }
+.lec-nums td:last-child { text-align: right; color: var(--muted); white-space: nowrap; }
+.lec-nums td:nth-child(2) { font-weight: 700; }
+.lec-nums tr { opacity: .55; transition: opacity .2s, background-color .2s; }
+.lec-nums tr.on { opacity: 1; background: rgba(255, 255, 255, .1); }
+.lec-nums tr.on td:first-child { color: var(--ink); }
+.lec-actions button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
 .lec-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 /* Boutons de coups animés (Découverte) : le geste de ta raquette, puis ce que donne le coup */
 .panel.big .shots { min-height: 236px; grid-auto-rows: minmax(112px, auto); gap: 10px 6px; padding-top: 4px; }
@@ -700,6 +710,7 @@ const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } c
 if (!PROF[store.prof]) store.prof = "pl";
 if (!LV[store.lvl]) store.lvl = "decouverte";
 if (![0.25, 0.5, 1].includes(store.animSp)) store.animSp = 0.5;
+if (typeof store.nums !== "boolean") store.nums = true;
 if (typeof store.sound !== "boolean") store.sound = true;
 
 /* ================= Son ================= */
@@ -981,6 +992,14 @@ function classify(tr, side) {
   return { res: "long" };
 }
 
+/* Rotation juste avant et juste après le rebond sur la table (camp de signe side) */
+function bounceAt(tr, side) {
+  const e = tr.events.find(e => e.type === "table" && Math.sign(e.z) === side);
+  if (!e) return null;
+  const a = PHYS.stateAt(tr, e.i - 1), b = PHYS.stateAt(tr, e.i);
+  return { a: PHYS.topRps(a), b: PHYS.topRps(b), ka: kmh(a), kb: kmh(b) };
+}
+
 /* Ton coup : tu règles la raquette pour la rotation que tu as lue (fenêtre du coup choisi) */
 function computeMyShot(k, sIn, noise) {
   const c = CH[k], cur = PHYS.topRps(sIn);
@@ -1094,6 +1113,8 @@ function startDecision(tr, inc) {
   const sIn = PHYS.stateAt(tr, im);
   st.mySIn = sIn;
   inc.wMe = PHYS.topRps(sIn); inc.eff = effKey(inc.wMe); inc.kmh = kmh(sIn);
+  inc.chain = Object.assign(inc.chain || {}, { meB: bounceAt(tr, 1) });
+  if (inc.outKmh == null) inc.outKmh = kmh(PHYS.stateAt(tr, 0));
   const evB = tr.events.find(e => e.type === "table" && e.z > 0);
   inc.bz = evB ? evB.z : null; inc.h = sIn.p[1] - TY;
   inc.works = null;
@@ -1207,7 +1228,9 @@ function planOpp(tr, myShot) {
   const faceA = resp.face === "picot";
   oppStroke = makeStroke(tc, sh.p, hit.n, hit.V, faceA);
   oppStroke.gest = resp.gest;
-  const inc = { face: resp.face, gest: resp.gest, wHis: resp.wHis, wOut: PHYS.topRps(hit.s), outKmh: kmh(hit.s), prev: st.lastMine, n: hit.n, V: hit.V, snd: resp.rubKey };
+  const s0 = PHYS.stateAt(tr, 0);
+  const chain = { me0: { w: PHYS.topRps(s0), k: kmh(s0) }, myB: myShot ? null : bounceAt(tr, 1), hisB: bounceAt(tr, -1), hisK: kmh(sh) };
+  const inc = { face: resp.face, gest: resp.gest, wHis: resp.wHis, wOut: PHYS.topRps(hit.s), outKmh: kmh(hit.s), prev: st.lastMine, n: hit.n, V: hit.V, snd: resp.rubKey, chain };
   at(tc, () => {
     launch(tr2, resp.rubKey, Math.hypot(hit.V[0], hit.V[1], hit.V[2]) / 5 + 0.3);
     if (miss) {
@@ -1223,6 +1246,7 @@ function planOpp(tr, myShot) {
 const lecEl = $("lecture"), lecLine = $("lecLine");
 function showLecture(on) { lecEl.hidden = !on; const b = $("lecMore"); if (b) b.textContent = on ? "Masquer" : "Carte"; }
 const GESTN = { bloc: "Bloc", coupe: "Défense coupée", pous: "Poussette", punch: "Attaque", serve: "Service" };
+const fmtW = w => { const a = Math.round(Math.abs(w)); return a < 3 ? "sans rotation" : `${w > 0 ? "lift" : "coupé"} ${a} tr/s`; };
 const spinS = w => { const a = Math.round(Math.abs(w)); return a < 3 ? "pas de rotation" : `${a} tr/s de ${w > 0 ? "lift" : "coupé"}`; };
 function gestArrow(V) {
   const sp = Math.hypot(V[0], V[1], V[2]) || 1, vy = V[1] / sp;
@@ -1389,7 +1413,7 @@ function anStrip(D, time) {
   const g = anOffs([AH.hr[0] + m.from[0], AH.hr[1] + m.from[1]], [AH.hr[0] + m.to[0], AH.hr[1] + m.to[1]], 26);
   const sl = dy ? [[Cm[0] - 13, Cm[1] - dy * 1.6], [Cm[0] - 13, Cm[1] + dy * 1.8]] : [[0, 0], [0, 1]];
   const u1 = anPu(t, 0.95, 0.3), u2 = anPu(t, 2.25, 0.3), b1 = anPu(t, 0.62, 0.4), b2 = anPu(t, 1.75, 0.4), tu = (t - (tEnd - 0.1)) / 0.15;
-  const ph = t < 0.95 ? 1 : t < 1.75 ? 2 : t < 2.25 ? 3 : 4;
+  const ph = t < 0.95 ? 1 : t < 1.75 ? 2 : t < 2.25 ? 3 : 4, lp = t < 0.62 ? 0 : t < 0.95 ? 1 : t < 1.75 ? 2 : 3;
   const sign = ph === 1 ? D.pSign : ph === 2 ? D.oSign1 : D.oSign2;
   const rot = AN_SPIN * (D.pSign * Math.min(t, 0.95) + D.oSign1 * anCl(t - 0.95, 0, 0.8) + D.oSign2 * Math.max(0, t - 1.75));
   const aC = ph === 1 ? D.pCol : ph === 2 ? D.oCol1 : D.oCol2;
@@ -1407,7 +1431,8 @@ function anStrip(D, time) {
     ball: anT(p, rot), arr: anA(p, sign), ring: anA(p, 1),
     ao: sign !== 0 && t < 2.25 ? 1 : 0, ro: sign === 0 && t < 2.25 ? 1 : 0,
     bo: D.serve && t < 0.5 ? 0 : anFade(t, 0.12, 4.2, 4.4),
-    lab: ph === 1 ? D.pLab : D.oLab, lc: ph === 1 ? D.pCol : D.oCol2, lo: t < 2.25 && (ph > 1 || D.pLab) ? 1 : 0,
+    stage: t < 0.62 ? 1 : t < 0.95 ? 2 : t < 1.75 ? 3 : t < 2.25 ? 4 : 5,
+    lab: D.labs[lp], lc: D.labc[lp], lo: t < 2.25 && D.labs[lp] ? 1 : 0,
     lx: an1(anCl(p[0], 76, 268)), ly: an1(Math.max(11, p[1] - 17)),
     tag: `translate(228 13) scale(${an2(tu >= 0 ? 0.6 + 0.4 * sm(tu) : 0.6)})`, to: tu >= 0 && t < 4.3 ? 1 : 0,
   };
@@ -1447,7 +1472,7 @@ function anMini(M, key, time, reveal) {
     io: show && r !== "long" && iu >= 0 && iu <= 1 ? an2(1 - iu) : 0,
   };
 }
-const anim = { tt: 0, last: 0, paused: false, D: null, strip: null, steps: null, M: { live: false, sign: 0, col: "#e3e9f0", mk: -8, res: null }, minis: [], reveal: false };
+const anim = { rows: [], tt: 0, last: 0, paused: false, D: null, strip: null, steps: null, M: { live: false, sign: 0, col: "#e3e9f0", mk: -8, res: null }, minis: [], reveal: false };
 const bigPanel = on => { $("panel").classList.toggle("big", !!on); if (!on) $("shots").classList.remove("reveal"); };
 function tickAnim(now) {
   if (!guided() || now - anim.last < 33) return;
@@ -1459,6 +1484,7 @@ function tickAnim(now) {
     const v = anStrip(anim.D, t);
     anApply(anim.strip, v);
     anim.steps.forEach((el, i) => el.classList.toggle("on", v.step === i + 1));
+    anim.rows.forEach(el => el.classList.toggle("on", +el.dataset.st === v.stage));
   }
   if ($("panel").classList.contains("big")) for (const m of anim.minis) anApply(m.b, anMini(anim.M, m.k, t, anim.reveal));
 }
@@ -1480,8 +1506,22 @@ function revealShots() {
 
 function renderLecture(inc) {
   const fl = faceLabel(inc.face), w = inc.wMe;
-  const word = v => v <= -6 ? "coupé" : v >= 6 ? "lifté" : "sans effet";
   const still = inc.still || "flat";
+  // Les chiffres de la chaîne : rotation (tours/s, lift ou coupé dans le sens où va la balle) et vitesse à chaque étape
+  const C = inc.chain || {}, cell = x => `<span style="color:${anCol(x)}">${esc(fmtW(x))}</span>`;
+  const wd = x => Math.abs(x) < 3 ? "0" : `${x > 0 ? "lift" : "coupé"} ${Math.round(Math.abs(x))}`;
+  const pair = (a, b) => (Math.sign(a) === Math.sign(b) && Math.abs(a) >= 3 && Math.abs(b) >= 3)
+    ? `<span style="color:${anCol(b)}">${wd(a)} → ${Math.round(Math.abs(b))} tr/s</span>`
+    : `<span style="color:${anCol(a)}">${wd(a)}</span> → <span style="color:${anCol(b)}">${wd(b)} tr/s</span>`;
+  const face = inc.face === "picot" ? RUBN[P.rub] : "backside";
+  const rows = [];
+  if (!inc.serve && C.me0) rows.push([1, cap(inc.prev ? inc.prev.label : "ta balle"), cell(C.me0.w), `${C.me0.k} km/h`]);
+  if (!inc.serve && C.myB) rows.push([1, "Rebond chez toi", pair(C.myB.a, C.myB.b), `${C.myB.ka} → ${C.myB.kb} km/h`]);
+  if (!inc.serve && C.hisB) rows.push([2, "Rebond chez lui", pair(C.hisB.a, C.hisB.b), `${C.hisB.ka} → ${C.hisB.kb} km/h`]);
+  rows.push([3, inc.serve ? `Son service · ${face}` : `Sa raquette · ${face}`, inc.serve ? cell(inc.wOut) : pair(inc.wHis, inc.wOut), inc.serve ? `${inc.outKmh} km/h` : `${C.hisK} → ${inc.outKmh} km/h`]);
+  if (C.meB) rows.push([4, "Rebond chez toi", pair(C.meB.a, C.meB.b), `${C.meB.ka} → ${C.meB.kb} km/h`]);
+  rows.push([5, "À ton contact", cell(w), `${inc.kmh} km/h · ${Math.round(inc.h * 100)} cm`]);
+  const labs = [inc.serve ? null : C.me0 && C.me0.w, inc.serve ? null : C.hisB && C.hisB.b, inc.wOut, C.meB ? C.meB.b : w];
   // Son geste vu de profil : angle de sa raquette et sens du mouvement
   const hz = Math.hypot(inc.n[0], inc.n[2]) || 1;
   const ang = anCl(Math.atan2(-inc.n[1], hz) / DEG, -60, 60);
@@ -1490,8 +1530,8 @@ function renderLecture(inc) {
   anim.D = {
     serve: !!inc.serve, still,
     pSign: inc.serve ? 0 : -anSgn(inc.wHis), pCol: anCol(inc.wHis),
-    pLab: inc.serve ? "" : inc.prev && inc.prev.serve ? inc.prev.label : `${inc.prev ? inc.prev.label : "ta balle"} · ${inc.wHis <= -6 ? "coupé" : inc.wHis >= 6 ? "lift" : "sans effet"}`,
-    oSign1: anSgn(inc.wOut), oCol1: anCol(inc.wOut), oSign2: anSgn(w), oCol2: anCol(w), oLab: `${word(w)} pour toi`,
+    labs: labs.map(x => x ? fmtW(x) : ""), labc: labs.map(x => anCol(x || 0)),
+    oSign1: anSgn(inc.wOut), oCol1: anCol(inc.wOut), oSign2: anSgn(w), oCol2: anCol(w),
     his: { ang, from: [-dir[0] * len * 0.45, -dir[1] * len * 0.45], to: [dir[0] * len * 0.55, dir[1] * len * 0.55] },
     hf: (inc.face === "picot") === picotRed ? "#e04848" : "#3a3f47", pips: inc.face === "picot" ? 1 : 0,
     p2c: w <= -6 ? [270, 24] : w >= 6 ? [290, 50] : [280, 34],
@@ -1501,10 +1541,17 @@ function renderLecture(inc) {
   lecEl.innerHTML = `
     <div class="lec-head"><span class="lec-eff ${w <= -6 ? "cut" : w >= 6 ? "top" : ""}">${esc(EFF[inc.eff])}</span><span class="face-chip ${fl.cls}">${esc(inc.face === "picot" ? RUBL[P.rub] : "Backside")}</span><b>${esc(gest)}</b><button type="button" id="lecClose">Masquer</button></div>
     <svg class="lec-strip" viewBox="0 0 344 88" role="img" aria-label="${esc(chainTxt(inc))}" font-family="Atkinson Hyperlegible, sans-serif">${STRIP_SVG}</svg>
-    <div class="lec-steps"><div><span>1 · Il a joué</span><b>${esc(gest)}</b></div><div><span>2 · Elle arrive</span><b style="color:${anCol(w)}">${esc(EFF[inc.eff])}</b></div><div><span>3 · Raquette droite</span><b style="color:${STILLT[still].c}">${esc(STILLT[still].t)}</b></div></div>
-    <div class="lec-actions"><button type="button" id="replayBtn">↺ Revoir son coup</button>
+    <table class="lec-nums"${store.nums ? "" : " hidden"}><tbody>${rows.map(r => `<tr data-st="${r[0]}"><td>${esc(r[1])}</td><td>${r[2]}</td><td>${esc(r[3])}</td></tr>`).join("")}</tbody></table>
+    <div class="lec-steps"${store.nums ? " hidden" : ""}><div><span>1 · Il a joué</span><b>${esc(gest)}</b></div><div><span>2 · Elle arrive</span><b style="color:${anCol(w)}">${esc(EFF[inc.eff])}</b></div><div><span>3 · Raquette droite</span><b style="color:${STILLT[still].c}">${esc(STILLT[still].t)}</b></div></div>
+    <div class="lec-actions"><button type="button" id="replayBtn">↺ Revoir son coup</button><button type="button" id="numsBtn" aria-pressed="${store.nums}">Chiffres</button>
       <div class="lec-speed" role="group" aria-label="Vitesse des animations"><span>Vitesse</span>${[[0.25, "Très lent"], [0.5, "Lent"], [1, "Normal"]].map(([v, l]) => `<button type="button" data-sp="${v}" aria-pressed="${store.animSp === v}">${l}</button>`).join("")}<button type="button" id="animPause" aria-label="${anim.paused ? "Relancer les animations" : "Mettre les animations en pause"}">${anim.paused ? "▶" : "❚❚"}</button></div>
     </div>`;
+  anim.rows = Array.from(lecEl.querySelectorAll(".lec-nums tr"));
+  $("numsBtn").addEventListener("click", () => {
+    store.nums = !store.nums; save();
+    lecEl.querySelector(".lec-nums").hidden = !store.nums; lecEl.querySelector(".lec-steps").hidden = store.nums;
+    $("numsBtn").setAttribute("aria-pressed", String(store.nums));
+  });
   lecEl.querySelectorAll(".lec-speed [data-sp]").forEach(b => b.addEventListener("click", () => {
     store.animSp = +b.dataset.sp; save(); anim.paused = false; syncSpeed();
   }));
@@ -1895,7 +1942,7 @@ function frame(now) {
   if (focus > 0 && oppStroke) _look.lerp(oppStroke.C, 0.55 * focus);
   // Découverte : quand la balle t'attend, la caméra s'incline vers elle pour qu'elle reste visible entre la carte et les coups
   fzLook += ((frozen && guided() ? 1 : 0) - fzLook) * Math.min(1, dt * 3);
-  if (fzLook > 0.002) _look.lerp(bp, 0.5 * fzLook);
+  if (fzLook > 0.002) { const lx = _look.x; _look.lerp(bp, 0.35 * fzLook); _look.x = lx + (bp.x - lx) * 0.8 * fzLook; }
   camera.lookAt(_look);
   const fov = baseFov * (1 - 0.38 * focus);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
