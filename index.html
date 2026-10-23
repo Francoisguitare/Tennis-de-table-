@@ -85,7 +85,6 @@ button { font: inherit; color: inherit; }
 .panel {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
   background: var(--panel); border-top: 1px solid var(--line);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   padding-top: 10px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
   padding-left: max(12px, env(safe-area-inset-left, 0px));
   padding-right: max(12px, env(safe-area-inset-right, 0px));
@@ -114,8 +113,7 @@ button { font: inherit; color: inherit; }
   position: fixed; z-index: 4; top: calc(env(safe-area-inset-top, 0px) + 62px);
   left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
   max-width: 600px; margin: 0 auto; max-height: 46vh; overflow: auto;
-  background: rgba(9, 18, 31, .94); border: 1px solid var(--line); border-radius: 14px;
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  background: rgba(9, 18, 31, .96); border: 1px solid var(--line); border-radius: 14px;
   padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.35;
 }
 .lecture p { margin: 0; }
@@ -155,7 +153,14 @@ button { font: inherit; color: inherit; }
 .lec-steps b { font-size: 13px; line-height: 1.15; }
 .lec-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 /* Boutons de coups animés (Découverte) : le geste de ta raquette, puis ce que donne le coup */
-.panel.guided .shots { min-height: 236px; grid-auto-rows: minmax(112px, auto); gap: 10px 6px; padding-top: 4px; }
+.panel.big .shots { min-height: 236px; grid-auto-rows: minmax(112px, auto); gap: 10px 6px; padding-top: 4px; }
+/* Pendant le jeu : boutons compacts, pour bien voir ta raquette et la balle */
+.panel.guided:not(.big) .shot.anim svg, .panel.guided:not(.big) .shot .res, .panel.guided:not(.big) .shot .tip { display: none; }
+.panel.guided:not(.big) .shots { min-height: 98px; grid-auto-rows: minmax(46px, auto); }
+.panel.big .lec-line { display: none; }
+.lec-speed { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.lec-speed span { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.lec-speed button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
 .shot.anim { position: relative; padding: 4px 3px 6px; gap: 2px; font-size: 12.5px; }
 .shot.anim svg { width: 100%; max-width: 112px; height: auto; display: block; }
 .shot .res { font-size: 11px; font-weight: 700; border-radius: 99px; padding: 1px 8px; color: #0f1c2e; background: var(--good); visibility: hidden; }
@@ -694,6 +699,7 @@ try { const d = JSON.parse(localStorage.getItem(KEY) || "null"); if (d && typeof
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };
 if (!PROF[store.prof]) store.prof = "pl";
 if (!LV[store.lvl]) store.lvl = "decouverte";
+if (![0.25, 0.5, 1].includes(store.animSp)) store.animSp = 0.5;
 if (typeof store.sound !== "boolean") store.sound = true;
 
 /* ================= Son ================= */
@@ -923,11 +929,13 @@ function animRacket(rk, stroke, restP, restQ, c) {
 }
 
 /* ================= Caméra et taille ================= */
-let baseFov = 60, focus = 0, fzLook = 0;
+let baseFov = 60, focus = 0, fzLook = 0, phCompact = 0;
 const _look = new THREE.Vector3();
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
-  const ph = Math.min($("panel").offsetHeight, h * 0.45);
+  const pe = $("panel");
+  if (!pe.classList.contains("big")) phCompact = pe.offsetHeight;
+  const ph = Math.min(phCompact, h * 0.45);
   renderer.setSize(w, h, false);
   const vh = h + ph;
   camera.aspect = w / vh;
@@ -1105,14 +1113,14 @@ function choose(k) {
   st.myShot = computeMyShot(k, st.mySIn, true);
   meStroke = makeStroke(st.myTc, st.mySIn.p, st.myShot.n, st.myShot.V, true, 0.45);
   const rb = $("replayBtn"); if (rb) rb.disabled = true;
-  if (guided()) showLecture(false);
+  if (guided()) { showLecture(false); bigPanel(false); }
   if (frozen) { frozen = false; myContact(); }
 }
 function myContact() {
   if (st.phase !== "play" || !st.awaiting) return;
   const inc = st.inc;
   if (!st.choice) {
-    if (LV[store.lvl].freeze) { frozen = true; prompt("Choisis ton coup", "hot"); if (guided()) { anim.t0 = performance.now(); showLecture(true); revealShots(); } return; }
+    if (LV[store.lvl].freeze) { frozen = true; prompt("Choisis ton coup", "hot"); if (guided()) { anim.tt = 0; showLecture(true); revealShots(); } return; }
     st.awaiting = false; setShotsEnabled(false);
     st.log.push({ w: inc.wMe, ok: false, type: "tard" });
     prompt("Trop tard !", "bad");
@@ -1435,24 +1443,28 @@ function anMini(M, key, time, reveal) {
     io: show && r !== "long" && iu >= 0 && iu <= 1 ? an2(1 - iu) : 0,
   };
 }
-const anim = { t0: 0, last: 0, D: null, strip: null, steps: null, M: { live: false, sign: 0, col: "#e3e9f0", mk: -8, res: null }, minis: [], reveal: false };
+const anim = { tt: 0, last: 0, paused: false, D: null, strip: null, steps: null, M: { live: false, sign: 0, col: "#e3e9f0", mk: -8, res: null }, minis: [], reveal: false };
+const bigPanel = on => { $("panel").classList.toggle("big", !!on); if (!on) $("shots").classList.remove("reveal"); };
 function tickAnim(now) {
   if (!guided() || now - anim.last < 33) return;
+  const dt = anim.last ? Math.min(0.1, (now - anim.last) / 1000) : 0;
   anim.last = now;
-  const t = (now - anim.t0) / 1000;
+  if (!anim.paused) anim.tt += dt * store.animSp;
+  const t = anim.tt;
   if (anim.strip && !lecEl.hidden) {
     const v = anStrip(anim.D, t);
     anApply(anim.strip, v);
     anim.steps.forEach((el, i) => el.classList.toggle("on", v.step === i + 1));
   }
-  for (const m of anim.minis) anApply(m.b, anMini(anim.M, m.k, t, anim.reveal));
+  if ($("panel").classList.contains("big")) for (const m of anim.minis) anApply(m.b, anMini(anim.M, m.k, t, anim.reveal));
 }
 /* Au moment où la balle t'attend : on montre ce que donne chaque coup et le conseil */
 function revealShots() {
   const inc = st.inc;
   if (!inc || !inc.res) return;
-  anim.reveal = true; anim.t0 = performance.now();
+  anim.reveal = true; anim.tt = 0;
   $("shots").classList.add("reveal");
+  bigPanel(true);
   for (const k of CH_ORDER) {
     const b = $("shot-" + k); if (!b) continue;
     const R = REST[RESV[inc.res[k]] || "long"], el = b.querySelector(".res");
@@ -1480,21 +1492,32 @@ function renderLecture(inc) {
     hf: (inc.face === "picot") === picotRed ? "#e04848" : "#3a3f47", pips: inc.face === "picot" ? 1 : 0,
     p2c: w <= -6 ? [270, 24] : w >= 6 ? [290, 50] : [280, 34],
   };
-  anim.t0 = performance.now(); anim.last = 0;
+  anim.tt = 0;
   const gest = inc.serve ? "Service" : GESTN[inc.gest];
   lecEl.innerHTML = `
     <div class="lec-head"><span class="lec-eff ${w <= -6 ? "cut" : w >= 6 ? "top" : ""}">${esc(EFF[inc.eff])}</span><span class="face-chip ${fl.cls}">${esc(inc.face === "picot" ? RUBL[P.rub] : "Backside")}</span><b>${esc(gest)}</b><button type="button" id="lecClose">Masquer</button></div>
     <svg class="lec-strip" viewBox="0 0 344 88" role="img" aria-label="${esc(chainTxt(inc))}" font-family="Atkinson Hyperlegible, sans-serif">${STRIP_SVG}</svg>
     <div class="lec-steps"><div><span>1 · Il a joué</span><b>${esc(gest)}</b></div><div><span>2 · Elle arrive</span><b style="color:${anCol(w)}">${esc(EFF[inc.eff])}</b></div><div><span>3 · Raquette droite</span><b style="color:${REST[still].c}">${esc(REST[still].t)}</b></div></div>
-    <div class="lec-actions"><button type="button" id="replayBtn">↺ Revoir son coup</button></div>`;
+    <div class="lec-actions"><button type="button" id="replayBtn">↺ Revoir son coup</button>
+      <div class="lec-speed" role="group" aria-label="Vitesse des animations"><span>Vitesse</span>${[[0.25, "Très lent"], [0.5, "Lent"], [1, "Normal"]].map(([v, l]) => `<button type="button" data-sp="${v}" aria-pressed="${store.animSp === v}">${l}</button>`).join("")}<button type="button" id="animPause" aria-label="${anim.paused ? "Relancer les animations" : "Mettre les animations en pause"}">${anim.paused ? "▶" : "❚❚"}</button></div>
+    </div>`;
+  lecEl.querySelectorAll(".lec-speed [data-sp]").forEach(b => b.addEventListener("click", () => {
+    store.animSp = +b.dataset.sp; save(); anim.paused = false; syncSpeed();
+  }));
+  $("animPause").addEventListener("click", () => { anim.paused = !anim.paused; syncSpeed(); });
   anim.strip = anBind(lecEl.querySelector(".lec-strip"));
   anim.steps = Array.from(lecEl.querySelectorAll(".lec-steps > div"));
   $("replayBtn").addEventListener("click", replayOpp);
   $("lecClose").addEventListener("click", () => showLecture(false));
   const ga = gestArrow(inc.V);
   lecLine.innerHTML = `<span class="face-chip ${fl.cls}">${esc(inc.face === "picot" ? RUBL[P.rub] : "Backside")}</span><b>${esc(gest)}${ga.a === "→" ? "" : " " + ga.a}</b><span class="lec-muted">· balle</span><span class="lec-eff-s ${w <= -6 ? "cut" : w >= 6 ? "top" : ""}">${esc(EFF[inc.eff])}</span><span class="lec-muted">${Math.round(Math.abs(w))} tr/s</span><button type="button" id="lecMore">Carte</button>`;
-  $("lecMore").addEventListener("click", () => { if (lecEl.hidden) anim.t0 = performance.now(); showLecture(lecEl.hidden); });
+  $("lecMore").addEventListener("click", () => { if (lecEl.hidden) anim.tt = 0; showLecture(lecEl.hidden); });
   showLecture(false);
+}
+function syncSpeed() {
+  lecEl.querySelectorAll(".lec-speed [data-sp]").forEach(b => b.setAttribute("aria-pressed", String(!anim.paused && +b.dataset.sp === store.animSp)));
+  const pb = $("animPause");
+  if (pb) { pb.textContent = anim.paused ? "▶" : "❚❚"; pb.setAttribute("aria-label", anim.paused ? "Relancer les animations" : "Mettre les animations en pause"); }
 }
 function renderLecturePlaceholder() {
   anim.strip = null;
@@ -1510,7 +1533,7 @@ function replayOpp() {
   events.forEach(e => { e.t += delta; });
   if (frozen) { frozen = false; at(st.myTc, myContact); }
   hold = 0; rkHist.length = 0;
-  showLecture(false);
+  showLecture(false); bigPanel(false);
   const snd = st.inc && st.inc.snd;
   at(oppStroke.tc, () => sound(snd || "inv", 0.6));
   at(oppStroke.tc + 0.12, () => { if (guided()) hold = 1.1; });
@@ -1567,6 +1590,7 @@ function pointEnd(winner, info) {
   if (st.phase !== "play") return;
   st.phase = "sheet"; events = []; st.awaiting = false; frozen = false;
   if (guided()) showLecture(false);
+  bigPanel(false);
   st.score[winner === "me" ? 0 : 1]++;
   updateHUD(); setShotsEnabled(false);
   const inc = st.inc, sh = st.myShot;
@@ -1682,7 +1706,7 @@ function previewOpp() {
 function openMenu() {
   paused = true; st.phase = "menu"; ball.tr = null; ball.handP = null; ball.hold = "me"; oppStroke = meStroke = null; events = [];
   renderMenu(); previewOpp(); showShots(false); prompt("Choisis ton adversaire");
-  $("panel").classList.remove("guided"); lecLine.hidden = true; showLecture(false); anim.strip = null; anim.minis = []; resize();
+  $("panel").classList.remove("guided", "big"); lecLine.hidden = true; showLecture(false); anim.strip = null; anim.minis = []; resize();
   $("menu").hidden = false;
 }
 function racketSVG(color, label, sub) {
@@ -1741,7 +1765,7 @@ function sample(tr, t) {
   for (let k = 0; k < 3; k++) { smp.p[k] = tr.P[i * 3 + k] * (1 - a) + tr.P[j * 3 + k] * a; smp.w[k] = tr.W[i * 3 + k]; }
   return smp;
 }
-let last = performance.now();
+let last = performance.now(), lastRender = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (hold > 0 && !paused) hold -= dt;
@@ -1872,7 +1896,7 @@ function frame(now) {
   const fov = baseFov * (1 - 0.38 * focus);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
 
-  renderer.render(scene, camera);
+  if (!(frozen || paused) || now - lastRender > 40) { renderer.render(scene, camera); lastRender = now; }
   requestAnimationFrame(frame);
 }
 
