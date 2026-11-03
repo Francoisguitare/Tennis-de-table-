@@ -345,10 +345,8 @@ button { font: inherit; color: inherit; }
     <div class="seg" id="lvlCards"></div>
     <h2 class="h">Il joue sur</h2>
     <div class="seg" id="placeCards"></div>
-    <label class="switch" for="latSw">
-      <input type="checkbox" id="latSw">
-      <span><b>Effets latéraux · difficile</b><small>Il frotte aussi la balle sur le côté : tu dois lire de quel côté elle part sur ta raquette</small></span>
-    </label>
+    <h2 class="h">Effets latéraux · difficile</h2>
+    <div class="seg" id="latCards"></div>
     <label class="switch" for="aide">
       <input type="checkbox" id="aide" checked>
       <span><b>Aide visuelle</b><small>Balle bicolore pour voir la rotation, nom de la face au contact, trace de la balle</small></span>
@@ -784,6 +782,7 @@ if (!LV[store.lvl]) store.lvl = "decouverte";
 if (![0.25, 0.5, 1].includes(store.animSp)) store.animSp = 0.5;
 if (typeof store.nums !== "boolean") store.nums = true;
 if (typeof store.lat !== "boolean") store.lat = false;
+if (typeof store.latAll !== "boolean") store.latAll = false;
 if (![0.1, 0.25, 0.5, 1].includes(store.anaSp)) store.anaSp = 0.25;
 if (!["tout", "revers", "cd"].includes(store.place)) store.place = "tout";
 if (typeof store.sound !== "boolean") store.sound = true;
@@ -1196,7 +1195,7 @@ function oppServe() {
   const rps = picot ? pickW({ "0": .6, "-15": .4 }) : pickW({ "-55": .45, "-30": .15, "0": .25, "25": .15 });
   const r = +rps, long = r > 0 || Math.random() < 0.2;
   const p0 = [store.place === "revers" ? rnd(-0.45, -0.2) : store.place === "cd" ? rnd(0.2, 0.45) : rnd(-0.25, 0.25), long ? 0.95 : 0.97, -(L + 0.13)];
-  const lat = !picot && store.lat && Math.random() < 0.6 ? (Math.random() < 0.5 ? -1 : 1) * rnd(25, 45) : 0;
+  const lat = !picot && store.lat && Math.random() < (store.latAll ? 1 : 0.6) ? (Math.random() < 0.5 ? -1 : 1) * rnd(25, 45) : 0;
   const s = PHYS.serve(p0, 1, r, long ? 0.8 : 1.0, long ? 1.15 : rnd(0.45, 0.6), lat);
   const sp = Math.hypot(s.v[0], s.v[1], s.v[2]);
   const n = [s.v[0] / sp, s.v[1] / sp, s.v[2] / sp];
@@ -1286,7 +1285,8 @@ function missProb() {
 /* Réponse de l'adversaire : face, geste, puis visée physique avec son revêtement */
 const placeX = () => store.place === "revers" ? rnd(-0.62, -0.22) : store.place === "cd" ? rnd(0.22, 0.62) : rnd(-0.5, 0.5);
 /* Effet latéral de l'adversaire (option « Effets latéraux ») : il frotte la balle sur le côté, à gauche ou à droite */
-const latPush = () => store.lat && Math.random() < 0.6 ? (Math.random() < 0.5 ? -1 : 1) * rnd(2.5, 4.5) : 0;
+/* « Que du latéral » : chaque geste frotte la balle sur le côté, plus fort */
+const latPush = () => store.lat && Math.random() < (store.latAll ? 1 : 0.6) ? (Math.random() < 0.5 ? -1 : 1) * (store.latAll ? rnd(3.5, 5) : rnd(2.5, 4.5)) : 0;
 function oppRespond(sh) {
   const wHis = PHYS.topRps(sh), top = wHis > 8;
   const usePicot = Math.random() < P.picot;
@@ -2069,12 +2069,17 @@ function renderMenu() {
   $("placeCards").innerHTML = Object.keys(PL).map(k =>
     `<button class="card" id="place-${k}" data-k="${k}" aria-pressed="${store.place === k}"><b>${esc(PL[k][0])}</b><small>${esc(PL[k][1])}</small></button>`).join("");
   $("placeCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => { store.place = c.dataset.k; save(); renderMenu(); }));
-  $("latSw").checked = !!store.lat;
+  const LT = { non: ["Aucun", "Effets classiques"], parfois: ["Parfois", "Mélangés aux autres"], toujours: ["Que du latéral", "Chaque balle en a"] };
+  const ltCur = !store.lat ? "non" : store.latAll ? "toujours" : "parfois";
+  $("latCards").innerHTML = Object.keys(LT).map(k =>
+    `<button class="card" id="lat-${k}" data-k="${k}" aria-pressed="${ltCur === k}"><b>${esc(LT[k][0])}</b><small>${esc(LT[k][1])}</small></button>`).join("");
+  $("latCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => {
+    store.lat = c.dataset.k !== "non"; store.latAll = c.dataset.k === "toujours"; save(); renderMenu();
+  }));
   $("aide").checked = !!store.aide;
   $("son").checked = !!store.sound;
 }
 $("aide").addEventListener("change", e => { store.aide = e.target.checked; save(); applyAide(); });
-$("latSw").addEventListener("change", e => { store.lat = e.target.checked; save(); });
 $("son").addEventListener("change", e => { store.sound = e.target.checked; save(); if (store.sound) audioOn(); });
 function applyAide() { ballMat.map = store.aide ? texTwo : texPlain; ballMat.needsUpdate = true; }
 function previewOpp() {
