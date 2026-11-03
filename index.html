@@ -225,6 +225,23 @@ button { font: inherit; color: inherit; }
 .ana-sp button { min-width: 40px; font-size: 13px; }
 .ana-sp button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
 
+/* Atelier « Règle l'angle » */
+.atl-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.atl-row button {
+  appearance: none; flex: 1 1 0; min-width: 0; min-height: 40px; border-radius: 10px; border: 2px solid var(--line);
+  background: var(--tile); font-weight: 700; font-size: 12.5px; line-height: 1.1; padding: 2px 4px; cursor: pointer;
+}
+.atl-row button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
+.atl-read { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.atl-ang { font: 800 32px/1 var(--f-display); text-transform: uppercase; }
+.atl-zone { font-size: 12.5px; color: var(--muted); text-align: right; line-height: 1.3; }
+.atl-zone b { color: var(--good); }
+.atl-range { display: flex; flex-direction: column; gap: 2px; }
+.atl-range input { width: 100%; height: 36px; accent-color: var(--accent); }
+.atl-range > span { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--muted); }
+.atl-rule { font-size: 13px; color: var(--muted); }
+.sheet.atl .ana-svg { max-height: 40vh; }
+
 /* Feuilles superposées */
 .overlay {
   position: fixed; inset: 0; z-index: 6; display: flex; justify-content: center; align-items: flex-end;
@@ -356,6 +373,7 @@ button { font: inherit; color: inherit; }
       <span><b>Son</b><small>Chaque revêtement a son bruit : écoute-le</small></span>
     </label>
     <button class="btn primary" id="playBtn">Jouer le match</button>
+    <button class="btn" id="atlMenuBtn">Atelier : règle l’angle de ta raquette</button>
     <a class="link" id="quizLink" href="quiz.html" target="_blank" rel="noopener">Quiz et fiches « Lire le picot »</a>
     <p class="sign">par <b>François Daoud</b></p>
   </div>
@@ -376,6 +394,21 @@ button { font: inherit; color: inherit; }
 <!-- Bilan du point -->
 <div class="overlay" id="sheet" hidden>
   <div class="sheet" id="sheetBody"></div>
+</div>
+
+<!-- Atelier : règle l'angle de ta raquette -->
+<div class="overlay center" id="atl" hidden>
+  <div class="sheet ana atl" role="dialog" aria-modal="true" aria-labelledby="atlTitle">
+    <div class="ana-top"><span class="eyebrow" id="atlTitle">Règle l’angle de ta raquette</span><button type="button" id="atlClose" aria-label="Fermer l’atelier">✕</button></div>
+    <div class="atl-row" id="atlBalls" role="group" aria-label="La balle qui arrive"></div>
+    <div class="atl-row" id="atlShots" role="group" aria-label="Ton coup"></div>
+    <svg class="ana-svg" id="atlSvg" viewBox="0 0 366 300" role="img" font-family="Atkinson Hyperlegible, sans-serif"></svg>
+    <div class="atl-read"><span class="atl-ang" id="atlAngTxt"></span><span class="atl-zone">Bonne zone : <b id="atlZone"></b><br><span id="atlInfo"></span></span></div>
+    <label class="atl-range"><input type="range" id="atlRange" min="-40" max="40" step="1" aria-label="Angle de ta raquette">
+      <span><span style="color:#8ab8ff">◀ ferme</span><span>verticale</span><span style="color:#ffab66">ouvre ▶</span></span></label>
+    <button type="button" class="btn" id="atlBest">Montre-moi le bon angle</button>
+    <p class="atl-rule">Plus elle est liftée, plus tu fermes. Trop fermé : filet. Pas assez : dehors.</p>
+  </div>
 </div>
 
 <!-- Analyse au ralenti -->
@@ -1679,11 +1712,12 @@ function renderLecture(inc) {
     <svg class="lec-strip" viewBox="0 0 344 88" role="img" aria-label="${esc(chainTxt(inc))}" font-family="Atkinson Hyperlegible, sans-serif">${STRIP_SVG}</svg>
     <table class="lec-nums"${store.nums ? "" : " hidden"}><tbody>${rows.map(r => `<tr data-st="${r[0]}"><td>${esc(r[1])}</td><td>${r[2]}</td><td>${esc(r[3])}</td></tr>`).join("")}</tbody></table>
     <div class="lec-steps"${store.nums ? " hidden" : ""}><div><span>1 · Il a joué</span><b>${esc(gest)}</b></div><div><span>2 · Elle arrive</span><b style="color:${anCol(w)}">${esc(EFF[inc.eff])}</b></div><div><span>3 · Raquette droite</span><b style="color:${STILLT[still].c}">${esc(STILLT[still].t)}</b></div></div>
-    <div class="lec-actions"><button type="button" id="replayBtn" aria-label="Revoir son coup" title="Revoir son coup">↺ Revoir</button><button type="button" id="numsBtn" aria-pressed="${store.nums}">Chiffres</button><button type="button" id="anaBtn">Analyse</button>
+    <div class="lec-actions"><button type="button" id="replayBtn" aria-label="Revoir son coup" title="Revoir son coup">↺ Revoir</button><button type="button" id="numsBtn" aria-pressed="${store.nums}">Chiffres</button><button type="button" id="anaBtn">Analyse</button><button type="button" id="atlBtn">Angle</button>
       <div class="lec-speed" role="group" aria-label="Vitesse des animations">${[[0.25, "×¼", "Vitesse très lente"], [0.5, "×½", "Vitesse lente"], [1, "×1", "Vitesse normale"]].map(([v, l, a]) => `<button type="button" data-sp="${v}" aria-label="${a}" aria-pressed="${store.animSp === v}">${l}</button>`).join("")}<button type="button" id="animPause" aria-label="${anim.paused ? "Relancer les animations" : "Mettre les animations en pause"}">${anim.paused ? "▶" : "❚❚"}</button></div>
     </div>`;
   anim.rows = Array.from(lecEl.querySelectorAll(".lec-nums tr"));
   $("anaBtn").addEventListener("click", () => openAna(inc));
+  $("atlBtn").addEventListener("click", () => openAtl(inc));
   $("numsBtn").addEventListener("click", () => {
     store.nums = !store.nums; save();
     lecEl.querySelector(".lec-nums").hidden = !store.nums; lecEl.querySelector(".lec-steps").hidden = store.nums;
@@ -1907,6 +1941,130 @@ $("anaNext").addEventListener("click", () => anaShow(ana.i + 1));
 $("anaPlay").addEventListener("click", () => { ana.paused = !ana.paused; anaSpeed(); });
 $("ana").querySelectorAll("[data-asp]").forEach(b => b.addEventListener("click", () => { store.anaSp = +b.dataset.asp; save(); ana.paused = false; anaSpeed(); }));
 
+/* ================= Atelier « Règle l'angle » =================
+   Tu choisis la balle et ton coup, tu règles l'angle de ta raquette (− = fermée, + = ouverte) :
+   le moteur calcule pour de vrai où part la balle, et la bonne zone (angles qui passent) s'affiche en vert. */
+const ATL_BALLS = [
+  { k: "c25", l: "Coupé 25", w: -25 }, { k: "c10", l: "Coupé 10", w: -10 }, { k: "flot", l: "Sans effet", w: 0 },
+  { k: "l20", l: "Lift 20", w: 20 }, { k: "l40", l: "Lift 40", w: 40 },
+];
+const ATL_SHOTS = [
+  { k: "top", l: "Top", st: { a: 3.5, b: 7 }, from: [18, 34], to: [-14, -40] },
+  { k: "bloc", l: "Bloc", st: { a: 1.2, b: 1 }, from: [6, 0], to: [-6, 0] },
+  { k: "pous", l: "Poussette", st: { a: 2, b: -3.5 }, from: [10, -6], to: [-14, 6] },
+];
+const atl = { open: false, ball: "l20", shot: "top", bh: true, own: null, ang: -8, scan: null, tt: 0, last: 0, binds: null };
+const ATL_P0 = [262, 150], ATL_R = 70;
+const atlAng = a => a < 0 ? `Fermée ${-a}°` : a > 0 ? `Ouverte ${a}°` : "Verticale";
+function atlBall() {
+  if (atl.ball === "own" && atl.own) return atl.own.sIn;
+  const B = ATL_BALLS.find(b => b.k === atl.ball) || ATL_BALLS[3];
+  const s = { p: [atl.bh ? -0.3 : 0.3, 0.95, 1.5], v: [0, 0.2, 6], w: [0, 0, 0] };
+  PHYS.setTop(s, B.w);
+  return s;
+}
+/* Pour chaque angle de -40° à +40° : le vrai résultat du coup, raquette dirigée vers le centre de sa table (latéral compensé) */
+function atlScan() {
+  const sIn = atlBall(), S = ATL_SHOTS.find(x => x.k === atl.shot);
+  const sol = PHYS.solveAuto(PHYS.clone(sIn), -1, Object.assign({ maxNet: 0.7 }, S.st), RUBP.inv, { x: 0, z: -1.0 }, 0.3);
+  const res = {};
+  for (let a = -40; a <= 40; a++) res[a] = classify(PHYS.fly(PHYS.hitWith(sIn, sol.d, a * DEG, S.st, RUBP.inv).s, 3), -1).res;
+  let best = null, cur = null;
+  for (let a = -40; a <= 40; a++) {
+    if (res[a] === "in") { if (!cur) cur = [a, a]; else cur[1] = a; if (!best || cur[1] - cur[0] > best[1] - best[0]) best = cur.slice(); }
+    else cur = null;
+  }
+  atl.scan = { res, win: best, w: PHYS.topRps(sIn), lat: latRps(sIn) };
+}
+function atlPolar(a, r) { return [ATL_P0[0] + r * Math.sin(a * DEG), ATL_P0[1] - r * Math.cos(a * DEG)]; }
+function atlArc(a0, a1, r) { const p = atlPolar(a0, r), q = atlPolar(a1, r); return `M${an1(p[0])} ${an1(p[1])} A${r} ${r} 0 0 1 ${an1(q[0])} ${an1(q[1])}`; }
+/* La face qui frappe (côté balle) est la plus large : noire en revers, rouge en coup droit */
+const ATL_RK = `<rect x="-2.5" y="26" width="5" height="14" rx="2" fill="#c9a26b"/><rect x="1" y="-26" width="3" height="52" rx="1.5" data-b="fill:mb"/><rect x="-5" y="-26" width="6" height="52" rx="3" stroke="#e3e9f0" stroke-width="1.2" data-b="fill:mf"/>`;
+const ATL_SVG = `<rect x="-10" y="230" width="240" height="7" fill="#1b4f8c"/><line x1="-10" y1="230" x2="230" y2="230" stroke="#5b9be6" stroke-width="3"/>
+  <line x1="200" y1="237" x2="200" y2="300" stroke="#33465f" stroke-width="4"/><line x1="14" y1="204" x2="14" y2="230" stroke="#e3e9f0" stroke-width="2.5"/>
+  <text x="8" y="290" font-size="12" font-weight="700" fill="#a9b8ca" letter-spacing="1">LUI ◀</text>
+  <text x="358" y="290" text-anchor="end" font-size="12" font-weight="700" fill="#a9b8ca" letter-spacing="1" data-b="text:side"></text>
+  <path fill="none" stroke="#33465f" stroke-width="9" stroke-linecap="round" d="${atlArc(-40, 40, ATL_R)}"/>
+  <path fill="none" stroke="#52c88a" stroke-width="9" stroke-linecap="round" data-b="d:band,opacity:bo2"/>
+  <path fill="none" stroke="#a9b8ca" stroke-width="1.5" d="${[-40, -30, -20, -10, 0, 10, 20, 30, 40].map(a => { const p = atlPolar(a, ATL_R - 9), q = atlPolar(a, ATL_R - 16); return `M${an1(p[0])} ${an1(p[1])} L${an1(q[0])} ${an1(q[1])}`; }).join(" ")}"/>
+  <text text-anchor="middle" font-size="11" font-weight="700" fill="#8ab8ff" x="${an1(atlPolar(-50, ATL_R + 6)[0])}" y="${an1(atlPolar(-50, ATL_R + 6)[1])}">fermée</text>
+  <text text-anchor="middle" font-size="11" font-weight="700" fill="#ffab66" x="${an1(atlPolar(50, ATL_R + 6)[0])}" y="${an1(atlPolar(50, ATL_R + 6)[1])}">ouverte</text>
+  <text x="262" y="68" text-anchor="middle" font-size="11" font-weight="700" fill="#a9b8ca">0°</text>
+  <line x1="262" y1="150" stroke="#f3f6fa" stroke-width="2" stroke-dasharray="3 3" data-b="x2:nx,y2:ny"/>
+  <rect x="298" y="96" width="46" height="104" rx="14" fill="#2a3f5c"/><circle cx="322" cy="72" r="18" fill="#d9a77f"/>
+  <path fill="none" stroke-width="1.6" stroke-dasharray="4 4" opacity=".5" data-b="d:trIn,stroke:bc"/>
+  <path fill="none" stroke-width="2" stroke-dasharray="4 4" data-b="d:trOut,stroke:rc,opacity:oo"/>
+  <g data-b="transform:g2,opacity:go2">${ATL_RK}</g><g data-b="transform:g1,opacity:go1">${ATL_RK}</g>
+  <path fill="none" stroke="#d9a77f" stroke-width="10" stroke-linecap="round" data-b="d:arm"/>
+  <g data-b="transform:rk">${ATL_RK}</g>
+  <g data-b="opacity:bo"><g data-b="transform:ball">${SV_BALL}</g><g data-b="transform:arr,opacity:ao">${svArr("bc")}</g></g>
+  <g transform="translate(120 40)" data-b="opacity:to"><rect x="-48" y="-15" width="96" height="30" rx="15" data-b="fill:rc"/><text x="0" y="5" text-anchor="middle" font-size="15" font-weight="700" fill="#0f1c2e" data-b="text:rt"/></g>`;
+const ATL_RES = { in: REST.in, haute: REST.high, net: REST.net, own: REST.net, long: REST.long, wide: REST.wide };
+function atlVals(time) {
+  const sc = atl.scan, a = atl.ang, r = sc.res[a] || "long", R = ATL_RES[r] || REST.long;
+  const S = ATL_SHOTS.find(x => x.k === atl.shot), t = time % 3.4, k = [0.55, 0.85, 1.35, 2.1, 2.6];
+  const sign = anSgn(sc.w), mid = [(S.from[0] + S.to[0]) / 2, (S.from[1] + S.to[1]) / 2], ar = a * DEG;
+  const C = [ATL_P0[0] + mid[0] - Math.cos(ar) * 11, ATL_P0[1] + mid[1] - Math.sin(ar) * 11];
+  const A = [[-10, 70], [90, 10], [170, 222]], Bq = [[170, 222], sign < 0 ? [215, 120] : sign > 0 ? [232, 165] : [222, 135], C];
+  const path = r === "net" || r === "own" ? "net" : r === "long" || r === "wide" ? "long" : r === "haute" ? "high" : "in";
+  const O = path === "net" ? [[C, [150, 170], [20, 214]], [[20, 214], [21, 218], [22, 222]]] : path === "long" ? [[C, [140, -40], [-30, 110]]]
+    : path === "high" ? [[C, [150, -70], [70, 222]]] : [[C, [140, 30], [70, 222]]];
+  const legs = [[A, 0, 0.75], [Bq, 0.75, 1.1]];
+  if (path === "net") legs.push([O[0], 1.1, 1.75], [O[1], 1.75, 1.9]); else legs.push([O[0], 1.1, 1.95]);
+  const p = anFly(legs, t), rk = anSwing(ATL_P0, S, 1, t, k), hand = [rk[0] - Math.sin(ar) * 33, rk[1] + Math.cos(ar) * 33];
+  const elbow = [hand[0] + 18, Math.max(hand[1], 112) + 6], stroke = atl.shot !== "bloc" && t > 0.8 && t < 1.4;
+  const W = sc.win, nd = atlPolar(a, ATL_R);
+  return {
+    ...ME_FACE(atl.bh), side: atl.bh ? "TOI · revers" : "TOI · coup droit",
+    band: W ? atlArc(W[0] - 0.5, W[1] + 0.5, ATL_R) : "M0 0", bo2: W ? 1 : 0, nx: an1(nd[0]), ny: an1(nd[1]),
+    rk: anT(rk, a), g1: anT(anSwing(ATL_P0, S, 1, t - 0.08, k), a), g2: anT(anSwing(ATL_P0, S, 1, t - 0.16, k), a), go1: stroke ? 0.35 : 0, go2: stroke ? 0.18 : 0,
+    arm: `M306 112 Q${an1(elbow[0])} ${an1(elbow[1])} ${an1(hand[0])} ${an1(hand[1])}`,
+    ball: anT(p, sign * AN_SPIN * t), arr: anA(p, sign, 1.2), ao: sign !== 0 && t < 1.1 ? 1 : 0, bo: t < 2.9 ? 1 : 0, bc: anCol(sc.w),
+    trIn: anQd([A, Bq]), trOut: anQd(O), oo: t > 1.1 ? 0.85 : 0.3, rc: R.c, rt: R.t, to: t > 1.8 && t < 3.2 ? 1 : 0,
+  };
+}
+function atlRender() {
+  atlScan();
+  const sc = atl.scan, W = sc.win;
+  $("atlBalls").innerHTML = (atl.own ? `<button type="button" data-b="own" aria-pressed="${atl.ball === "own"}">Cette balle</button>` : "")
+    + ATL_BALLS.map(b => `<button type="button" data-b="${b.k}" aria-pressed="${atl.ball === b.k}" style="color:${anCol(b.w)}">${esc(b.l)}</button>`).join("");
+  $("atlBalls").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { atl.ball = b.dataset.b; atlRender(); }));
+  $("atlShots").innerHTML = ATL_SHOTS.map(x => `<button type="button" data-s="${x.k}" aria-pressed="${atl.shot === x.k}">${esc(x.l)}</button>`).join("")
+    + `<button type="button" id="atlSide" aria-pressed="false">${atl.bh ? "Revers" : "Coup droit"} ⇄</button>`;
+  $("atlShots").querySelectorAll("[data-s]").forEach(b => b.addEventListener("click", () => { atl.shot = b.dataset.s; atlRender(); }));
+  $("atlSide").addEventListener("click", () => { atl.bh = !atl.bh; if (atl.ball === "own") atl.ball = "l20"; atlRender(); });
+  $("atlInfo").textContent = `Balle : ${fmtW(sc.w)}${Math.abs(sc.lat) >= LAT_MIN ? ` · latéral ${Math.round(Math.abs(sc.lat))} tr/s` : ""}`;
+  $("atlZone").textContent = !W ? "aucun angle ne passe avec ce coup" : W[0] === W[1] ? atlAng(W[0]) : W[1] <= 0 ? `fermée ${-W[1]}° à ${-W[0]}°` : W[0] >= 0 ? `ouverte ${W[0]}° à ${W[1]}°` : `${atlAng(W[0]).toLowerCase()} à ${atlAng(W[1]).toLowerCase()}`;
+  $("atlBest").disabled = !W;
+  atlAngle(atl.ang);
+}
+function atlAngle(a) {
+  atl.ang = Math.max(-40, Math.min(40, Math.round(a)));
+  $("atlRange").value = atl.ang;
+  const el = $("atlAngTxt"); el.textContent = atlAng(atl.ang); el.style.color = atl.ang < 0 ? "#8ab8ff" : atl.ang > 0 ? "#ffab66" : "var(--ink)";
+  const R = ATL_RES[atl.scan.res[atl.ang]] || REST.long;
+  $("atlSvg").setAttribute("aria-label", `${$("atlInfo").textContent}. ${ATL_SHOTS.find(x => x.k === atl.shot).l}, raquette ${atlAng(atl.ang).toLowerCase()} : ${R.t}`);
+}
+function openAtl(inc) {
+  atl.own = inc && inc.sIn ? inc : null;
+  atl.ball = atl.own ? "own" : atl.ball === "own" ? "l20" : atl.ball;
+  if (atl.own) atl.bh = !!inc.bh;
+  if (atl.own && inc.best) atl.shot = inc.best === "bloc" ? "bloc" : inc.best === "pous" || inc.best === "morte" ? "pous" : "top";
+  const svg = $("atlSvg"); svg.innerHTML = ATL_SVG; atl.binds = anBind(svg);
+  atl.open = true; atl.tt = 0; $("atl").hidden = false;
+  atlRender();
+}
+function tickAtl(now) {
+  if (!atl.open || now - atl.last < 33) return;
+  const dt = atl.last ? Math.min(0.1, (now - atl.last) / 1000) : 0;
+  atl.last = now; atl.tt += dt * 0.55;
+  anApply(atl.binds, atlVals(atl.tt));
+}
+$("atlRange").addEventListener("input", e => atlAngle(+e.target.value));
+$("atlBest").addEventListener("click", () => { const W = atl.scan.win; if (W) atlAngle((W[0] + W[1]) / 2); });
+$("atlClose").addEventListener("click", () => { atl.open = false; $("atl").hidden = true; });
+$("atlMenuBtn").addEventListener("click", () => openAtl(null));
+
 /* ================= Bilan du point ================= */
 function faceLabel(face) {
   const picotCol = picotRed ? "rouge" : "noire", bsCol = picotRed ? "noire" : "rouge";
@@ -1997,12 +2155,13 @@ function pointEnd(winner, info) {
     </div>`;
   }
   const over = isOver();
-  if (winner === "opp" && inc && inc.sIn) html += `<button class="btn" id="anaPtBtn">Analyser cette balle au ralenti</button>`;
+  if (winner === "opp" && inc && inc.sIn) html += `<div class="row"><button class="btn" id="anaPtBtn">Analyser au ralenti</button><button class="btn" id="atlPtBtn">Régler l’angle</button></div>`;
   html += `<button class="btn primary" id="nextBtn">${over ? "Voir le bilan du match" : "Point suivant"}</button>`;
   $("sheetBody").innerHTML = html;
   $("sheet").hidden = false;
   $("nextBtn").focus({ preventScroll: true });
   if ($("anaPtBtn")) $("anaPtBtn").addEventListener("click", () => openAna(inc));
+  if ($("atlPtBtn")) $("atlPtBtn").addEventListener("click", () => openAtl(inc));
   $("nextBtn").addEventListener("click", () => {
     $("sheet").hidden = true;
     if (over) endMatch(); else newPoint();
@@ -2270,6 +2429,7 @@ function frame(now) {
   // Découverte : la carte et les boutons de coups s'animent
   tickAnim(now);
   tickAna(now);
+  tickAtl(now);
 
   // Caméra : léger suivi de la balle
   // quand la balle t'attend (Découverte), la caméra la recentre pour qu'elle reste visible
