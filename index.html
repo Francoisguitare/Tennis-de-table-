@@ -143,7 +143,6 @@ button { font: inherit; color: inherit; }
   padding: 4px 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; min-height: 32px;
 }
 .lec-actions button[disabled] { opacity: .4; cursor: default; }
-.lec-topv { display: block; flex: none; width: 100%; height: auto; max-height: 72px; }
 .lat-chip, .bh-chip { padding: 1px 8px; border-radius: 99px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
 .lat-chip { background: #f2c94c; color: #0f1c2e; }
 .bh-chip { background: #15181d; color: #fff; border: 1.5px solid #fff; }
@@ -205,6 +204,26 @@ button { font: inherit; color: inherit; }
 @media (hover: hover) and (pointer: fine) {
   .shot .key { display: inline; color: var(--muted); font-weight: 400; font-size: 11px; }
 }
+
+/* Analyse au ralenti : une étape, une phrase, une grande animation */
+.sheet.ana { max-width: 520px; gap: 8px; padding: 12px 14px 14px; }
+.ana-top { display: flex; align-items: center; gap: 8px; }
+.ana-top .eyebrow { flex: 1 1 auto; }
+.ana-steps { display: flex; gap: 4px; }
+.ana-steps button, .ana-ctl button, #anaClose {
+  appearance: none; border: 1px solid var(--line); background: var(--tile); border-radius: 8px;
+  min-width: 34px; min-height: 34px; font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.ana-steps button[aria-current="step"] { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+.ana-title { margin: 0; font: 800 26px/1.05 var(--f-display); text-transform: uppercase; letter-spacing: .02em; }
+.ana-svg { display: block; width: 100%; height: auto; max-height: 52vh; background: #17263b; border-radius: 12px; }
+.ana-cap { font-size: 17px; line-height: 1.35; min-height: 46px; }
+.ana-ctl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ana-ctl button { min-width: 44px; min-height: 44px; font-size: 16px; }
+.ana-ctl button[disabled] { opacity: .35; cursor: default; }
+.ana-sp { display: flex; gap: 4px; margin-left: auto; }
+.ana-sp button { min-width: 40px; font-size: 13px; }
+.ana-sp button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
 
 /* Feuilles superposées */
 .overlay {
@@ -359,6 +378,22 @@ button { font: inherit; color: inherit; }
 <!-- Bilan du point -->
 <div class="overlay" id="sheet" hidden>
   <div class="sheet" id="sheetBody"></div>
+</div>
+
+<!-- Analyse au ralenti -->
+<div class="overlay center" id="ana" hidden>
+  <div class="sheet ana" role="dialog" aria-modal="true" aria-labelledby="anaTitle">
+    <div class="ana-top"><span class="eyebrow">Analyse au ralenti</span><div class="ana-steps" id="anaSteps"></div><button type="button" id="anaClose" aria-label="Fermer l’analyse">✕</button></div>
+    <h2 class="ana-title" id="anaTitle"></h2>
+    <svg class="ana-svg" id="anaSvg" role="img" font-family="Atkinson Hyperlegible, sans-serif"></svg>
+    <p class="ana-cap" id="anaCap"></p>
+    <div class="ana-ctl">
+      <button type="button" id="anaPrev" aria-label="Étape précédente">◀</button>
+      <button type="button" id="anaPlay" aria-label="Pause">❚❚</button>
+      <button type="button" id="anaNext" aria-label="Étape suivante">▶</button>
+      <span class="ana-sp"><button type="button" data-asp="0.1" aria-label="Vitesse très très lente">×⅒</button><button type="button" data-asp="0.25" aria-label="Vitesse très lente">×¼</button><button type="button" data-asp="0.5" aria-label="Vitesse lente">×½</button><button type="button" data-asp="1" aria-label="Vitesse normale">×1</button></span>
+    </div>
+  </div>
 </div>
 
 <!-- Pause -->
@@ -749,6 +784,7 @@ if (!LV[store.lvl]) store.lvl = "decouverte";
 if (![0.25, 0.5, 1].includes(store.animSp)) store.animSp = 0.5;
 if (typeof store.nums !== "boolean") store.nums = true;
 if (typeof store.lat !== "boolean") store.lat = false;
+if (![0.1, 0.25, 0.5, 1].includes(store.anaSp)) store.anaSp = 0.25;
 if (!["tout", "revers", "cd"].includes(store.place)) store.place = "tout";
 if (typeof store.sound !== "boolean") store.sound = true;
 
@@ -934,7 +970,7 @@ for (const x of [-0.11, 0.11]) { const leg = new THREE.Mesh(new THREE.CylinderGe
 box(0.38, 0.22, 0.22, 0x161c27, 0, 0.86, 0, opp);
 const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 0.6, 16), shirtMat); torso.position.y = 1.27; opp.add(torso);
 const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), mat(0xd9a77f)); head.position.y = 1.7; opp.add(head);
-const lArm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 10), shirtMat); lArm.position.set(-0.25, 1.22, 0.08); lArm.rotation.z = 0.2; opp.add(lArm);
+const lArm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 10), shirtMat); lArm.position.set(0.25, 1.22, 0.08); lArm.rotation.z = -0.2;   // bras gauche libre (il est droitier) opp.add(lArm);
 const rArm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1, 10), shirtMat); scene.add(rArm);
 const UP = new THREE.Vector3(0, 1, 0);
 function setArm(a, b) {
@@ -954,7 +990,7 @@ function faceQuat(n, faceA) {
   _m.makeBasis(_x, _y, _z);
   return new THREE.Quaternion().setFromRotationMatrix(_m);
 }
-const OPP_REST_Q = faceQuat([1, 0, 0], true), ME_REST_Q = faceQuat([0, 0, -1], true), ME_REST_BH = faceQuat([0, 0, -1], false);
+const OPP_REST_Q = faceQuat([0.3, 0, 1], true), ME_REST_Q = faceQuat([0, 0, -1], true), ME_REST_BH = faceQuat([0, 0, -1], false);
 
 /* Geste : armé → contact → accompagnement, dans la direction réelle de la raquette */
 function makeStroke(tc, ballP, n, V, faceA, amp) {
@@ -1189,6 +1225,7 @@ function startDecision(tr, inc) {
   inc.bz = evB ? evB.z : null; inc.h = sIn.p[1] - TY;
   inc.works = null;
   inc.wLat = latRps(sIn); inc.latDir = latDir(sIn);
+  inc.tr = tr; inc.im = im; inc.sIn = sIn;
   inc.bh = sIn.p[0] < -0.06;          // balle sur ta gauche : tu joues en revers
   st.comp = 0; syncComp();
   st.inc = inc;
@@ -1261,7 +1298,7 @@ function oppRespond(sh) {
     const og = OG[gest], c = latPush(), st0 = Object.assign({}, usePicot ? og.picot : og.bs, { c });
     const tgt = { x: placeX(), z: rnd(og.depth[0], og.depth[1]) };
     const sol = PHYS.solveAuto(sh, 1, st0, RUBP[rubKey], tgt);
-    if (sol.ok) return { face: usePicot ? "picot" : "bs", rubKey, gest, wHis, sol, lat: c !== 0 };
+    if (sol.ok) return { face: usePicot ? "picot" : "bs", rubKey, gest, wHis, sol, lat: c !== 0, brush: -c };
   }
   return null;
 }
@@ -1307,7 +1344,7 @@ function planOpp(tr, myShot) {
   oppStroke.gest = resp.gest; oppStroke.lat = !!resp.lat;
   const s0 = PHYS.stateAt(tr, 0);
   const chain = { me0: { w: PHYS.topRps(s0), k: kmh(s0) }, myB: myShot ? null : bounceAt(tr, 1), hisB: bounceAt(tr, -1), hisK: kmh(sh) };
-  const inc = { lat: !!resp.lat, face: resp.face, gest: resp.gest, wHis: resp.wHis, wOut: PHYS.topRps(hit.s), outKmh: kmh(hit.s), prev: st.lastMine, n: hit.n, V: hit.V, snd: resp.rubKey, chain };
+  const inc = { lat: !!resp.lat, brush: resp.brush || 0, face: resp.face, gest: resp.gest, wHis: resp.wHis, wOut: PHYS.topRps(hit.s), outKmh: kmh(hit.s), prev: st.lastMine, n: hit.n, V: hit.V, snd: resp.rubKey, chain };
   at(tc, () => {
     launch(tr2, resp.rubKey, Math.hypot(hit.V[0], hit.V[1], hit.V[2]) / 5 + 0.3);
     if (miss) {
@@ -1349,23 +1386,11 @@ function shotResults(inc, sIn) {
   inc.res = {};
   for (const k of CH_ORDER) inc.res[k] = computeMyShot(k, sIn, false, store.lat ? st.comp : null).res;
 }
-function readBall(inc, sIn) {
-  // Le conseil suppose le latéral bien lu ; les résultats affichés suivent ta lecture du latéral (sélecteur « elle part »)
+/* Conseil (latéral bien lu) et ce que fait la balle sur une raquette droite qui ne fait qu'accompagner */
+function adviseBall(inc, sIn) {
   const ok = {};
   for (const k of CH_ORDER) ok[k] = computeMyShot(k, sIn, false).res;
   inc.works = CH_ORDER.filter(k => ok[k] === "in");
-  shotResults(inc, sIn);
-  // Vue de dessus (effet latéral) : sa balle jusqu'à toi, puis ton top tendu sans compenser
-  inc.top = null;
-  if (store.lat && inc.latDir && ball.tr) {
-    const tr = ball.tr, im = Math.round((st.myTc - ball.start) / tr.dt), pts = [];
-    for (let i = 0; i <= im; i += 15) pts.push([tr.P[i * 3 + 2], tr.P[i * 3]]);
-    pts.push([sIn.p[2], sIn.p[0]]);
-    const raw = computeMyShot("plat", sIn, false, 0).tr, out = [];
-    const end = raw.events.length ? raw.events[0].i : raw.n;
-    for (let i = 0; i <= end; i += 15) out.push([raw.P[i * 3 + 2], raw.P[i * 3]]);
-    inc.top = { pts, out };
-  }
   let pref = PREF[inc.eff].slice();
   if (inc.eff === "lift" && inc.kmh >= 15) pref = ["bloc", "plat"];
   inc.best = pref.find(k => inc.works.includes(k)) || inc.works[0] || null;
@@ -1375,6 +1400,10 @@ function readBall(inc, sIn) {
   const ang = s0 => { const o = PHYS.hitWith(s0, d, 0, { a: 1.5, b: 0 }, RUBP.inv).s.v; return Math.atan2(o[1], Math.hypot(o[0], o[2])) / DEG; };
   const delta = ang(sIn) - ang(flat);
   inc.still = delta > 4 ? "up" : delta < -4 ? "down" : "flat";
+}
+function readBall(inc, sIn) {
+  adviseBall(inc, sIn);
+  shotResults(inc, sIn);   // les résultats affichés suivent ta lecture du latéral (sélecteur « elle part »)
 }
 
 /* ===== Animations de lecture, de profil : lui à gauche, toi à droite =====
@@ -1488,31 +1517,6 @@ function anApply(binds, v) {
   }
 }
 
-/* Vue de dessus (effet latéral), tracée avec la vraie trajectoire : lui à gauche, toi à droite, ta droite vers le haut.
-   En jaune : sa balle qui tourne sur le côté ; en orange : ton top tendu si tu ne compenses pas. */
-const tvX = z => 172 + z / L * 132, tvY = x => 31 - x * 30;
-function topSVG(inc) {
-  const T = inc.top, pl = a => a.map(p => `${an1(tvX(p[0]))},${an1(tvY(p[1]))}`).join(" ");
-  const e = T.out[T.out.length - 1], ex = an1(anCl(tvX(e[0]), 14, 330)), ey = an1(anCl(tvY(e[1]), 9, 56));
-  const side = inc.latDir > 0 ? "droite" : "gauche";
-  return `<svg class="lec-topv" viewBox="0 0 344 62" role="img" aria-label="Vue de dessus : sur ta raquette, la balle part vers ta ${side} si tu ne compenses pas" font-family="Atkinson Hyperlegible, sans-serif">
-    <rect x="40" y="8.1" width="264" height="45.8" fill="#1b4f8c" stroke="#f4f6f8" stroke-width="1.5"/>
-    <line x1="40" y1="31" x2="304" y2="31" stroke="#f4f6f8" stroke-width=".8" opacity=".6"/><line x1="172" y1="4" x2="172" y2="58" stroke="#e3e9f0" stroke-width="2"/>
-    <text x="4" y="12" font-size="9" font-weight="700" fill="#a9b8ca">DESSUS</text>
-    <text x="340" y="12" text-anchor="end" font-size="9" font-weight="700" fill="#a9b8ca">▲ ta droite</text>
-    <text x="340" y="58" text-anchor="end" font-size="9" font-weight="700" fill="#a9b8ca">▼ ta gauche</text>
-    <polyline points="${pl(T.pts)}" fill="none" stroke="#f2c94c" stroke-width="1.6" stroke-dasharray="3 3"/>
-    <polyline points="${pl(T.out)}" fill="none" stroke="#f2925f" stroke-width="1.8" stroke-dasharray="3 3" data-b="opacity:too"/>
-    <circle r="4" fill="#fbfaf4" stroke="#ff7a1a" stroke-width="2" data-b="cx:tbx,cy:tby,opacity:tbo"/>
-    <text font-size="10.5" font-weight="700" fill="#f2925f" stroke="#0b1424" stroke-width="3" paint-order="stroke" text-anchor="middle" x="${ex}" y="${ey}" data-b="opacity:too">sort à ${side}</text>
-  </svg>`;
-}
-function anTop(inc, t) {
-  const T = inc.top; t %= 4.6;
-  const along = (a, u) => { const f = anCl(u, 0, 1) * (a.length - 1), i = Math.min(a.length - 2, Math.floor(f)), k = f - i; return [a[i][0] + (a[i + 1][0] - a[i][0]) * k, a[i][1] + (a[i + 1][1] - a[i][1]) * k]; };
-  const p = t < 2.45 ? along(T.pts, (t - 0.95) / 1.3) : along(T.out, (t - 2.45) / 0.85);
-  return { tbx: an1(tvX(p[0])), tby: an1(tvY(p[1])), tbo: t < 0.95 ? 0 : anFade(t - 0.95, 0.1, 3.2, 3.4), too: t >= 2.45 ? 1 : 0.25 };
-}
 /* La bande de la carte : 1 · son coup, 2 · la balle vient vers toi, 3 · raquette droite qui ne fait qu'accompagner */
 const AH = { hr: [22, 44], mr: [322, 42], hs: [-14, 20], ms: [358, 20] };
 function anStrip(D, time) {
@@ -1608,7 +1612,6 @@ function tickAnim(now) {
     anApply(anim.strip, v);
     anim.steps.forEach((el, i) => el.classList.toggle("on", v.step === i + 1));
     anim.rows.forEach(el => el.classList.toggle("on", +el.dataset.st === v.stage));
-    if (anim.top && st.inc && st.inc.top) anApply(anim.top, anTop(st.inc, t));
   }
   if ($("panel").classList.contains("big")) for (const m of anim.minis) anApply(m.b, anMini(anim.M, m.k, t, anim.reveal));
 }
@@ -1631,6 +1634,26 @@ function revealShots(keep) {
   }
 }
 
+/* Le film de profil d'une balle : son geste, les rotations à chaque étape, ce que fait ta raquette droite */
+function makeD(inc) {
+  const C = inc.chain || {}, w = inc.wMe, still = inc.still || "flat";
+  const labs = [inc.serve ? null : C.me0 && C.me0.w, inc.serve ? null : C.hisB && C.hisB.b, inc.wOut, C.meB ? C.meB.b : w];
+  // Son geste vu de profil : angle de sa raquette et sens du mouvement
+  const hz = Math.hypot(inc.n[0], inc.n[2]) || 1;
+  const ang = anCl(Math.atan2(-inc.n[1], hz) / DEG, -60, 60);
+  const vh = (inc.V[0] * inc.n[0] + inc.V[2] * inc.n[2]) / hz, vy = inc.V[1], vs = Math.hypot(vh, vy) || 1;
+  const len = anCl(4 + Math.hypot(inc.V[0], inc.V[1], inc.V[2]) * 3.5, 8, 26), dir = [vh / vs, -vy / vs];
+  return {
+    serve: !!inc.serve, still,
+    pSign: inc.serve ? 0 : -anSgn(inc.wHis), pCol: anCol(inc.wHis),
+    labs: labs.map(x => x ? fmtW(x) : ""), labc: labs.map(x => anCol(x || 0)),
+    oSign1: anSgn(inc.wOut), oCol1: anCol(inc.wOut), oSign2: anSgn(w), oCol2: anCol(w),
+    his: { ang, from: [-dir[0] * len * 0.45, -dir[1] * len * 0.45], to: [dir[0] * len * 0.55, dir[1] * len * 0.55] },
+    hf: (inc.face === "picot") === picotRed ? "#e04848" : "#3a3f47", pips: inc.face === "picot" ? 1 : 0,
+    p2c: w <= -6 ? [270, 24] : w >= 6 ? [290, 50] : [280, 34],
+    ...ME_FACE(inc.bh),
+  };
+}
 function renderLecture(inc) {
   const fl = faceLabel(inc.face), w = inc.wMe;
   const still = inc.still || "flat";
@@ -1648,34 +1671,19 @@ function renderLecture(inc) {
   rows.push([3, inc.serve ? `Son service · ${face}` : `Sa raquette · ${face}`, inc.serve ? cell(inc.wOut) : pair(inc.wHis, inc.wOut), inc.serve ? `${inc.outKmh} km/h` : `${C.hisK} → ${inc.outKmh} km/h`]);
   if (C.meB) rows.push([4, "Rebond chez toi", pair(C.meB.a, C.meB.b), `${C.meB.ka} → ${C.meB.kb} km/h`]);
   rows.push([5, inc.bh ? "À ton contact · revers" : "À ton contact", cell(w) + (inc.latDir ? ` <span style="color:#f2c94c">· latéral ${Math.round(Math.abs(inc.wLat))}</span>` : ""), `${inc.kmh} km/h · ${Math.round(inc.h * 100)} cm`]);
-  const labs = [inc.serve ? null : C.me0 && C.me0.w, inc.serve ? null : C.hisB && C.hisB.b, inc.wOut, C.meB ? C.meB.b : w];
-  // Son geste vu de profil : angle de sa raquette et sens du mouvement
-  const hz = Math.hypot(inc.n[0], inc.n[2]) || 1;
-  const ang = anCl(Math.atan2(-inc.n[1], hz) / DEG, -60, 60);
-  const vh = (inc.V[0] * inc.n[0] + inc.V[2] * inc.n[2]) / hz, vy = inc.V[1], vs = Math.hypot(vh, vy) || 1;
-  const len = anCl(4 + Math.hypot(inc.V[0], inc.V[1], inc.V[2]) * 3.5, 8, 26), dir = [vh / vs, -vy / vs];
-  anim.D = {
-    serve: !!inc.serve, still,
-    pSign: inc.serve ? 0 : -anSgn(inc.wHis), pCol: anCol(inc.wHis),
-    labs: labs.map(x => x ? fmtW(x) : ""), labc: labs.map(x => anCol(x || 0)),
-    oSign1: anSgn(inc.wOut), oCol1: anCol(inc.wOut), oSign2: anSgn(w), oCol2: anCol(w),
-    his: { ang, from: [-dir[0] * len * 0.45, -dir[1] * len * 0.45], to: [dir[0] * len * 0.55, dir[1] * len * 0.55] },
-    hf: (inc.face === "picot") === picotRed ? "#e04848" : "#3a3f47", pips: inc.face === "picot" ? 1 : 0,
-    p2c: w <= -6 ? [270, 24] : w >= 6 ? [290, 50] : [280, 34],
-    ...ME_FACE(inc.bh),
-  };
+  anim.D = makeD(inc);
   anim.tt = 0;
   const gest = gName(inc);
   lecEl.innerHTML = `
     <div class="lec-head"><span class="lec-eff ${w <= -6 ? "cut" : w >= 6 ? "top" : ""}">${esc(EFF[inc.eff])}</span>${P.rub === "inv" ? "" : `<span class="face-chip ${fl.cls}">${esc(inc.face === "picot" ? RUBL[P.rub] : "Backside")}</span>`}<b>${esc(gest)}</b>${inc.latDir ? `<span class="lat-chip" aria-label="Sur ta raquette, elle part vers ta ${inc.latDir < 0 ? "gauche" : "droite"}">${inc.latDir < 0 ? "◀" : "▶"}</span>` : ""}${inc.bh ? `<span class="bh-chip">Revers</span>` : ""}<button type="button" id="lecClose" aria-label="Masquer la carte">✕</button></div>
     <svg class="lec-strip" viewBox="0 0 344 88" role="img" aria-label="${esc(chainTxt(inc))}" font-family="Atkinson Hyperlegible, sans-serif">${STRIP_SVG}</svg>
-    ${inc.top ? topSVG(inc) : ""}
     <table class="lec-nums"${store.nums ? "" : " hidden"}><tbody>${rows.map(r => `<tr data-st="${r[0]}"><td>${esc(r[1])}</td><td>${r[2]}</td><td>${esc(r[3])}</td></tr>`).join("")}</tbody></table>
     <div class="lec-steps"${store.nums ? " hidden" : ""}><div><span>1 · Il a joué</span><b>${esc(gest)}</b></div><div><span>2 · Elle arrive</span><b style="color:${anCol(w)}">${esc(EFF[inc.eff])}</b></div><div><span>3 · Raquette droite</span><b style="color:${STILLT[still].c}">${esc(STILLT[still].t)}</b></div></div>
-    <div class="lec-actions"><button type="button" id="replayBtn" aria-label="Revoir son coup" title="Revoir son coup">↺ Revoir</button><button type="button" id="numsBtn" aria-pressed="${store.nums}">Chiffres</button>
+    <div class="lec-actions"><button type="button" id="replayBtn" aria-label="Revoir son coup" title="Revoir son coup">↺ Revoir</button><button type="button" id="numsBtn" aria-pressed="${store.nums}">Chiffres</button><button type="button" id="anaBtn">Analyse</button>
       <div class="lec-speed" role="group" aria-label="Vitesse des animations">${[[0.25, "×¼", "Vitesse très lente"], [0.5, "×½", "Vitesse lente"], [1, "×1", "Vitesse normale"]].map(([v, l, a]) => `<button type="button" data-sp="${v}" aria-label="${a}" aria-pressed="${store.animSp === v}">${l}</button>`).join("")}<button type="button" id="animPause" aria-label="${anim.paused ? "Relancer les animations" : "Mettre les animations en pause"}">${anim.paused ? "▶" : "❚❚"}</button></div>
     </div>`;
   anim.rows = Array.from(lecEl.querySelectorAll(".lec-nums tr"));
+  $("anaBtn").addEventListener("click", () => openAna(inc));
   $("numsBtn").addEventListener("click", () => {
     store.nums = !store.nums; save();
     lecEl.querySelector(".lec-nums").hidden = !store.nums; lecEl.querySelector(".lec-steps").hidden = store.nums;
@@ -1686,7 +1694,6 @@ function renderLecture(inc) {
   }));
   $("animPause").addEventListener("click", () => { anim.paused = !anim.paused; syncSpeed(); });
   anim.strip = anBind(lecEl.querySelector(".lec-strip"));
-  anim.top = inc.top ? anBind(lecEl.querySelector(".lec-topv")) : null;
   anim.steps = Array.from(lecEl.querySelectorAll(".lec-steps > div"));
   $("replayBtn").addEventListener("click", replayOpp);
   $("lecClose").addEventListener("click", () => showLecture(false));
@@ -1720,6 +1727,185 @@ function replayOpp() {
   at(oppStroke.tc + 0.12, () => { if (guided()) hold = 1.1; });
   prompt("Regarde son geste…", "hot");
 }
+
+/* ================= Analyse au ralenti =================
+   Une étape = une idée, une phrase, une animation tracée avec les vraies données de cette balle.
+   Profil : lui à gauche, toi à droite. Vue de dessus : lui en haut, toi en bas, ta droite à droite (comme dans le jeu). */
+const ana = { open: false, steps: [], i: 0, tt: 0, last: 0, paused: false, binds: null, step: null, inc: null };
+const TVX = x => 150 + x * 140, TVY = z => 240 + z * 140;
+const sideW = x => x > 0 ? "droite" : "gauche";
+function trPts(tr, i0, i1) {
+  const a = [];
+  for (let i = i0; i < i1; i += 8) a.push([tr.P[i * 3], tr.P[i * 3 + 2]]);
+  a.push([tr.P[i1 * 3], tr.P[i1 * 3 + 2]]);
+  return a;
+}
+function anAlong(a, u) {
+  const f = anCl(u, 0, 1) * (a.length - 1), i = Math.min(a.length - 2, Math.floor(f)), k = f - i;
+  return [a[i][0] + (a[i + 1][0] - a[i][0]) * k, a[i][1] + (a[i + 1][1] - a[i][1]) * k];
+}
+const tvLine = a => a.map(p => `${an1(TVX(p[0]))},${an1(TVY(p[1]))}`).join(" ");
+/* Balle vue d'en haut : disque bicolore qui tourne, flèche du latéral (sens horaire à l'écran quand w[1] < 0) */
+const TV_BALL = `<g data-b="transform:bt"><circle r="10" fill="#fbfaf4"/><path d="M0 -10 A10 10 0 0 1 0 10 Z" fill="#ff7a1a"/></g>
+  <g data-b="transform:ba,opacity:bao">${svArr("bc")}</g>`;
+const TV_TABLE = `<rect x="43.2" y="48.2" width="213.6" height="383.6" fill="#1b4f8c" stroke="#f4f6f8" stroke-width="2"/>
+  <line x1="150" y1="48" x2="150" y2="432" stroke="#f4f6f8" stroke-width="1" opacity=".5"/>
+  <line x1="28" y1="240" x2="272" y2="240" stroke="#e3e9f0" stroke-width="4"/>
+  <text x="150" y="30" text-anchor="middle" font-size="14" font-weight="700" fill="#a9b8ca">LUI</text>
+  <text x="150" y="468" text-anchor="middle" font-size="14" font-weight="700" fill="#a9b8ca">TOI</text>
+  <text x="6" y="468" font-size="12" font-weight="700" fill="#a9b8ca">◀ ta gauche</text>
+  <text x="294" y="468" text-anchor="end" font-size="12" font-weight="700" fill="#a9b8ca">ta droite ▶</text>`;
+/* Raquette vue d'en haut : un trait épais perpendiculaire à la direction de la face */
+function tvRacket(p, n, col, w) {
+  const h = Math.hypot(n[0], n[2]) || 1, nx = n[0] / h, nz = n[2] / h, L2 = 20;
+  const cx = TVX(p[0]) - nx * 12, cy = TVY(p[2]) - nz * 12;
+  return `<line x1="${an1(cx - nz * L2)}" y1="${an1(cy + nx * L2)}" x2="${an1(cx + nz * L2)}" y2="${an1(cy - nx * L2)}" stroke="${col}" stroke-width="${w || 7}" stroke-linecap="round"/>`;
+}
+function tvBallVals(p, wl, t, show) {
+  return { bt: anT([TVX(p[0]), TVY(p[1])], -wl * 14 * t), ba: anA([TVX(p[0]), TVY(p[1])], wl < 0 ? 1 : -1, 1.6), bao: show && Math.abs(wl) >= LAT_MIN ? 1 : 0, bc: "#f2c94c" };
+}
+
+function anaSteps(inc) {
+  const D = makeD(inc), steps = [], wl = inc.wLat || 0, lat = Math.abs(wl) >= LAT_MIN, sIn = inc.sIn;
+  const w = inc.wMe, gest = gName(inc);
+  const strip = (vb, t0, dur) => ({
+    vb, svg: STRIP_SVG,
+    upd: t => anStrip(D, t0 + (t % (dur + 0.6) < dur ? t % (dur + 0.6) : dur)),
+  });
+  // 1 · Son geste (de profil, zoom sur lui)
+  const open = inc.n[1] >= 0.5 ? "très ouverte" : inc.n[1] >= 0.2 ? "ouverte" : inc.n[1] > -0.2 ? "droite" : "fermée";
+  steps.push(Object.assign({ t: "Son geste", cap: `${gest} : raquette ${open}, geste ${gestArrow(inc.V).t}.` }, strip("-10 0 200 88", inc.serve ? 0.4 : 0.3, 1.3)));
+  // 2 · Son frottement sur le côté (vu d'en haut)
+  if (lat && !inc.serve && Math.abs(inc.brush || 0) > 0.5) {
+    const vx = inc.brush * 1.6, vz = Math.max(1.5, inc.V[2]), vh = Math.hypot(vx, vz) || 1, dx = vx / vh, dz = vz / vh;
+    const hh = Math.hypot(inc.n[0], inc.n[2]) || 1, nx = inc.n[0] / hh, nz = inc.n[2] / hh;
+    steps.push({
+      t: "Il frotte sur le côté", cap: `Il frotte la balle de ta ${sideW(-vx)} vers ta ${sideW(vx)} : elle se met à tourner sur elle-même, vue d'en haut.`,
+      vb: "0 0 300 260",
+      svg: `<text x="150" y="22" text-anchor="middle" font-size="14" font-weight="700" fill="#a9b8ca">LUI · vu d'en haut</text>
+        <text x="150" y="252" text-anchor="middle" font-size="14" font-weight="700" fill="#a9b8ca">TOI</text>
+        <line data-b="x1:rx1,y1:ry1,x2:rx2,y2:ry2" stroke="#3a3f47" stroke-width="12" stroke-linecap="round"/>
+        <path d="M${an1(150 - dx * 70)} ${an1(110 - dz * 70)} L${an1(150 + dx * 60)} ${an1(110 + dz * 60)}" stroke="#f3f6fa" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
+        <polygon fill="#f3f6fa" points="${anHead([150 - dx * 70, 110 - dz * 70], [150 + dx * 62, 110 + dz * 62], 9)}"/>
+        <g data-b="transform:bt"><circle r="22" fill="#fbfaf4"/><path d="M0 -22 A22 22 0 0 1 0 22 Z" fill="#ff7a1a"/></g>
+        <g data-b="transform:ba,opacity:bao">${svArr("bc")}</g>`,
+      upd: t => {
+        const u = (t % 3) / 1.6, k = anCl(u, 0, 1), c = [150 - dx * 70 + dx * 130 * k, 110 - nz * 34 - dz * 70 + dz * 130 * k];
+        const spin = u > 0.5 ? (u - 0.5) * 1.6 : 0;
+        return { rx1: an1(c[0] - nz * 34), ry1: an1(c[1] + nx * 34), rx2: an1(c[0] + nz * 34), ry2: an1(c[1] - nx * 34),
+          bt: anT([150, 150], -wl * 14 * spin), ba: anA([150, 150], wl < 0 ? 1 : -1, 3), bao: u > 0.5 ? 1 : 0, bc: "#f2c94c" };
+      },
+    });
+  }
+  // 3 · Comment elle tourne en arrivant chez toi : de profil et vue d'en haut
+  steps.push({
+    t: "Comment elle tourne", cap: `De profil : ${fmtW(w)}. Vue d'en haut : ${lat ? `latéral ${Math.round(Math.abs(wl))} tr/s` : "pas de latéral"}.`,
+    vb: "0 0 300 190",
+    svg: `<text x="78" y="20" text-anchor="middle" font-size="13" font-weight="700" fill="#a9b8ca">DE PROFIL</text>
+      <text x="22" y="100" text-anchor="middle" font-size="11" font-weight="700" fill="#a9b8ca">LUI</text><text x="134" y="100" text-anchor="middle" font-size="11" font-weight="700" fill="#a9b8ca">TOI</text>
+      <g data-b="transform:pb">${SV_BALL}</g><g data-b="transform:pa,opacity:pao">${svArr("pc")}</g>
+      <text x="78" y="178" text-anchor="middle" font-size="15" font-weight="700" data-b="fill:pc">${esc(fmtW(w))}</text>
+      <text x="222" y="20" text-anchor="middle" font-size="13" font-weight="700" fill="#a9b8ca">VU D'EN HAUT</text>
+      <text x="222" y="44" text-anchor="middle" font-size="11" font-weight="700" fill="#a9b8ca">LUI</text><text x="222" y="160" text-anchor="middle" font-size="11" font-weight="700" fill="#a9b8ca">TOI</text>
+      <g data-b="transform:bt"><circle r="30" fill="#fbfaf4"/><path d="M0 -30 A30 30 0 0 1 0 30 Z" fill="#ff7a1a"/></g><g data-b="transform:ba,opacity:bao">${svArr("bc")}</g>
+      <text x="222" y="178" text-anchor="middle" font-size="15" font-weight="700" fill="${lat ? "#f2c94c" : "#a9b8ca"}">${lat ? `latéral ${Math.round(Math.abs(wl))} tr/s` : "pas de latéral"}</text>`,
+    upd: t => ({
+      pb: anT([78, 100], anSgn(w) * Math.min(1, Math.abs(w) / 30) * 220 * t, 5.4), pa: anA([78, 100], anSgn(w), 4.6), pao: anSgn(w) ? 1 : 0, pc: anCol(w),
+      bt: anT([222, 100], -wl * 7 * t), ba: anA([222, 100], wl < 0 ? 1 : -1, 4.4), bao: lat ? 1 : 0, bc: "#f2c94c",
+    }),
+  });
+  // Trajectoires réelles (vue de dessus) : sa balle, ton coup sans compenser, ton coup bien réglé
+  const best = inc.best || "plat";
+  const raw = computeMyShot(best, sIn, false, 0), good = computeMyShot(best, sIn, false);
+  const endI = tr => tr.events.length ? Math.min(tr.n, tr.events[0].i + 120) : Math.min(tr.n, 900);
+  if (lat) {
+    const his0 = trPts(inc.tr, 0, inc.im), a0 = his0[0], a1 = his0[his0.length - 1];
+    const chord = z => a0[0] + (a1[0] - a0[0]) * (z - a0[1]) / ((a1[1] - a0[1]) || 1);
+    const his = his0.map(q => [chord(q[1]) + (q[0] - chord(q[1])) * 2.5, q[1]]);   // écart à la ligne droite amplifié ×2,5 pour voir la courbe
+    const hb0 = inc.tr.events.find(e => e.type === "table" && e.z > 0), hb = hb0 && { x: chord(hb0.z) + (hb0.x - chord(hb0.z)) * 2.5, z: hb0.z };
+    const curve = wl > 0 ? "droite" : "gauche";
+    steps.push({
+      t: "Son trajet", cap: `Dans l'air, le latéral la fait tourner vers ta ${curve}. Regarde la courbe, puis le rebond.`,
+      vb: "0 0 300 480",
+      svg: `${TV_TABLE}<line x1="${an1(TVX(a0[0]))}" y1="${an1(TVY(a0[1]))}" x2="${an1(TVX(a1[0]))}" y2="${an1(TVY(a1[1]))}" stroke="#f3f6fa" stroke-width="1.5" stroke-dasharray="3 6" opacity=".5"/>
+        <polyline points="${tvLine(his)}" fill="none" stroke="#f2c94c" stroke-width="4" stroke-linecap="round"/>
+        <text x="292" y="62" text-anchor="end" font-size="11" font-weight="700" fill="#a9b8ca">courbe ×2,5</text>
+        ${hb ? `<ellipse cx="${an1(TVX(hb.x))}" cy="${an1(TVY(hb.z))}" rx="9" ry="9" fill="none" stroke="#f2c94c" stroke-width="2.5" data-b="opacity:ro"/>` : ""}${TV_BALL}`,
+      upd: t => { const u = (t % 3.6) / 3; return Object.assign(tvBallVals(anAlong(his, u), wl, t, true), { ro: hb && u > 0.62 ? 1 : 0 }); },
+    });
+    const tail = his.slice(Math.floor(his.length * 0.6));
+    const rawP = trPts(raw.tr, 0, endI(raw.tr)), goodP = trPts(good.tr, 0, endI(good.tr));
+    const rawR = REST[RESV[raw.res] || "long"], dirW = sideW(inc.latDir);
+    const myCol = ME_FACE(inc.bh).mf === "#e04848" ? "#e04848" : "#f3f6fa";
+    const flight = (pts, out, t) => { const c = t % 3.6; return c < 1.2 ? anAlong(pts, c / 1.2) : anAlong(out, Math.min(1, (c - 1.2) / 1.6)); };
+    steps.push({
+      t: "Sur ta raquette", cap: `Raquette droite : elle part vers ta ${dirW}${raw.res === "in" ? ", mais reste sur la table" : " et sort à côté"}.`,
+      vb: "0 0 300 480",
+      svg: `${TV_TABLE}<polyline points="${tvLine(tail)}" fill="none" stroke="#f2c94c" stroke-width="2" stroke-dasharray="5 5" opacity=".6"/>
+        <polyline points="${tvLine(rawP)}" fill="none" stroke="${rawR.c}" stroke-width="4.5" stroke-linecap="round" data-b="opacity:oo"/>
+        ${tvRacket(sIn.p, [0, 0, -1], myCol)}${TV_BALL}
+        <text x="${an1(anCl(TVX(rawP[rawP.length - 1][0]), 40, 260))}" y="${an1(anCl(TVY(rawP[rawP.length - 1][1]), 60, 420))}" text-anchor="middle" font-size="15" font-weight="700" fill="${rawR.c}" stroke="#0f1c2e" stroke-width="4" paint-order="stroke" data-b="opacity:oo">${esc(rawR.t)}</text>`,
+      upd: t => Object.assign(tvBallVals(flight(tail, rawP, t), wl, t, t % 3.6 < 1.2), { oo: t % 3.6 > 1.2 ? 1 : 0.45 }),
+    });
+    const aim = good.n[0] < raw.n[0] ? "gauche" : "droite", goodR = REST[RESV[good.res] || "long"];
+    steps.push({
+      t: "Ta réponse", cap: good.res !== "in" ? "Balle très difficile : aucun coup ne passe proprement."
+        : raw.res === "in" ? `${CH[best].l} passe même sans compenser. Tourne un peu la raquette vers ta ${aim} pour la garder au centre.`
+        : `${CH[best].l}, raquette tournée un peu plus vers ta ${aim} : le latéral la ramène dans la table.`,
+      vb: "0 0 300 480",
+      svg: `${TV_TABLE}<polyline points="${tvLine(rawP)}" fill="none" stroke="#f2925f" stroke-width="2" stroke-dasharray="4 5" opacity=".35"/>
+        <polyline points="${tvLine(tail)}" fill="none" stroke="#f2c94c" stroke-width="2" stroke-dasharray="5 5" opacity=".6"/>
+        <polyline points="${tvLine(goodP)}" fill="none" stroke="${goodR.c}" stroke-width="4.5" stroke-linecap="round" data-b="opacity:oo"/>
+        ${tvRacket(sIn.p, [0, 0, -1], "#a9b8ca", 3)}${tvRacket(sIn.p, good.n, myCol)}${TV_BALL}`,
+      upd: t => Object.assign(tvBallVals(flight(tail, goodP, t), wl, t, t % 3.6 < 1.2), { oo: t % 3.6 > 1.2 ? 1 : 0.45 }),
+    });
+  } else {
+    steps.push(Object.assign({ t: "Son trajet", cap: inc.chain && inc.chain.meB ? `Au rebond chez toi : ${fmtW(inc.chain.meB.a)} → ${fmtW(inc.chain.meB.b)}.` : `Elle arrive ${EFF[inc.eff].toLowerCase()}.` }, strip("0 0 344 88", 0.95, 1.35)));
+    steps.push(Object.assign({ t: "Sur ta raquette", cap: `Raquette droite : elle ${{ up: "monte", down: "descend", flat: "part tout droit" }[inc.still || "flat"]}.` }, strip("150 0 194 88", 1.75, 1.9)));
+    if (inc.best) {
+      const M = { ...ME_FACE(inc.bh), live: true, sign: anSgn(w), col: anCol(w), mk: w <= -6 ? -14 : w >= 6 ? -2 : -8, res: { [best]: "in" } };
+      steps.push({ t: "Ta réponse", cap: `${CH[best].l} : ${CH[best].s.toLowerCase()}.`, vb: "0 0 120 72", svg: MINI_SVG, upd: t => anMini(M, best, t, true) });
+    }
+  }
+  return steps;
+}
+function anaShow(i) {
+  ana.i = Math.max(0, Math.min(ana.steps.length - 1, i)); ana.tt = 0;
+  const S = ana.steps[ana.i], svg = $("anaSvg");
+  svg.setAttribute("viewBox", S.vb); svg.innerHTML = S.svg;
+  ana.binds = anBind(svg);
+  $("anaTitle").textContent = `${ana.i + 1} · ${S.t}`;
+  $("anaCap").textContent = S.cap;
+  svg.setAttribute("aria-label", S.cap);
+  $("anaSteps").querySelectorAll("button").forEach((b, k) => b.setAttribute("aria-current", k === ana.i ? "step" : "false"));
+  $("anaPrev").disabled = ana.i === 0; $("anaNext").disabled = ana.i === ana.steps.length - 1;
+}
+function openAna(inc) {
+  if (!inc || !inc.sIn) return;
+  if (!inc.works) adviseBall(inc, inc.sIn);
+  ana.inc = inc; ana.steps = anaSteps(inc); ana.open = true; ana.paused = false;
+  $("anaSteps").innerHTML = ana.steps.map((S, k) => `<button type="button" aria-label="Étape ${k + 1} : ${esc(S.t)}">${k + 1}</button>`).join("");
+  $("anaSteps").querySelectorAll("button").forEach((b, k) => b.addEventListener("click", () => anaShow(k)));
+  anaSpeed();
+  $("ana").hidden = false; anaShow(0);
+}
+function anaSpeed() {
+  $("ana").querySelectorAll("[data-asp]").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.asp === store.anaSp)));
+  $("anaPlay").textContent = ana.paused ? "▶" : "❚❚";
+  $("anaPlay").setAttribute("aria-label", ana.paused ? "Lecture" : "Pause");
+}
+function tickAna(now) {
+  if (!ana.open || now - ana.last < 33) return;
+  const dt = ana.last ? Math.min(0.1, (now - ana.last) / 1000) : 0;
+  ana.last = now;
+  if (!ana.paused) ana.tt += dt * store.anaSp;
+  anApply(ana.binds, ana.steps[ana.i].upd(ana.tt));
+}
+$("anaClose").addEventListener("click", () => { ana.open = false; $("ana").hidden = true; });
+$("anaPrev").addEventListener("click", () => anaShow(ana.i - 1));
+$("anaNext").addEventListener("click", () => anaShow(ana.i + 1));
+$("anaPlay").addEventListener("click", () => { ana.paused = !ana.paused; anaSpeed(); });
+$("ana").querySelectorAll("[data-asp]").forEach(b => b.addEventListener("click", () => { store.anaSp = +b.dataset.asp; save(); ana.paused = false; anaSpeed(); }));
 
 /* ================= Bilan du point ================= */
 function faceLabel(face) {
@@ -1811,10 +1997,12 @@ function pointEnd(winner, info) {
     </div>`;
   }
   const over = isOver();
+  if (winner === "opp" && inc && inc.sIn) html += `<button class="btn" id="anaPtBtn">Analyser cette balle au ralenti</button>`;
   html += `<button class="btn primary" id="nextBtn">${over ? "Voir le bilan du match" : "Point suivant"}</button>`;
   $("sheetBody").innerHTML = html;
   $("sheet").hidden = false;
   $("nextBtn").focus({ preventScroll: true });
+  if ($("anaPtBtn")) $("anaPtBtn").addEventListener("click", () => openAna(inc));
   $("nextBtn").addEventListener("click", () => {
     $("sheet").hidden = true;
     if (over) endMatch(); else newPoint();
@@ -2028,11 +2216,12 @@ function frame(now) {
   }
 
   // Adversaire
-  const tx = oppStroke ? oppStroke.C.x - 0.3 : 0;
+  // droitier : il te fait face, sa raquette (main droite) est sur ta gauche, son corps à droite de la raquette vu de chez toi
+  const tx = oppStroke ? oppStroke.C.x + 0.3 : 0;
   const tz = oppStroke && clock < oppStroke.tc + 0.8 ? Math.min(oppStroke.C.z - 0.35, -L - 0.25) : oppZ() - 0.3;
   opp.position.x += (tx - opp.position.x) * Math.min(1, dt * 4);
   opp.position.z += (tz - opp.position.z) * Math.min(1, dt * 3);
-  const oRest = tmpV.set(opp.position.x + 0.32, 1.0, opp.position.z + 0.3).clone();
+  const oRest = tmpV.set(opp.position.x - 0.32, 1.0, opp.position.z + 0.3).clone();
   animRacket(oppRk, oppStroke, oRest, OPP_REST_Q, clock);
   // Stroboscope : on garde la trace de sa raquette pendant le geste
   if (sdt > 0) {
@@ -2055,7 +2244,7 @@ function frame(now) {
     g.visible = true;
   }
   _x.set(0, -0.13, 0).applyQuaternion(oppRk.quaternion);
-  setArm(new THREE.Vector3(opp.position.x + 0.2, 1.48, opp.position.z + 0.02), oppRk.position.clone().add(_x));
+  setArm(new THREE.Vector3(opp.position.x - 0.2, 1.48, opp.position.z + 0.02), oppRk.position.clone().add(_x));
 
   // Toi
   const bh = !!(st.inc && st.inc.bh && st.phase === "play");   // balle sur ta gauche : raquette en revers, face noire
@@ -2075,6 +2264,7 @@ function frame(now) {
 
   // Découverte : la carte et les boutons de coups s'animent
   tickAnim(now);
+  tickAna(now);
 
   // Caméra : léger suivi de la balle
   // quand la balle t'attend (Découverte), la caméra la recentre pour qu'elle reste visible
