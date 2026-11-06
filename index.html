@@ -127,6 +127,17 @@ button { font: inherit; color: inherit; }
 .ring-num { display: flex; align-items: baseline; gap: 4px; margin-top: -6px; }
 .ring-num b { font: 800 36px/1 var(--f-display); }
 .ring-num span { font-size: 14px; font-weight: 700; color: var(--muted); }
+.ring-card.hist .ring-num { visibility: hidden; height: 0; }
+.ring-nav { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px; }
+.ring-nav span { flex: 1 1 auto; text-align: center; font-size: 13px; font-weight: 700; line-height: 1.2; }
+.ring-nav button {
+  appearance: none; border: 1px solid var(--line); background: var(--tile); border-radius: 10px;
+  min-width: 44px; min-height: 40px; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.ring-nav button[disabled] { opacity: .3; cursor: default; }
+.ring-txt { font-size: 13px; font-weight: 700; text-align: center; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.ring-hint { font-size: 12px; color: var(--muted); text-align: center; }
+.ring-hint:empty { display: none; }
 .shot.rxbest { border-color: var(--good); background: rgba(82, 200, 138, .2); opacity: 1; }
 /* Ligne compacte dans le panneau du bas */
 .lec-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-height: 34px; font-size: 13px; line-height: 1.3; }
@@ -351,6 +362,8 @@ button { font: inherit; color: inherit; }
 <div class="ring-card" id="ringCard" hidden>
   <svg id="ringSvg" viewBox="0 0 240 196" role="img" font-family="Atkinson Hyperlegible, sans-serif"></svg>
   <div class="ring-num"><b id="ringRps"></b><span>tr/s</span></div>
+  <div class="ring-nav"><button type="button" id="ringPrev" aria-label="Moment précédent">◀</button><span id="ringLab"></span><button type="button" id="ringNext" aria-label="Moment suivant">▶</button></div>
+  <div class="ring-txt" id="ringTxt"></div><div class="ring-hint" id="ringHint"></div>
 </div>
 
 <div class="panel" id="panel">
@@ -1219,6 +1232,7 @@ function updateHUD() {
 function newPoint() {
   events = []; ball.tr = null; ball.handP = null; oppStroke = meStroke = null; frozen = false;
   st.awaiting = false; st.choice = null; st.rally = 0; st.lastMine = null; st.inc = null; st.myShot = null; st.phase = "play"; st.comp = 0; syncComp(); hideRing();
+  st.hist = [];
   const tot = st.score[0] + st.score[1];
   st.server = (st.score[0] >= 10 && st.score[1] >= 10) ? (tot % 2 === 0 ? "me" : "opp") : (Math.floor(tot / 2) % 2 === 0 ? "me" : "opp");
   ball.hold = st.server;
@@ -1246,6 +1260,7 @@ function myServe(k) {
   const tr = PHYS.fly(s, 3);
   at(tc, () => {
     launch(tr, "inv", 0.5);
+    histPush({ kind: "me", title: `Ton ${sv.l.toLowerCase()}`, before: null, after: stLite(s), n, V: meStroke.V, face: "#e04848" });
     st.lastMine = { k, serve: true, label: sv.my };
     planOpp(tr, null);
   });
@@ -1267,6 +1282,7 @@ function oppServe() {
   const tr = PHYS.fly(s, 3);
   at(tc, () => {
     launch(tr, picot ? P.rub : "inv", 0.5);
+    histPush({ kind: "his", title: `Son service · ${picot ? RUBN[P.rub] : "backside"}`, before: null, after: stLite(s), n, V: Vs, face: picot === picotRed ? "#e04848" : "#22262d" });
     startDecision(tr, { serve: true, lat: lat !== 0, face: picot ? "picot" : "bs", gest: "serve", wOut: PHYS.topRps(s), n, V: Vs, snd: picot ? P.rub : "inv" });
     if (guided()) at(clock + 0.12, () => { hold = 1.1; });
   });
@@ -1277,6 +1293,7 @@ function startDecision(tr, inc) {
   st.awaiting = true; st.choice = null; st.myShot = null;
   const sIn = PHYS.stateAt(tr, im);
   st.mySIn = sIn;
+  histBounces(tr, im);
   inc.wMe = PHYS.topRps(sIn); inc.eff = effKey(inc.wMe); inc.kmh = kmh(sIn);
   inc.chain = Object.assign(inc.chain || {}, { meB: bounceAt(tr, 1) });
   if (inc.outKmh == null) inc.outKmh = kmh(PHYS.stateAt(tr, 0));
@@ -1324,6 +1341,7 @@ function myContact() {
   const sh = st.myShot, ok = sh.res === "in" || sh.res === "haute";
   st.log.push({ w: inc.wMe, ok: sh.res === "in", type: sh.res, choice: sh.k });
   launch(sh.tr, "inv", Math.hypot(sh.V[0], sh.V[1], sh.V[2]) / 6);
+  histPush({ kind: "me", title: `Ta raquette · ${(reflex() ? RX_L[sh.k] : CH[sh.k].l).replace(/[◀▶] ?| ?[◀▶]/g, "")}`, before: stLite(st.mySIn), after: stLite(sh.s), n: sh.n, V: sh.V, face: inc.bh ? "#22262d" : "#e04848" });
   if (ok) {
     st.rally++;
     if (reflex()) rxFeedback(sh);
@@ -1416,6 +1434,11 @@ function planOpp(tr, myShot) {
     if (classify(tr2, 1).res !== "in") { hit = PHYS.hitWith(sh, sol.d, sol.th, sol.st, RUBP[resp.rubKey]); tr2 = PHYS.fly(hit.s, 3); }
   }
   const faceA = resp.face === "picot";
+  histBounces(tr, io);
+  const same = v3n(sh.w), aft = v3n(hit.s.w), keep = same[0] * aft[0] + same[1] * aft[1] + same[2] * aft[2] > 0.8 && Math.hypot(...hit.s.w) > 0.3 * Math.hypot(...sh.w);
+  histPush({ kind: "his", title: `Sa raquette · ${faceA ? RUBN[P.rub] : "backside"} · ${GESTN[resp.gest].toLowerCase()}${resp.lat ? " latéral" : ""}`,
+    before: stLite(sh), after: stLite(hit.s), n: hit.n, V: hit.V, face: faceA === picotRed ? "#e04848" : "#22262d",
+    hint: keep && PHYS.topRps(sh) * PHYS.topRps(hit.s) < 0 ? "Même rotation dans l’espace : la balle repart dans l’autre sens, alors le lift devient coupé (ou l’inverse)." : "" });
   oppStroke = makeStroke(tc, sh.p, hit.n, hit.V, faceA);
   oppStroke.gest = resp.gest; oppStroke.lat = !!resp.lat;
   const s0 = PHYS.stateAt(tr, 0);
@@ -2149,9 +2172,23 @@ function rgChev(p, q) {
   const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
   return `${an1(p[0] + ux * 11)},${an1(p[1] + uy * 11)} ${an1(p[0] - ux * 6 - uy * 9)},${an1(p[1] - uy * 6 + ux * 9)} ${an1(p[0] - ux * 6 + uy * 9)},${an1(p[1] - uy * 6 - ux * 9)}`;
 }
+/* L'historique de l'échange : chaque frappe et chaque rebond, avec la rotation juste avant et juste après.
+   Dans la carte, ◀ ▶ : la balle reste au centre, la raquette (ou la table) arrive et la frotte, l'anneau change. */
+const stLite = s => ({ w: s.w.slice(), v: s.v.slice() });
+function histPush(m) { if (st.hist) st.hist.push(m); }
+function histBounces(tr, iMax) {
+  for (const e of tr.events) {
+    if (e.i >= iMax) break;
+    if (e.type !== "table") continue;
+    histPush({ kind: "table", title: e.z > 0 ? "Rebond sur ta table" : "Rebond sur sa table", before: stLite(PHYS.stateAt(tr, e.i - 1)), after: stLite(PHYS.stateAt(tr, e.i)) });
+  }
+}
+const spinDesc = s => { if (!s) return "pas de rotation"; const l = Math.abs(s.w[1] / PHYS.TAU); return fmtW(PHYS.topRps(s)) + (l >= 6 ? ` · latéral ${Math.round(l)}` : ""); };
 const RING_SVG = `<ellipse cx="120" cy="178" rx="48" ry="9" fill="#000" opacity=".3"/>
+  <polygon fill="#1b4f8c" stroke="#f4f6f8" stroke-width="1.5" data-b="points:tab,opacity:tabo"/>
+  <polygon stroke="#e3e9f0" stroke-width="1.5" data-b="points:rk,fill:rkc,opacity:rkb"/>
   <path fill="none" stroke="#a9b8ca" stroke-width="2" stroke-dasharray="5 5" data-b="d:dirD"/><polygon fill="#a9b8ca" data-b="points:dirH"/>
-  <text font-size="11" font-weight="700" fill="#a9b8ca" data-b="x:dirTx,y:dirTy">vers toi</text>
+  <text font-size="11" font-weight="700" fill="#a9b8ca" data-b="x:dirTx,y:dirTy,text:dirT"></text>
   <path fill="none" stroke-width="6" stroke-linecap="round" opacity=".35" data-b="d:back,stroke:col"/>
   ${[0, 1, 2].map(i => `<polygon data-b="points:c${i},fill:col,opacity:bo${i}"/>`).join("")}
   <circle cx="120" cy="92" r="50" fill="#efece3"/><circle cx="107" cy="78" r="33" fill="#fbfaf5"/>
@@ -2159,15 +2196,28 @@ const RING_SVG = `<ellipse cx="120" cy="178" rx="48" ry="9" fill="#000" opacity=
   <path fill="none" stroke="#ff7a1a" stroke-width="6" stroke-linecap="round" data-b="d:seam"/>
   <circle cx="120" cy="92" r="76" fill="none" stroke="#e3e9f0" stroke-width="2" stroke-dasharray="3 7" data-b="opacity:none"/>
   <path fill="none" stroke-width="6" stroke-linecap="round" data-b="d:front,stroke:col"/>
-  ${[0, 1, 2].map(i => `<polygon stroke="#0f1c2e" stroke-width="1.5" data-b="points:c${i},fill:col,opacity:fo${i}"/>`).join("")}`;
-const ring = { w: null, tt: 0, last: 0, binds: null };
-/* Couleur de l'anneau : bleu coupé, orange lift, jaune quand le latéral domine, gris sans rotation */
-function ringCol(w) {
-  const top = w[0] / PHYS.TAU, lat = Math.abs(w[1] / PHYS.TAU);   // top : lift (+) ou coupé (−) pour une balle qui vient vers toi
+  ${[0, 1, 2].map(i => `<polygon stroke="#0f1c2e" stroke-width="1.5" data-b="points:c${i},fill:col,opacity:fo${i}"/>`).join("")}
+  <polygon stroke="#e3e9f0" stroke-width="1.5" data-b="points:rk,fill:rkc,opacity:rkf"/>
+  <path fill="none" stroke="#f3f6fa" stroke-width="3" stroke-linecap="round" data-b="d:br,opacity:bro"/><polygon fill="#f3f6fa" data-b="points:brh,opacity:bro"/>
+  <circle cx="120" cy="92" fill="none" stroke="#fff" stroke-width="2.5" data-b="r:flr,opacity:flo"/>`;
+const ring = { live: null, idx: 0, tt: 0, last: 0, binds: null, ang: 0 };
+/* Couleur de l'anneau : bleu coupé, orange lift, jaune quand le latéral domine, gris sans rotation (relatif au sens de la balle) */
+function ringCol(s) {
+  const top = PHYS.topRps(s), lat = Math.abs(s.w[1] / PHYS.TAU);
   return lat >= 6 && lat >= Math.abs(top) ? "#f2c94c" : top <= -6 ? "#8ab8ff" : top >= 6 ? "#ffab66" : "#e3e9f0";
 }
-function ringVals(t) {
-  const w = ring.w, mag = Math.hypot(w[0], w[1], w[2]) / PHYS.TAU, spin = mag >= 6, a = spin ? v3n(w) : [1, 0, 0];
+const rgPoly = pts => pts.map(q => `${an1(q[0])},${an1(q[1])}`).join(" ");
+function rgArrow(o, from, dir, len, key) {
+  const a = rgView(from), b = rgView([from[0] + dir[0] * len, from[1] + dir[1] * len, from[2] + dir[2] * len]);
+  const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+  o[key + "D"] = `M${an1(a[0])} ${an1(a[1])} L${an1(b[0])} ${an1(b[1])}`;
+  o[key + "H"] = `${an1(b[0] + ux * 8)},${an1(b[1] + uy * 8)} ${an1(b[0] - uy * 6)},${an1(b[1] + ux * 6)} ${an1(b[0] + uy * 6)},${an1(b[1] - ux * 6)}`;
+  return b;
+}
+function ringVals(t, M) {
+  const T = 3.4, h = M.live ? 0 : t % T, tc = 1.3, after = M.live || h >= tc || !M.before;
+  const S = M.live ? M.live : after ? M.after : M.before;
+  const w = S.w, mag = Math.hypot(w[0], w[1], w[2]) / PHYS.TAU, spin = mag >= 6 && (after || !!M.before), a = spin ? v3n(w) : [1, 0, 0];
   let u = v3x(a, [0, 0, 1]); if (Math.hypot(u[0], u[1], u[2]) < 0.1) u = v3x(a, [0, 1, 0]); u = v3n(u);
   const v = v3x(a, u), R = 1.5, P = x => [0, 1, 2].map(i => R * (u[i] * Math.cos(x) + v[i] * Math.sin(x)));
   const pts = []; for (let i = 0; i <= 72; i++) pts.push(rgView(P(i / 72 * 2 * Math.PI)));
@@ -2179,28 +2229,60 @@ function ringVals(t) {
   }
   const seam = []; for (let i = 0; i <= 60; i++) { const ph = i / 60 * 2 * Math.PI; seam.push(rgView(v3rot([0, 1, 2].map(j => u[j] * Math.cos(ph) + a[j] * Math.sin(ph)), a, ang))); }
   o.seam = rgPath(seam, true);
-  o.col = ringCol(w);
-  const d0 = rgView([0, -1.55, -1.3]), d1 = rgView([0, -1.55, 1.5]), dx = d1[0] - d0[0], dy = d1[1] - d0[1], l = Math.hypot(dx, dy), ux = dx / l, uy = dy / l;
-  o.dirD = `M${an1(d0[0])} ${an1(d0[1])} L${an1(d1[0])} ${an1(d1[1])}`;
-  o.dirH = `${an1(d1[0] + ux * 8)},${an1(d1[1] + uy * 8)} ${an1(d1[0] - uy * 6)},${an1(d1[1] + ux * 6)} ${an1(d1[0] + uy * 6)},${an1(d1[1] - ux * 6)}`;
-  o.dirTx = an1(d0[0] + 6); o.dirTy = an1(d0[1] - 8);
+  o.col = ringCol(S);
+  // sens de la balle
+  const vh = v3n(S.v), b = rgArrow(o, [vh[0] * 1.15, vh[1] * 1.15 - 0.1, vh[2] * 1.15], vh, 1.1, "dir");
+  o.dirT = M.live ? "vers toi" : after ? "après" : "avant"; o.dirTx = an1(b[0] + 8); o.dirTy = an1(b[1] + 4);
+  // la raquette qui frotte, ou la table
+  o.rk = "0,0"; o.rkf = 0; o.rkb = 0; o.bro = 0; o.br = "M0 0"; o.brh = "0,0"; o.tab = "0,0"; o.tabo = 0; o.flo = 0; o.flr = 0;
+  if (!M.live && M.kind === "table") {
+    o.tab = rgPoly([[-2.6, -1.05, -2.6], [2.6, -1.05, -2.6], [2.6, -1.05, 2.6], [-2.6, -1.05, 2.6]].map(rgView));
+    o.tabo = h < tc - 0.5 ? 0.25 : h < tc + 0.6 ? 0.85 : 0.3;
+  }
+  if (!M.live && M.n) {
+    const n = v3n(M.n), Vl = Math.hypot(M.V[0], M.V[1], M.V[2]) || 1, Vh = M.V.map(x => x / Vl);
+    const dn = Vh[0] * n[0] + Vh[1] * n[1] + Vh[2] * n[2], tg = v3n([Vh[0] - dn * n[0], Vh[1] - dn * n[1], Vh[2] - dn * n[2]]);
+    const s = h < tc ? -(tc - h) * 1.9 : (h - tc) * 1.2, dirv = h < tc ? Vh : tg;
+    const c = [-n[0] * 1.08 + dirv[0] * s, -n[1] * 1.08 + dirv[1] * s, -n[2] * 1.08 + dirv[2] * s];
+    let e1 = v3x(n, [0, 1, 0]); if (Math.hypot(e1[0], e1[1], e1[2]) < 0.2) e1 = v3x(n, [1, 0, 0]); e1 = v3n(e1); const e2 = v3x(n, e1);
+    const disc = []; for (let i = 0; i < 28; i++) { const ph = i / 28 * 2 * Math.PI; disc.push(rgView([0, 1, 2].map(j => c[j] + 1.35 * (e1[j] * Math.cos(ph) + e2[j] * Math.sin(ph))))); }
+    const vis = h < tc - 1.0 ? 0 : h < tc + 0.9 ? 1 : Math.max(0, 1 - (h - tc - 0.9) / 0.4), front = rgView(c)[2] > 0;
+    o.rk = rgPoly(disc); o.rkc = M.face; o.rkf = front ? vis * 0.6 : 0; o.rkb = front ? 0 : vis;
+    if (h > tc - 0.35 && h < tc + 1.0) { rgArrow(o, [c[0] - tg[0] * 0.6, c[1] - tg[1] * 0.6, c[2] - tg[2] * 0.6], tg, 1.3, "br"); o.br = o.brD; o.brh = o.brH; o.bro = 1; }
+  }
+  if (!M.live) { const f = (h - tc) / 0.35; if (f >= 0 && f <= 1) { o.flo = 1 - f; o.flr = an1(52 + 30 * f); } }
   return o;
 }
+/* Le moment affiché : l'historique de l'échange, puis la balle qui t'arrive maintenant */
+function ringMoments() { return (st.hist || []).concat([{ live: stLite(ring.liveS), title: "À ton contact : maintenant" }]); }
+function ringShow(i) {
+  const ms = ringMoments();
+  ring.idx = Math.max(0, Math.min(ms.length - 1, i)); ring.tt = 0;
+  const M = ms[ring.idx];
+  $("ringLab").textContent = `${ring.idx + 1}/${ms.length} · ${M.title}`;
+  $("ringTxt").textContent = M.live ? spinDesc(M.live) : M.before ? `Avant : ${spinDesc(M.before)} → après : ${spinDesc(M.after)}` : `Départ : ${spinDesc(M.after)}`;
+  $("ringHint").textContent = M.hint || "";
+  $("ringPrev").disabled = ring.idx === 0; $("ringNext").disabled = ring.idx === ms.length - 1;
+  $("ringCard").classList.toggle("hist", !M.live);
+}
 function showRing(sIn) {
-  ring.w = sIn.w.slice(); ring.tt = 0; ring.last = 0;
+  ring.liveS = sIn; ring.tt = 0; ring.last = 0; ring.live = true;
   if (!ring.binds) { $("ringSvg").innerHTML = RING_SVG; ring.binds = anBind($("ringSvg")); }
   const mag = Math.round(Math.hypot(sIn.w[0], sIn.w[1], sIn.w[2]) / PHYS.TAU);
-  $("ringRps").textContent = mag; $("ringRps").style.color = ringCol(sIn.w);
+  $("ringRps").textContent = mag; $("ringRps").style.color = ringCol(sIn);
   $("ringSvg").setAttribute("aria-label", `La balle tourne à ${mag} tours par seconde ; l’anneau fléché montre le sens de sa rotation`);
   $("ringCard").hidden = false;
+  ringShow(ringMoments().length - 1);
 }
-const hideRing = () => { $("ringCard").hidden = true; ring.w = null; };
+const hideRing = () => { $("ringCard").hidden = true; ring.live = null; };
 function tickRing(now) {
-  if (!ring.w || $("ringCard").hidden || now - ring.last < 33) return;
+  if (!ring.live || $("ringCard").hidden || now - ring.last < 33) return;
   const dt = ring.last ? Math.min(0.1, (now - ring.last) / 1000) : 0;
-  ring.last = now; ring.tt += dt * 0.6;
-  anApply(ring.binds, ringVals(ring.tt));
+  ring.last = now; ring.tt += dt * (ring.idx === ringMoments().length - 1 ? 0.6 : 0.45);
+  anApply(ring.binds, ringVals(ring.tt, ringMoments()[ring.idx]));
 }
+$("ringPrev").addEventListener("click", () => ringShow(ring.idx - 1));
+$("ringNext").addEventListener("click", () => ringShow(ring.idx + 1));
 
 /* ================= Bilan du point ================= */
 function faceLabel(face) {
