@@ -117,6 +117,17 @@ button { font: inherit; color: inherit; }
   padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.35;
 }
 .lecture p { margin: 0; }
+/* Niveau Réflexe : la balle en 3D avec son anneau-flèche */
+.ring-card {
+  position: fixed; z-index: 4; top: calc(env(safe-area-inset-top, 0px) + 62px); left: 50%; transform: translateX(-50%);
+  width: min(300px, calc(100% - 20px)); background: rgba(9, 18, 31, .94); border: 1px solid var(--line); border-radius: 18px;
+  padding: 6px 8px 8px; display: flex; flex-direction: column; align-items: center;
+}
+.ring-card svg { width: 100%; height: auto; display: block; }
+.ring-num { display: flex; align-items: baseline; gap: 4px; margin-top: -6px; }
+.ring-num b { font: 800 36px/1 var(--f-display); }
+.ring-num span { font-size: 14px; font-weight: 700; color: var(--muted); }
+.shot.rxbest { border-color: var(--good); background: rgba(82, 200, 138, .2); opacity: 1; }
 /* Ligne compacte dans le panneau du bas */
 .lec-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-height: 34px; font-size: 13px; line-height: 1.3; }
 .lec-line .lec-gold { font-size: 12.5px; color: var(--muted); }
@@ -337,6 +348,10 @@ button { font: inherit; color: inherit; }
 </div>
 
 <div class="lecture" id="lecture" hidden></div>
+<div class="ring-card" id="ringCard" hidden>
+  <svg id="ringSvg" viewBox="0 0 240 196" role="img" font-family="Atkinson Hyperlegible, sans-serif"></svg>
+  <div class="ring-num"><b id="ringRps"></b><span>tr/s</span></div>
+</div>
 
 <div class="panel" id="panel">
   <div class="panel-in">
@@ -760,6 +775,9 @@ const CH = {
   pous:       { l: "Poussette", s: "Raquette ouverte, sous la balle", read: "coupée", win: [-80, -5], a: 2.0, b: -3.5, depth: [0.55, 0.85], maxNet: 0.35, my: "ta poussette" },
   morte:      { l: "Balle morte", s: "Poussette sans frotter", read: "légèrement coupée ou sans effet", win: [-20, 5], a: 2.2, b: 0, depth: [0.75, 1.0], maxNet: 0.4, my: "ta balle morte" },
   bloc:       { l: "Bloc fermé", s: "Raquette fermée, court", read: "liftée", win: [15, 90], a: 1.0, b: 1.2, depth: [0.8, 0.95], maxNet: 0.45, my: "ton bloc" },
+  /* Top avec frottement sur le côté (c > 0 : vers ta droite) */
+  latg:       { l: "Latéral gauche", s: "Top, frotte vers ta gauche", read: "peu tournée", win: [-15, 25], a: 3.2, b: 5, c: -3.2, depth: [0.9, 1.1], maxNet: 0.5, my: "ton latéral à gauche" },
+  latd:       { l: "Latéral droite", s: "Top, frotte vers ta droite", read: "peu tournée", win: [-15, 25], a: 3.2, b: 5, c: 3.2, depth: [0.9, 1.1], maxNet: 0.5, my: "ton latéral à droite" },
 };
 const CH_ORDER = ["tresouvert", "ouvert", "plat", "pous", "morte", "bloc"];
 const SV = {
@@ -803,6 +821,7 @@ const LV = {
   decouverte:   { l: "Découverte", s: "Ralenti, carte de lecture, la balle t’attend", ts: .42, freeze: true, guided: true },
   entrainement: { l: "Entraînement", s: "Très lent, tu lis seul", ts: .3 },
   match:        { l: "Match", s: "Rapide, un peu ralenti pour voir", ts: .62 },
+  reflexe:      { l: "Réflexe", s: "Son geste, la balle en 3D, ta réponse. On répète.", ts: .5, freeze: true, reflex: true },
 };
 
 /* ================= Réglages mémorisés ================= */
@@ -1143,7 +1162,7 @@ function worksList(sIn) {
 /* ================= Interface : coups ================= */
 /* Ta lecture du latéral : où la balle va partir sur ta raquette */
 function syncComp() {
-  const row = $("latRow"), on = store.lat && st.phase === "play";
+  const row = $("latRow"), on = store.lat && st.phase === "play" && !reflex();
   row.hidden = !on;
   row.querySelectorAll("button").forEach(b => {
     b.setAttribute("aria-pressed", String(+b.dataset.c === (st.comp || 0)));
@@ -1165,6 +1184,12 @@ function prompt(txt, cls) { const p = $("prompt"); p.textContent = txt; p.classN
 function showShots(enabled) {
   const box = $("shots"), g = guided();
   box.classList.remove("serve", "reveal");
+  if (reflex()) {
+    box.innerHTML = RX_ORDER.map((k, i) => `<button class="shot" id="shot-${k}" data-k="${k}"${enabled ? "" : " disabled"}><span>${esc(RX_L[k])} <span class="key">${i + 1}</span></span><small>${esc(RX_S[k])}</small></button>`).join("");
+    box.querySelectorAll(".shot").forEach(b => b.addEventListener("click", () => { audioOn(); choose(b.dataset.k); }));
+    anim.minis = [];
+    return;
+  }
   box.innerHTML = CH_ORDER.map((k, i) => g
     ? `<button class="shot anim" id="shot-${k}" data-k="${k}"${enabled ? "" : " disabled"}><svg viewBox="0 0 120 72" aria-hidden="true">${MINI_SVG}</svg><span>${esc(CH[k].l)} <span class="key">${i + 1}</span></span><span class="res">·</span><span class="tip">CONSEIL</span></button>`
     : `<button class="shot" id="shot-${k}" data-k="${k}"${enabled ? "" : " disabled"}><span>${esc(CH[k].l)} <span class="key">${i + 1}</span></span><small>${esc(CH[k].s)}</small></button>`).join("");
@@ -1194,14 +1219,17 @@ function updateHUD() {
 /* ================= Déroulement d'un point ================= */
 function newPoint() {
   events = []; ball.tr = null; ball.handP = null; oppStroke = meStroke = null; frozen = false;
-  st.awaiting = false; st.choice = null; st.rally = 0; st.lastMine = null; st.inc = null; st.myShot = null; st.phase = "play"; st.comp = 0; syncComp();
+  st.awaiting = false; st.choice = null; st.rally = 0; st.lastMine = null; st.inc = null; st.myShot = null; st.phase = "play"; st.comp = 0; syncComp(); hideRing();
   const tot = st.score[0] + st.score[1];
   st.server = (st.score[0] >= 10 && st.score[1] >= 10) ? (tot % 2 === 0 ? "me" : "opp") : (Math.floor(tot / 2) % 2 === 0 ? "me" : "opp");
   ball.hold = st.server;
   hold = 0; rkHist.length = 0;
   updateHUD();
   if (guided()) renderLecturePlaceholder();
-  if (st.server === "me") { showServe(); prompt("À toi de servir", "hot"); }
+  if (st.server === "me") {
+    showServe(); prompt("À toi de servir", "hot");
+    if (reflex()) at(clock + 0.4, () => { if (st.phase === "play" && !ball.tr && !meStroke) myServe(Object.keys(SV)[Math.floor(Math.random() * 3)]); });
+  }
   else { showShots(false); prompt("Il sert…"); oppServe(); }
   resize();
 }
@@ -1273,7 +1301,8 @@ function choose(k) {
   st.choice = k;
   const b = $("shot-" + k); if (b) b.classList.add("chosen");
   setShotsEnabled(false); syncComp();
-  st.myShot = computeMyShot(k, st.mySIn, true, store.lat ? st.comp : null);
+  st.myShot = computeMyShot(k, st.mySIn, true, reflex() ? rxComp(k, st.mySIn) : store.lat ? st.comp : null);
+  hideRing();
   meStroke = makeStroke(st.myTc, st.mySIn.p, st.myShot.n, st.myShot.V, !st.inc.bh, 0.45);
   const rb = $("replayBtn"); if (rb) rb.disabled = true;
   if (guided()) { showLecture(false); bigPanel(false); }
@@ -1283,7 +1312,9 @@ function myContact() {
   if (st.phase !== "play" || !st.awaiting) return;
   const inc = st.inc;
   if (!st.choice) {
-    if (LV[store.lvl].freeze) { frozen = true; prompt(st.inc && st.inc.bh ? "Choisis ton coup · revers" : "Choisis ton coup", "hot"); if (guided()) { anim.tt = 0; showLecture(true); revealShots(); } return; }
+    if (LV[store.lvl].freeze) { frozen = true; prompt(st.inc && st.inc.bh ? "Choisis ton coup · revers" : "Choisis ton coup", "hot"); if (guided()) { anim.tt = 0; showLecture(true); revealShots(); }
+      if (reflex()) { showRing(st.mySIn); prompt(st.inc && st.inc.bh ? "Revers · comment tu réponds ?" : "Comment tu réponds ?", "hot"); }
+      return; }
     st.awaiting = false; setShotsEnabled(false);
     st.log.push({ w: inc.wMe, ok: false, type: "tard" });
     prompt("Trop tard !", "bad");
@@ -1296,13 +1327,26 @@ function myContact() {
   launch(sh.tr, "inv", Math.hypot(sh.V[0], sh.V[1], sh.V[2]) / 6);
   if (ok) {
     st.rally++;
-    prompt(`${sh.res === "haute" ? "Balle haute…" : "Bien lu"} · ${EFF[inc.eff]} · ${Math.round(Math.abs(inc.wMe))} tr/s`, sh.res === "haute" ? "bad" : "good");
+    if (reflex()) rxFeedback(sh);
+    else prompt(`${sh.res === "haute" ? "Balle haute…" : "Bien lu"} · ${EFF[inc.eff]} · ${Math.round(Math.abs(inc.wMe))} tr/s`, sh.res === "haute" ? "bad" : "good");
     st.lastMine = { k: sh.k, label: CH[sh.k].my, attack: sh.k === "plat" && inc.wMe > -6 && inc.kmh < 26 };
     planOpp(sh.tr, sh);
   } else {
-    prompt({ net: "Filet", own: "Filet", long: "Dehors", wide: "Dehors" }[sh.res] || "Faute", "bad");
+    if (reflex()) rxFeedback(sh);
+    else prompt({ net: "Filet", own: "Filet", long: "Dehors", wide: "Dehors" }[sh.res] || "Faute", "bad");
     at(clock + 1.0, () => pointEnd("opp", { type: sh.res }));
   }
+}
+/* Réflexe : le verdict en une ligne, et la bonne réponse s'allume si tu t'es trompé */
+function rxFeedback(sh) {
+  const inc = st.inc;
+  if (!inc.rxWorks) rxAdvise(inc, st.mySIn);
+  const R = { in: "Bien lu", haute: "Balle haute", net: "Filet", own: "Filet", long: "Dehors", wide: "À côté" }[sh.res] || "Faute";
+  const best = inc.rxBest, good = sh.res === "in";
+  st.rxOk = (st.rxOk || 0) + (good ? 1 : 0); st.rxN = (st.rxN || 0) + 1; st.rxRun = good ? (st.rxRun || 0) + 1 : 0;
+  const tail = good ? (st.rxRun >= 3 ? ` · série de ${st.rxRun}` : "") : best ? ` · il fallait : ${RX_L[best].replace(/[◀▶] ?| ?[◀▶]/g, "")}` : " · rien ne passait proprement";
+  prompt(`${R}${tail}`, good ? "good" : "bad");
+  if (!good && best) { const b = $("shot-" + best); if (b) b.classList.add("rxbest"); }
 }
 function missProb() {
   let p = 0.06 + 0.015 * st.rally;
@@ -2065,6 +2109,101 @@ $("atlBest").addEventListener("click", () => { const W = atl.scan.win; if (W) at
 $("atlClose").addEventListener("click", () => { atl.open = false; $("atl").hidden = true; });
 $("atlMenuBtn").addEventListener("click", () => openAtl(null));
 
+/* ================= Niveau Réflexe : son geste → la balle en 3D avec son anneau → ta réponse ================= */
+const RX_ORDER = ["tresouvert", "plat", "bloc", "pous", "latg", "latd"];
+const RX_L = { tresouvert: "Top ouvert", plat: "Top frappé", bloc: "Bloc", pous: "Coupe", latg: "◀ Latéral gauche", latd: "Latéral droite ▶" };
+const RX_S = { tresouvert: "la cloche, grosse rotation", plat: "fort, vers l’avant", bloc: "raquette fermée, court", pous: "sous la balle", latg: "frotte vers ta gauche", latd: "frotte vers ta droite" };
+const reflex = () => !!LV[store.lvl].reflex;
+/* Latéral : tes réponses classiques visent juste ; tes latéraux doivent frotter du côté opposé à celui où elle part
+   sur ta raquette (balle qui part à droite → latéral gauche). Du mauvais côté, tu ajoutes l'erreur au lieu de la corriger. */
+function rxComp(k, sIn) {
+  const d = latDir(sIn);
+  if (!d || (k !== "latg" && k !== "latd")) return null;
+  return (k === "latg" && d > 0) || (k === "latd" && d < 0) ? d : -d;
+}
+function rxAdvise(inc, sIn) {
+  inc.rxWorks = RX_ORDER.filter(k => computeMyShot(k, sIn, false, rxComp(k, sIn)).res === "in");
+  const P = { tcoupe: ["tresouvert", "pous"], coupe: ["tresouvert", "pous"], lcoupe: ["pous", "latg", "latd", "tresouvert"],
+    flot: ["plat", "latg", "latd"], llift: ["bloc", "plat"], lift: ["bloc", "plat"] }[inc.eff].slice();
+  const d = latDir(sIn);
+  if (d) P.unshift(d > 0 ? "latg" : "latd");
+  inc.rxBest = P.find(k => inc.rxWorks.includes(k)) || inc.rxWorks[0] || null;
+}
+/* L'anneau-flèche autour de la balle, vu de trois quarts et un peu de dessus (de derrière, l'anneau d'un lift serait vu par la tranche) */
+const RG = { yaw: 32 * DEG, pitch: 18 * DEG, cx: 120, cy: 92, s: 50 };
+function rgView(p) {
+  const x1 = p[0] * Math.cos(RG.yaw) - p[2] * Math.sin(RG.yaw), z1 = p[0] * Math.sin(RG.yaw) + p[2] * Math.cos(RG.yaw);
+  const y2 = p[1] * Math.cos(RG.pitch) - z1 * Math.sin(RG.pitch), z2 = p[1] * Math.sin(RG.pitch) + z1 * Math.cos(RG.pitch);
+  return [RG.cx + x1 * RG.s, RG.cy - y2 * RG.s, z2];
+}
+const v3n = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const v3x = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+function v3rot(p, k, ang) {
+  const c = Math.cos(ang), s = Math.sin(ang), kd = k[0] * p[0] + k[1] * p[1] + k[2] * p[2], kx = v3x(k, p);
+  return [0, 1, 2].map(i => p[i] * c + kx[i] * s + k[i] * kd * (1 - c));
+}
+function rgPath(pts, front) {
+  let d = "", on = false;
+  for (const q of pts) { const ok = front ? q[2] >= 0 : q[2] < 0; if (ok) { d += `${on ? " L" : " M"}${an1(q[0])} ${an1(q[1])}`; on = true; } else on = false; }
+  return d || "M0 0";
+}
+function rgChev(p, q) {
+  const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+  return `${an1(p[0] + ux * 11)},${an1(p[1] + uy * 11)} ${an1(p[0] - ux * 6 - uy * 9)},${an1(p[1] - uy * 6 + ux * 9)} ${an1(p[0] - ux * 6 + uy * 9)},${an1(p[1] - uy * 6 - ux * 9)}`;
+}
+const RING_SVG = `<ellipse cx="120" cy="178" rx="48" ry="9" fill="#000" opacity=".3"/>
+  <path fill="none" stroke="#a9b8ca" stroke-width="2" stroke-dasharray="5 5" data-b="d:dirD"/><polygon fill="#a9b8ca" data-b="points:dirH"/>
+  <text font-size="11" font-weight="700" fill="#a9b8ca" data-b="x:dirTx,y:dirTy">vers toi</text>
+  <path fill="none" stroke-width="6" stroke-linecap="round" opacity=".35" data-b="d:back,stroke:col"/>
+  ${[0, 1, 2].map(i => `<polygon data-b="points:c${i},fill:col,opacity:bo${i}"/>`).join("")}
+  <circle cx="120" cy="92" r="50" fill="#efece3"/><circle cx="107" cy="78" r="33" fill="#fbfaf5"/>
+  <circle cx="120" cy="92" r="50" fill="none" stroke="#9aa3ad" stroke-width="1.5" opacity=".6"/>
+  <path fill="none" stroke="#ff7a1a" stroke-width="6" stroke-linecap="round" data-b="d:seam"/>
+  <circle cx="120" cy="92" r="76" fill="none" stroke="#e3e9f0" stroke-width="2" stroke-dasharray="3 7" data-b="opacity:none"/>
+  <path fill="none" stroke-width="6" stroke-linecap="round" data-b="d:front,stroke:col"/>
+  ${[0, 1, 2].map(i => `<polygon stroke="#0f1c2e" stroke-width="1.5" data-b="points:c${i},fill:col,opacity:fo${i}"/>`).join("")}`;
+const ring = { w: null, tt: 0, last: 0, binds: null };
+/* Couleur de l'anneau : bleu coupé, orange lift, jaune quand le latéral domine, gris sans rotation */
+function ringCol(w) {
+  const top = w[0] / PHYS.TAU, lat = Math.abs(w[1] / PHYS.TAU);   // top : lift (+) ou coupé (−) pour une balle qui vient vers toi
+  return lat >= 6 && lat >= Math.abs(top) ? "#f2c94c" : top <= -6 ? "#8ab8ff" : top >= 6 ? "#ffab66" : "#e3e9f0";
+}
+function ringVals(t) {
+  const w = ring.w, mag = Math.hypot(w[0], w[1], w[2]) / PHYS.TAU, spin = mag >= 6, a = spin ? v3n(w) : [1, 0, 0];
+  let u = v3x(a, [0, 0, 1]); if (Math.hypot(u[0], u[1], u[2]) < 0.1) u = v3x(a, [0, 1, 0]); u = v3n(u);
+  const v = v3x(a, u), R = 1.5, P = x => [0, 1, 2].map(i => R * (u[i] * Math.cos(x) + v[i] * Math.sin(x)));
+  const pts = []; for (let i = 0; i <= 72; i++) pts.push(rgView(P(i / 72 * 2 * Math.PI)));
+  const ang = spin ? t * 2 * Math.PI * 0.45 * Math.min(2, Math.max(0.6, mag / 25)) : 0;
+  const o = { front: spin ? rgPath(pts, true) : "M0 0", back: spin ? rgPath(pts, false) : "M0 0", none: spin ? 0 : 1 };
+  for (let i = 0; i < 3; i++) {
+    const th = ang + i * 2 * Math.PI / 3, p = rgView(P(th)), q = rgView(P(th + 0.14));
+    o["c" + i] = rgChev(p, q); o["fo" + i] = spin && p[2] >= 0 ? 1 : 0; o["bo" + i] = spin && p[2] < 0 ? 0.4 : 0;
+  }
+  const seam = []; for (let i = 0; i <= 60; i++) { const ph = i / 60 * 2 * Math.PI; seam.push(rgView(v3rot([0, 1, 2].map(j => u[j] * Math.cos(ph) + a[j] * Math.sin(ph)), a, ang))); }
+  o.seam = rgPath(seam, true);
+  o.col = ringCol(w);
+  const d0 = rgView([0, -1.55, -1.3]), d1 = rgView([0, -1.55, 1.5]), dx = d1[0] - d0[0], dy = d1[1] - d0[1], l = Math.hypot(dx, dy), ux = dx / l, uy = dy / l;
+  o.dirD = `M${an1(d0[0])} ${an1(d0[1])} L${an1(d1[0])} ${an1(d1[1])}`;
+  o.dirH = `${an1(d1[0] + ux * 8)},${an1(d1[1] + uy * 8)} ${an1(d1[0] - uy * 6)},${an1(d1[1] + ux * 6)} ${an1(d1[0] + uy * 6)},${an1(d1[1] - ux * 6)}`;
+  o.dirTx = an1(d0[0] + 6); o.dirTy = an1(d0[1] - 8);
+  return o;
+}
+function showRing(sIn) {
+  ring.w = sIn.w.slice(); ring.tt = 0; ring.last = 0;
+  if (!ring.binds) { $("ringSvg").innerHTML = RING_SVG; ring.binds = anBind($("ringSvg")); }
+  const mag = Math.round(Math.hypot(sIn.w[0], sIn.w[1], sIn.w[2]) / PHYS.TAU);
+  $("ringRps").textContent = mag; $("ringRps").style.color = ringCol(sIn.w);
+  $("ringSvg").setAttribute("aria-label", `La balle tourne à ${mag} tours par seconde ; l’anneau fléché montre le sens de sa rotation`);
+  $("ringCard").hidden = false;
+}
+const hideRing = () => { $("ringCard").hidden = true; ring.w = null; };
+function tickRing(now) {
+  if (!ring.w || $("ringCard").hidden || now - ring.last < 33) return;
+  const dt = ring.last ? Math.min(0.1, (now - ring.last) / 1000) : 0;
+  ring.last = now; ring.tt += dt * 0.6;
+  anApply(ring.binds, ringVals(ring.tt));
+}
+
 /* ================= Bilan du point ================= */
 function faceLabel(face) {
   const picotCol = picotRed ? "rouge" : "noire", bsCol = picotRed ? "noire" : "rouge";
@@ -2121,6 +2260,13 @@ function pointEnd(winner, info) {
   bigPanel(false);
   st.score[winner === "me" ? 0 : 1]++;
   updateHUD(); setShotsEnabled(false);
+  if (reflex()) {
+    hideRing();
+    if (winner === "me") prompt(info.type === "faute" ? "Il fait la faute · point pour toi" : "Point pour toi", "good");
+    else if (info.type === "haute") prompt("Il smashe ta balle haute", "bad");
+    setTimeout(() => { if (st.phase !== "sheet") return; if (isOver()) endMatch(); else newPoint(); }, winner === "me" ? 1100 : 1700);
+    return;
+  }
   const inc = st.inc, sh = st.myShot;
   const reasons = {
     faute: "Il fait la faute." + (info.attack ? " Ta frappe sur sa balle peu tournée l’a mis sous pression : c’est le plan contre un picot." : ""),
@@ -2248,7 +2394,7 @@ function previewOpp() {
 function openMenu() {
   paused = true; st.phase = "menu"; ball.tr = null; ball.handP = null; ball.hold = "me"; oppStroke = meStroke = null; events = [];
   renderMenu(); previewOpp(); showShots(false); prompt("Choisis ton adversaire");
-  $("panel").classList.remove("guided", "big"); lecLine.hidden = true; $("latRow").hidden = true; showLecture(false); anim.strip = null; anim.minis = []; resize();
+  $("panel").classList.remove("guided", "big"); lecLine.hidden = true; $("latRow").hidden = true; hideRing(); showLecture(false); anim.strip = null; anim.minis = []; resize();
   $("menu").hidden = false;
 }
 function racketSVG(color, label, sub) {
@@ -2300,7 +2446,8 @@ window.addEventListener("keydown", e => {
   const n = parseInt(e.key, 10);
   if (!(n >= 1)) return;
   audioOn();
-  if (st.phase === "play" && st.awaiting && CH_ORDER[n - 1]) choose(CH_ORDER[n - 1]);
+  const ord = reflex() ? RX_ORDER : CH_ORDER;
+  if (st.phase === "play" && st.awaiting && ord[n - 1]) choose(ord[n - 1]);
   else if (st.phase === "play" && st.server === "me" && !ball.tr && !meStroke) { const k = Object.keys(SV)[n - 1]; if (k) myServe(k); }
 });
 
@@ -2318,8 +2465,8 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (hold > 0 && !paused) hold -= dt;
   let ts = timeScale;
-  // Découverte : ralenti supplémentaire pendant son geste
-  if (guided() && oppStroke && oppStroke.gest && clock > oppStroke.tc - oppStroke.fwd - 0.4 && clock < oppStroke.tc + 0.12) ts *= 0.5;
+  // Découverte et Réflexe : ralenti supplémentaire pendant son geste
+  if ((guided() || reflex()) && oppStroke && oppStroke.gest && clock > oppStroke.tc - oppStroke.fwd - 0.4 && clock < oppStroke.tc + 0.12) ts *= 0.5;
   const sdt = paused || frozen || hold > 0 ? 0 : dt * ts;
   clock += sdt;
   for (;;) { const i = events.findIndex(e => e.t <= clock); if (i < 0) break; events.splice(i, 1)[0].fn(); }
@@ -2429,13 +2576,14 @@ function frame(now) {
   // Découverte : la carte et les boutons de coups s'animent
   tickAnim(now);
   tickAna(now);
+  tickRing(now);
   tickAtl(now);
 
   // Caméra : léger suivi de la balle
   // quand la balle t'attend (Découverte), la caméra la recentre pour qu'elle reste visible
   camera.position.x += ((bp.x * (frozen ? 0.75 : 0.25)) - camera.position.x) * Math.min(1, dt * 2);
-  // Découverte : la caméra se rapproche de son geste, puis revient sur la balle
-  const fT = guided() && st.phase === "play" && oppStroke && oppStroke.gest &&
+  // Découverte et Réflexe : la caméra se rapproche de son geste, puis revient sur la balle
+  const fT = (guided() || reflex()) && st.phase === "play" && oppStroke && oppStroke.gest &&
     clock > oppStroke.tc - oppStroke.fwd - 0.5 && clock < oppStroke.tc + 0.18 ? 1 : 0;
   focus += (fT - focus) * Math.min(1, dt * 3);
   if (focus < 0.002) focus = 0;
