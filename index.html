@@ -138,6 +138,31 @@ button { font: inherit; color: inherit; }
 .ring-txt { font-size: 13px; font-weight: 700; text-align: center; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .ring-hint { font-size: 12px; color: var(--muted); text-align: center; }
 .ring-hint:empty { display: none; }
+.ring-lab {
+  appearance: none; margin-top: 6px; width: 100%; min-height: 40px; border-radius: 10px; border: 1.5px solid var(--accent);
+  background: var(--accent-bg); font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.ring-card.hist .ring-lab { display: none; }
+/* Labo : 4 coups × 3 façons de frotter */
+.sheet.lab { gap: 6px; }
+.lab-ball { font-weight: 700; font-size: 15px; }
+.lab-aim { font-size: 13px; color: #f2c94c; line-height: 1.3; }
+.lab-grid { display: grid; grid-template-columns: 78px repeat(3, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.lab-h { font-size: 11.5px; font-weight: 700; color: var(--muted); text-align: center; align-self: end; }
+.lab-row { text-align: left; align-self: center; color: var(--ink); font-size: 12.5px; }
+.lab-cell {
+  appearance: none; border: 2px solid var(--line); background: var(--tile); border-radius: 10px; padding: 4px 2px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; min-height: 44px;
+}
+.lab-cell b { font-size: 11px; color: #0f1c2e; border-radius: 99px; padding: 0 7px; }
+.lab-cell small { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lab-cell[aria-pressed="true"] { border-color: var(--ink); background: rgba(255, 255, 255, .14); }
+.lab-svg { display: block; width: 100%; max-height: 24vh; background: #17263b; border-radius: 12px; }
+.lab-title { font-weight: 700; font-size: 14.5px; }
+.lab-title b { color: inherit; }
+.lab-lines { display: flex; flex-direction: column; gap: 2px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.lab-note { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.lab-lines span { display: inline-block; width: 64px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
 .shot.rxbest { border-color: var(--good); background: rgba(82, 200, 138, .2); opacity: 1; }
 /* Ligne compacte dans le panneau du bas */
 .lec-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-height: 34px; font-size: 13px; line-height: 1.3; }
@@ -364,6 +389,7 @@ button { font: inherit; color: inherit; }
   <div class="ring-num"><b id="ringRps"></b><span>tr/s</span></div>
   <div class="ring-nav"><button type="button" id="ringPrev" aria-label="Moment précédent">◀</button><span id="ringLab"></span><button type="button" id="ringNext" aria-label="Moment suivant">▶</button></div>
   <div class="ring-txt" id="ringTxt"></div><div class="ring-hint" id="ringHint"></div>
+  <button type="button" class="ring-lab" id="labBtn">Tester mes réponses</button>
 </div>
 
 <div class="panel" id="panel">
@@ -435,6 +461,19 @@ button { font: inherit; color: inherit; }
       <span><span style="color:#8ab8ff">◀ ferme</span><span>verticale</span><span style="color:#ffab66">ouvre ▶</span></span></label>
     <button type="button" class="btn" id="atlBest">Montre-moi le bon angle</button>
     <p class="atl-rule">Plus elle est liftée, plus tu fermes. Trop fermé : filet. Pas assez : dehors.</p>
+  </div>
+</div>
+
+<!-- Labo : toutes tes réponses sur cette balle -->
+<div class="overlay center" id="lab" hidden>
+  <div class="sheet ana lab" role="dialog" aria-modal="true" aria-labelledby="labTop">
+    <div class="ana-top"><span class="eyebrow" id="labTop">Tes réponses sur cette balle</span><button type="button" id="labClose" aria-label="Fermer">✕</button></div>
+    <div class="lab-ball" id="labBall"></div>
+    <div class="lab-aim" id="labAim" hidden></div>
+    <div class="lab-grid" id="labGrid" role="group" aria-label="Tes réponses"></div>
+    <svg class="lab-svg" id="labSvg" viewBox="0 0 240 196" role="img" aria-label="Ta raquette frotte la balle, l’anneau montre la rotation avant puis après" font-family="Atkinson Hyperlegible, sans-serif"></svg>
+    <div class="lab-title" id="labTitle"></div>
+    <div class="lab-lines" id="labLines"></div>
   </div>
 </div>
 
@@ -2284,6 +2323,92 @@ function tickRing(now) {
 $("ringPrev").addEventListener("click", () => ringShow(ring.idx - 1));
 $("ringNext").addEventListener("click", () => ringShow(ring.idx + 1));
 
+/* ================= Labo : teste toutes tes réponses sur la balle qui arrive =================
+   4 coups × 3 façons de frotter. Pour chacun, le moteur calcule où part ta balle et avec quelle rotation,
+   en visant juste (son latéral compensé) : on voit ce que ton coup fait à son effet. */
+const LAB_SHOTS = [["tresouvert", "Top ouvert"], ["plat", "Top frappé"], ["bloc", "Bloc"], ["pous", "Coupe"]];
+const LAB_SIDES = [[-1, "Frotte ◀"], [0, "Droit"], [1, "Frotte ▶"]];
+const lab = { cells: [], sel: null, tt: 0, last: 0, binds: null, open: false };
+function labShot(k, side, sIn) {
+  const c = Object.assign({}, CH[k], { c: side * 3.5 }), cur = PHYS.topRps(sIn);
+  const hyp = PHYS.clone(sIn); PHYS.setTop(hyp, Math.max(c.win[0], Math.min(c.win[1], cur)));
+  const sol = PHYS.solveAuto(hyp, -1, c, RUBP.inv, { x: 0, z: -(c.depth[0] + c.depth[1]) / 2 }, 0.5);
+  const hit = PHYS.hitWith(sIn, sol.d, sol.th, sol.st, RUBP.inv);
+  return { hit, res: classify(PHYS.fly(hit.s, 3), -1).res };
+}
+/* Latéral signé par le côté où il fait tourner la balle dans l'air, vu de chez toi : + = courbe vers ta droite ▶ */
+const latOf = s => s.w[1] / PHYS.TAU * Math.sign(s.v[2] || 1);
+/* Ce que ton coup fait à son effet, en mots simples */
+function topWord(a, b) {
+  const A = Math.abs(a), B = Math.abs(b);
+  if (A < 6 && B < 6) return "rien ne change";
+  if (A >= 6 && B >= 6 && Math.sign(a) !== Math.sign(b)) return "tu inverses";
+  if (A < 6) return b > 0 ? "tu crées du lift" : "tu crées du coupé";
+  if (B < 6) return "tu l’annules";
+  return B > A + 5 ? "tu en rajoutes" : B < A - 5 ? "tu le calmes" : "tu le gardes";
+}
+function latWord(a, b) {
+  const A = Math.abs(a), B = Math.abs(b);
+  if (A < 6 && B < 6) return "pas de latéral";
+  if (A < 6) return "tu crées ton latéral";
+  if (B < 6) return "tu l’annules";
+  if (Math.sign(a) !== Math.sign(b)) return "tu l’inverses";
+  return B > A + 5 ? "tu en rajoutes" : B < A - 5 ? "tu le diminues" : "tu le gardes";
+}
+const latTxt = l => Math.abs(l) < 6 ? "0" : `${Math.round(Math.abs(l))} ${l > 0 ? "▶" : "◀"}`;
+function openLab() {
+  const sIn = st.mySIn; if (!sIn) return;
+  const inc = st.inc, top0 = PHYS.topRps(sIn), lat0 = latOf(sIn);
+  // son latéral : où part un top frappé si tu ne vises pas
+  let aim = "";
+  if (Math.abs(lat0) >= 6) {
+    const raw = computeMyShot("plat", sIn, false, 0), ok = computeMyShot("plat", sIn, false);
+    const e1 = raw.tr.events[0], e2 = ok.tr.events[0];
+    const dx = e1 && e2 ? Math.round((e1.x - e2.x) * 100) : 0;
+    if (Math.abs(dx) >= 5) aim = `Son latéral : si tu ne vises pas, ta balle part ${Math.abs(dx)} cm vers ta ${dx > 0 ? "droite" : "gauche"}. Vise un peu à ${dx > 0 ? "gauche" : "droite"}.`;
+  }
+  $("labBall").textContent = `Elle arrive : ${fmtW(top0)}${Math.abs(lat0) >= 6 ? ` · latéral ${Math.round(Math.abs(lat0))} tr/s, courbe ${lat0 > 0 ? "▶" : "◀"}` : ""}`;
+  $("labAim").textContent = aim; $("labAim").hidden = !aim;
+  lab.cells = [];
+  let html = `<span></span>${LAB_SIDES.map(s => `<span class="lab-h">${s[1]}</span>`).join("")}`;
+  for (const [k, l] of LAB_SHOTS) {
+    html += `<span class="lab-h lab-row">${esc(l)}</span>`;
+    for (const [side, sl] of LAB_SIDES) {
+      const r = labShot(k, side, sIn), R = REST[RESV[r.res] || "long"], out = r.hit.s, i = lab.cells.length;
+      const top1 = PHYS.topRps(out), lat1 = latOf(out);
+      lab.cells.push({ k, side, label: `${l}${side ? (side < 0 ? ", frotte vers ta gauche" : ", frotte vers ta droite") : ""}`, r, R, top0, top1, lat0, lat1, bh: !!(inc && inc.bh) });
+      html += `<button type="button" class="lab-cell" data-i="${i}" aria-label="${esc(l + " " + sl + " : " + R.t)}"><b style="background:${R.c}">${esc(R.t)}</b><small>${top1 >= 0 ? "lift" : "coupé"} ${Math.round(Math.abs(top1))}</small><small>${Math.abs(lat1) < 6 ? "sans latéral" : "lat " + latTxt(lat1)}</small></button>`;
+    }
+  }
+  $("labGrid").innerHTML = html;
+  $("labGrid").querySelectorAll(".lab-cell").forEach(b => b.addEventListener("click", () => labPick(+b.dataset.i)));
+  if (!lab.binds) { $("labSvg").innerHTML = RING_SVG; lab.binds = anBind($("labSvg")); }
+  lab.open = true; $("lab").hidden = false;
+  // on ouvre sur la réponse conseillée (frotte droit), sinon sur la première qui passe
+  if (inc && !inc.rxWorks) rxAdvise(inc, sIn);
+  const adv = lab.cells.findIndex(c => inc && c.k === inc.rxBest && c.side === 0 && c.r.res === "in");
+  const first = lab.cells.findIndex(c => c.r.res === "in");
+  labPick(adv >= 0 ? adv : first >= 0 ? first : 4);
+}
+function labPick(i) {
+  const c = lab.cells[i]; if (!c) return;
+  lab.sel = { kind: "me", title: c.label, before: stLite(st.mySIn), after: stLite(c.r.hit.s), n: c.r.hit.n, V: c.r.hit.V, face: c.bh ? "#22262d" : "#e04848" };
+  lab.tt = 0;
+  $("labGrid").querySelectorAll(".lab-cell").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.i === i)));
+  $("labTitle").innerHTML = `${esc(c.label)} → <b style="color:${c.R.c}">${esc(c.R.t)}</b>`;
+  $("labLines").innerHTML = `<div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
+    + `<div><span>Latéral</span> ${latTxt(c.lat0)} → <b>${latTxt(c.lat1)}</b> tr/s · ${esc(latWord(c.lat0, c.lat1))}</div>`
+    + `<div class="lab-note">▶ ◀ : le côté où le latéral fait tourner la balle dans l’air, vu de chez toi. Frotter vers ta gauche la fait tourner vers ta droite, et inversement. 1 tr/s = 60 tr/min.</div>`;
+}
+function tickLab(now) {
+  if (!lab.open || !lab.sel || now - lab.last < 33) return;
+  const dt = lab.last ? Math.min(0.1, (now - lab.last) / 1000) : 0;
+  lab.last = now; lab.tt += dt * 0.45;
+  anApply(lab.binds, ringVals(lab.tt, lab.sel));
+}
+$("labBtn").addEventListener("click", openLab);
+$("labClose").addEventListener("click", () => { lab.open = false; $("lab").hidden = true; });
+
 /* ================= Bilan du point ================= */
 function faceLabel(face) {
   const picotCol = picotRed ? "rouge" : "noire", bsCol = picotRed ? "noire" : "rouge";
@@ -2657,6 +2782,7 @@ function frame(now) {
   tickAnim(now);
   tickAna(now);
   tickRing(now);
+  tickLab(now);
   tickAtl(now);
 
   // Caméra : léger suivi de la balle
