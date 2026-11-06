@@ -370,10 +370,10 @@ button { font: inherit; color: inherit; }
   <div class="sheet">
     <span class="eyebrow">Tennis de table · lecture du jeu</span>
     <h1 class="title">Face au <span>picot</span></h1>
-    <p>Tu es au bout de la table. En face, un joueur picot ou anti-top. Pour chaque balle, regarde la face qui touche la balle, son geste et la trajectoire, puis choisis ton coup avant que la balle arrive.</p>
+    <p>Regarde son geste. La balle s’arrête et tourne devant toi avec son anneau et ses tours/s. Choisis ta réponse. On répète.</p>
     <h2 class="h">Ton adversaire</h2>
     <div class="cards" id="oppCards"></div>
-    <h2 class="h">Niveau</h2>
+    <h2 class="h">Vitesse</h2>
     <div class="seg" id="lvlCards"></div>
     <h2 class="h">Il joue sur</h2>
     <div class="seg" id="placeCards"></div>
@@ -388,7 +388,6 @@ button { font: inherit; color: inherit; }
       <span><b>Son</b><small>Chaque revêtement a son bruit : écoute-le</small></span>
     </label>
     <button class="btn primary" id="playBtn">Jouer le match</button>
-    <button class="btn" id="atlMenuBtn">Atelier : règle l’angle de ta raquette</button>
     <a class="link" id="quizLink" href="quiz.html" target="_blank" rel="noopener">Quiz et fiches « Lire le picot »</a>
     <p class="sign">par <b>François Daoud</b></p>
   </div>
@@ -817,20 +816,20 @@ const PROF = {
           pTop: {}, pLow: {}, bTop: { top: .4, blocact: .35, bloc: .25 }, bLow: { top: .45, pous: .45, coupe: .1 }, shirt: 0xb83b3b,
           gold: "Backside : c’est son geste qui fait l’effet. Il tope → ça arrive lifté. Il pousse ou coupe → ça arrive coupé. Il bloque → il te renvoie ton lift." },
 };
+/* Un seul affichage : son geste, la balle en 3D avec son anneau, ta réponse. Seule la vitesse de jeu change. */
 const LV = {
-  decouverte:   { l: "Découverte", s: "Ralenti, carte de lecture, la balle t’attend", ts: .42, freeze: true, guided: true },
-  entrainement: { l: "Entraînement", s: "Très lent, tu lis seul", ts: .3 },
-  match:        { l: "Match", s: "Rapide, un peu ralenti pour voir", ts: .62 },
-  reflexe:      { l: "Réflexe", s: "Son geste, la balle en 3D, ta réponse. On répète.", ts: .5, freeze: true, reflex: true },
+  lent:   { l: "Lent", s: "Pour bien regarder son geste", ts: .35, freeze: true, reflex: true },
+  moyen:  { l: "Moyen", s: "Le rythme pour répéter", ts: .5, freeze: true, reflex: true },
+  rapide: { l: "Rapide", s: "Proche du vrai match", ts: .72, freeze: true, reflex: true },
 };
 
 /* ================= Réglages mémorisés ================= */
 const KEY = "faceaupicot.v1";
-let store = { prof: "pl", lvl: "decouverte", aide: true, sound: true, best: {} };
+let store = { prof: "pl", lvl: "moyen", aide: true, sound: true, best: {} };
 try { const d = JSON.parse(localStorage.getItem(KEY) || "null"); if (d && typeof d === "object") store = Object.assign(store, d); } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };
 if (!PROF[store.prof]) store.prof = "pl";
-if (!LV[store.lvl]) store.lvl = "decouverte";
+if (!LV[store.lvl]) store.lvl = "moyen";
 if (![0.25, 0.5, 1].includes(store.animSp)) store.animSp = 0.5;
 if (typeof store.nums !== "boolean") store.nums = true;
 if (typeof store.lat !== "boolean") store.lat = false;
@@ -2107,7 +2106,6 @@ function tickAtl(now) {
 $("atlRange").addEventListener("input", e => atlAngle(+e.target.value));
 $("atlBest").addEventListener("click", () => { const W = atl.scan.win; if (W) atlAngle((W[0] + W[1]) / 2); });
 $("atlClose").addEventListener("click", () => { atl.open = false; $("atl").hidden = true; });
-$("atlMenuBtn").addEventListener("click", () => openAtl(null));
 
 /* ================= Niveau Réflexe : son geste → la balle en 3D avec son anneau → ta réponse ================= */
 const RX_ORDER = ["tresouvert", "plat", "bloc", "pous", "latg", "latd"];
