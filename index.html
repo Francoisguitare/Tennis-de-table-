@@ -1147,25 +1147,16 @@ function faceQuat(n, faceA) {
 const OPP_REST_Q = faceQuat([0.3, 0, 1], true), ME_REST_Q = faceQuat([0, 0, -1], true), ME_REST_BH = faceQuat([0, 0, -1], false);
 
 /* Geste : armé → contact → accompagnement, dans la direction réelle de la raquette */
+/* Le geste réel (voir swingMake) : arc de cercle, angle exact de la face et vitesse exacte de la raquette au contact */
 function makeStroke(tc, ballP, n, V, faceA, amp) {
-  const sp = Math.hypot(V[0], V[1], V[2]);
-  const dir = sp > 0.3 ? new THREE.Vector3(V[0] / sp, V[1] / sp, V[2] / sp) : new THREE.Vector3(n[0], n[1], n[2]);
-  const C = new THREE.Vector3(ballP[0] - n[0] * (RV + 0.008), ballP[1] - n[1] * (RV + 0.008) + (RV - PHYS.r), ballP[2] - n[2] * (RV + 0.008));
-  const sw = Math.max(0.15, Math.min(0.7, 0.12 + 0.07 * sp)) * (amp || 1);
-  return { tc, C, q: faceQuat(n, faceA), dir, sw, fwd: Math.max(0.12, Math.min(0.3, 0.32 - 0.02 * sp)), faceA, V: V.slice() };
+  const nn = v3n(n), w = swingMake(ballP, nn, V, faceA, new THREE.Vector3(ballP[0], ballP[1] + 0.6, ballP[2]), null, null, tc, amp || 1);
+  return Object.assign(w, { fwd: w.Ta, faceA, q: w.q0 });
 }
 const _B = new THREE.Vector3(), _F = new THREE.Vector3(), _q = new THREE.Quaternion();
 function animRacket(rk, stroke, restP, restQ, c) {
   if (!stroke) { rk.position.copy(restP); rk.quaternion.copy(restQ); return; }
-  const { tc, C, q, dir, sw, fwd } = stroke, prep = 0.3, pause = 0.08;
-  _B.copy(C).addScaledVector(dir, -sw); _F.copy(C).addScaledVector(dir, sw * 0.8);
-  if (c < tc - fwd - pause - prep) { rk.position.copy(restP); rk.quaternion.copy(restQ); }
-  else if (c < tc - fwd - pause) { const k = sm((c - (tc - fwd - pause - prep)) / prep); rk.position.copy(restP).lerp(_B, k); _q.copy(restQ).slerp(q, k); rk.quaternion.copy(_q); }
-  else if (c < tc - fwd) { rk.position.copy(_B); rk.quaternion.copy(q); }
-  else if (c < tc) { rk.position.copy(_B).lerp(C, sm((c - (tc - fwd)) / fwd)); rk.quaternion.copy(q); }
-  else if (c < tc + 0.25) { rk.position.copy(C).lerp(_F, sm((c - tc) / 0.25)); rk.quaternion.copy(q); }
-  else if (c < tc + 0.7) { const k = sm((c - tc - 0.25) / 0.45); rk.position.copy(_F).lerp(restP, k); _q.copy(q).slerp(restQ, k); rk.quaternion.copy(_q); }
-  else { rk.position.copy(restP); rk.quaternion.copy(restQ); }
+  stroke.restP = restP; stroke.restQ = restQ;
+  swingAt(stroke, c, rk);
 }
 
 /* ================= Caméra et taille ================= */
@@ -2565,7 +2556,7 @@ const L3_VIEWS = {
   cote: { l: "Côté", yaw: 90, pitch: 10, d: 5.6, t: [0, 0.95, -0.35] },
   dessus: { l: "Dessus", yaw: 0, pitch: 86, d: 5.2, t: [0, 0.76, -0.2] },
   // de côté, du côté opposé à ton corps : on voit la face frotter la balle
-  contact: { l: "Contact", yaw: 100, pitch: 12, d: 0.55, t: null },
+  contact: { l: "Contact", yaw: 100, pitch: 12, d: 0.62, t: null },
 };
 const L3_ORDER = ["tq", "moi", "cote", "dessus", "contact"];
 function l3Figure(parent, shirt, op) {
@@ -2582,6 +2573,73 @@ function l3Arm(arm, a, b) {
   const d = b.clone().sub(a), len = d.length();
   arm.position.copy(a).add(b).multiplyScalar(0.5); arm.scale.set(1, len, 1);
   arm.quaternion.setFromUnitVectors(UP, d.normalize());
+}
+/* Étiquette de texte dans la scène (toujours lisible, même taille à l'écran) */
+function l3Label(sc) {
+  const c = document.createElement("canvas"); c.width = 1024; c.height = 96;
+  const tex = new THREE.CanvasTexture(c);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  sp.renderOrder = 10; sp.userData = { c, tex, txt: "" }; sp.visible = false; sc.add(sp); return sp;
+}
+function l3Text(sp, txt, col) {
+  if (sp.userData.txt === txt) return;
+  const { c, tex } = sp.userData, x = c.getContext("2d");
+  x.clearRect(0, 0, c.width, c.height);
+  x.font = '700 50px "Atkinson Hyperlegible", sans-serif'; x.textBaseline = "middle"; x.textAlign = "center";
+  x.lineWidth = 10; x.strokeStyle = "rgba(11,20,36,.95)"; x.strokeText(txt, 512, 48, 1000);
+  x.fillStyle = col || "#f3f6fa"; x.fillText(txt, 512, 48, 1000);
+  tex.needsUpdate = true; sp.userData.txt = txt;
+}
+/* ===== Le geste de la raquette, reconstruit à partir des chiffres exacts du moteur =====
+   Au contact : la raquette est à l'angle exact (face n) et va à la vitesse exacte V (m/s) du calcul physique.
+   Autour du contact : un arc de cercle autour de l'épaule (le bras tourne), parcouru en accélérant jusqu'au contact
+   puis en freinant ; la face tourne un peu avec le bras. Un geste vrai, pas générique : ce que tu vois, c'est ce qui frappe. */
+const _sq = new THREE.Quaternion(), _sv = new THREE.Vector3();
+function swingMake(ballP, n, V, faceA, S, restP, restQ, tc, amp) {
+  const sp = Math.max(0.5, Math.hypot(V[0], V[1], V[2])), t = new THREE.Vector3(V[0], V[1], V[2]).divideScalar(sp);
+  const C = new THREE.Vector3(ballP[0] - n[0] * (RV + 0.006), ballP[1] - n[1] * (RV + 0.006) + (RV - PHYS.r), ballP[2] - n[2] * (RV + 0.006));
+  // l'arc reste dans le plan vertical du geste (on y lit les vrais angles), il s'enroule vers le haut, côté épaule
+  const k = new THREE.Vector3(0, 1, 0).addScaledVector(t, -t.y);
+  if (k.length() < 0.2) k.copy(S).sub(C).addScaledVector(t, -S.clone().sub(C).dot(t));
+  k.normalize();
+  const rho = Math.max(0.35, Math.min(0.65, 0.3 + 0.04 * sp)), O = C.clone().addScaledVector(k, rho);
+  const m = new THREE.Vector3().crossVectors(k.clone().negate(), t).normalize();
+  const sb = Math.max(0.12, Math.min(0.6, 0.1 + 0.045 * sp)) * (amp || 1), sf = sb * 0.85;
+  return { C, O, k, m, t, rho, sb, sf, Ta: 2 * sb / sp, Td: 2 * sf / sp, sp, q0: faceQuat(n, faceA), restP, restQ, tc, n: v3n(n), V: V.slice() };
+}
+/* la raquette à l'abscisse s (m) le long de son chemin : s < 0 avant le contact, 0 au contact */
+function swingPose(w, s, pos, q) {
+  const ph = s / w.rho;
+  _sq.setFromAxisAngle(w.m, ph);
+  pos.copy(w.C).sub(w.O).applyQuaternion(_sq).add(w.O);
+  q.setFromAxisAngle(w.m, ph * 0.5).multiply(w.q0);
+}
+/* abscisse au temps t (s, 0 = contact) : accélère depuis l'armé, passe au contact à la vitesse exacte, freine */
+function swingS(w, t) {
+  if (t <= -w.Ta) return -w.sb;
+  if (t < 0) { const u = (t + w.Ta) / w.Ta; return -w.sb + w.sb * u * u; }
+  if (t < w.Td) { const u = t / w.Td; return w.sf * (1 - (1 - u) * (1 - u)); }
+  return w.sf;
+}
+const _sp1 = new THREE.Vector3(), _sq1 = new THREE.Quaternion();
+function swingAt(w, tau, rk) {
+  const t = tau - w.tc, prep = 0.35, pause = 0.06, tA = -w.Ta - pause, tR = tA - prep, back = w.Td + 0.5;
+  if (t < tR || t > back) { rk.position.copy(w.restP); rk.quaternion.copy(w.restQ); return; }
+  if (t < tA) { swingPose(w, -w.sb, _sp1, _sq1); const u = sm((t - tR) / prep); rk.position.copy(w.restP).lerp(_sp1, u); rk.quaternion.copy(w.restQ).slerp(_sq1, u); return; }
+  if (t > w.Td) { swingPose(w, w.sf, _sp1, _sq1); const u = sm((t - w.Td) / 0.5); rk.position.copy(_sp1).lerp(w.restP, u); rk.quaternion.copy(_sq1).slerp(w.restQ, u); return; }
+  swingPose(w, swingS(w, t), rk.position, rk.quaternion);
+}
+/* Les chiffres du geste, vus de chez toi */
+function swingNums(w) {
+  const n = w.n, t = w.t;
+  const face = Math.round(Math.asin(Math.max(-1, Math.min(1, n[1]))) / DEG);
+  const up = Math.round(Math.asin(Math.max(-1, Math.min(1, t.y))) / DEG);
+  const side = Math.round(Math.atan2(t.x, -t.z) / DEG);
+  return {
+    face: Math.abs(face) < 3 ? "verticale" : `${face > 0 ? "ouverte" : "fermée"} ${Math.abs(face)}°`,
+    path: `${Math.abs(up) < 3 ? "à plat" : up > 0 ? `monte ${up}°` : `descend ${-up}°`}${Math.abs(side) >= 6 && Math.abs(side) <= 174 ? `, ${Math.abs(side)}° vers ta ${side > 0 ? "droite" : "gauche"}` : ""}`,
+    sp: w.sp.toFixed(1).replace(".", ","), len: Math.round((w.sb + w.sf) * 100)
+  };
 }
 function l3Init() {
   const cv = $("labCv");
@@ -2612,12 +2670,17 @@ function l3Init() {
   const ringG = new THREE.Group(); sc.add(ringG);
   ringG.add(new THREE.Mesh(new THREE.TorusGeometry(RR, 0.0045, 8, 48), ringM));
   const cones = [0, 1, 2].map(() => { const c = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.03, 12), ringM); ringG.add(c); return c; });
-  // au contact : ce que fait ta raquette (frotte en blanc, pousse en gris)
-  const arF = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.15, 0xffffff, 0.04, 0.025);
-  const arP = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(), 0.15, 0x9fb0c4, 0.04, 0.025);
-  sc.add(arF); sc.add(arP);
+  // ton geste : le chemin de la raquette, ses positions successives (stroboscope), et l'angle au contact
+  const ghM = new THREE.MeshBasicMaterial({ color: 0xf3f6fa, transparent: true, opacity: 0.22, depthWrite: false });
+  const ghC = new THREE.MeshBasicMaterial({ color: 0xf2c94c, transparent: true, opacity: 0.4, depthWrite: false });
+  const ghG = new THREE.CylinderGeometry(0.08, 0.08, 0.012, 28); ghG.rotateX(Math.PI / 2);
+  const ghosts = [0, 1, 2, 3, 4, 5, 6].map(i => { const g = new THREE.Mesh(ghG, i === 4 ? ghC : ghM); g.visible = false; sc.add(g); return g; });
+  const refM = new THREE.LineDashedMaterial({ color: 0xf3f6fa, dashSize: 0.012, gapSize: 0.01, depthTest: false, transparent: true });
+  const vRef = new THREE.Line(new THREE.BufferGeometry(), refM); vRef.renderOrder = 9; sc.add(vRef);
+  const arc = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xf2c94c, depthTest: false, transparent: true })); arc.renderOrder = 9; sc.add(arc);
+  const lbA = l3Label(sc), lbP = l3Label(sc);
   const cam = new THREE.PerspectiveCamera(48, 1, 0.01, 40);
-  Object.assign(L3, { ok: true, r, sc, cam, him, me, hisRk, myRk, bm, shd, ringG, ringM, cones, arF, arP, RR, inTube: null, outTube: null, marks: [],
+  Object.assign(L3, { ok: true, r, sc, cam, him, me, hisRk, myRk, bm, shd, ringG, ringM, cones, ghosts, vRef, arc, lbA, lbP, RR, pathTube: null, inTube: null, outTube: null, marks: [],
     view: "tq", orb: { yaw: 52 * DEG, pitch: 26 * DEG, d: 4.6, t: new THREE.Vector3(0, 0.8, -0.1) }, goal: null, free: false, spin: 0, q: new THREE.Quaternion() });
   l3Ctl(cv);
   return true;
@@ -2669,20 +2732,50 @@ function l3Load() {
   const hc = L3.his ? L3.his.C : new THREE.Vector3(tr.P[0], tr.P[1], tr.P[2]);
   L3.hisPos = new THREE.Vector3(hc.x + 0.3, 0, Math.min(hc.z - 0.35, -L - 0.25));
   L3.hisRest = new THREE.Vector3(L3.hisPos.x - 0.32, 1.0, L3.hisPos.z + 0.3);
-  L3.my = makeStroke(L3.tMe, st.mySIn.p, c.sh.n, c.sh.V, !inc.bh, 0.45);
-  const mc = L3.my.C;
-  L3.mePos = new THREE.Vector3(mc.x + (inc.bh ? 0.25 : -0.3), 0, Math.max(mc.z + 0.35, L + 0.25));
-  L3.meRest = new THREE.Vector3(inc.bh ? mc.x : mc.x, 0.9, L3.mePos.z - 0.1);
+  const bp0 = st.mySIn.p;
+  L3.mePos = new THREE.Vector3(bp0[0] + (inc.bh ? 0.3 : -0.38), 0, Math.max(bp0[2] + 0.42, L + 0.25));
+  L3.meSh = new THREE.Vector3(L3.mePos.x + 0.2, 1.42, L3.mePos.z - 0.02);
+  L3.meRest = new THREE.Vector3(bp0[0], 0.9, L3.mePos.z - 0.1);
   L3.meRestQ = inc.bh ? ME_REST_BH : ME_REST_Q;
+  L3.my = swingMake(bp0, v3n(c.sh.n), c.sh.V, !inc.bh, L3.meSh, L3.meRest, L3.meRestQ, L3.tMe, 1);
+  // son geste aussi, quand on connaît sa raquette au contact
+  const hisSh = new THREE.Vector3(L3.hisPos.x - 0.2, 1.48, L3.hisPos.z + 0.02);
+  L3.hisW = L3.his && inc.n && inc.V ? swingMake(tr.P.subarray(0, 3), v3n(inc.n), inc.V, L3.his.faceA, hisSh, L3.hisRest, OPP_REST_Q, 0, 1) : null;
+  l3SwingVis();
   l3Faces(L3.hisRk, picotRed ? RED : BLACK, picotRed ? BLACK : RED);
-  // frotte / pousse au contact
-  const n = v3n(c.sh.n), p = strokeParts(n, c.sh.V), cp = new THREE.Vector3(st.mySIn.p[0] - n[0] * RV, st.mySIn.p[1] - n[1] * RV + (RV - PHYS.r), st.mySIn.p[2] - n[2] * RV);
-  L3.cp = cp;
-  if (p.vtm > 0.5) { L3.arF.position.copy(cp); L3.arF.setDirection(new THREE.Vector3(...v3n(p.vt))); L3.arF.setLength(Math.min(0.24, 0.06 + p.vtm * 0.018), 0.04, 0.025); L3.fOn = true; } else L3.fOn = false;
-  if (p.vn > 0.2) { const d = new THREE.Vector3(...n), len = Math.min(0.2, 0.05 + p.vn * 0.02); L3.arP.position.copy(cp).addScaledVector(d, -len); L3.arP.setDirection(d); L3.arP.setLength(len, 0.035, 0.022); L3.pOn = true; } else L3.pOn = false;
+  L3.cp = L3.my.C.clone();
   $("labTime").style.setProperty("--tc", `${((L3.tMe - L3.t0) / (L3.t1 - L3.t0) * 100).toFixed(1)}%`);
   if (L3.view === "contact") l3Goal("contact");
   l3Size();
+}
+/* Le chemin de ta raquette (trait blanc), 7 positions successives à intervalles de temps égaux (la jaune : le contact),
+   la verticale en pointillés et l'angle de la face au contact. Vue « Contact » : exactement de profil par rapport au geste,
+   la raquette apparaît comme un trait : on lit son angle et son chemin sans déformation. */
+function l3SwingVis() {
+  const w = L3.my, pos = new THREE.Vector3(), q = new THREE.Quaternion();
+  l3Drop(L3.pathTube);
+  const pts = []; for (let i = 0; i <= 40; i++) { const p = new THREE.Vector3(); swingPose(w, -w.sb + (w.sb + w.sf) * i / 40, p, q); pts.push(p); }
+  L3.pathTube = l3Tube(pts, 0xf3f6fa, 0.55);
+  const times = [-1, -0.75, -0.5, -0.25, 0, 0.5, 1];
+  L3.ghosts.forEach((g, i) => { swingPose(w, swingS(w, times[i] < 0 ? times[i] * w.Ta : times[i] * w.Td), g.position, g.quaternion); });
+  // la verticale et l'angle, dans le plan du geste
+  const m = w.m, C = w.C, n = new THREE.Vector3(...w.n);
+  const vr = new THREE.Vector3(0, 1, 0).addScaledVector(m, -m.y).normalize();
+  const e = new THREE.Vector3().crossVectors(m, n).normalize(); if (e.y < 0) e.negate();
+  L3.vRef.geometry.dispose(); L3.vRef.geometry = new THREE.BufferGeometry().setFromPoints([C.clone().addScaledVector(vr, -0.12), C.clone().addScaledVector(vr, 0.16)]); L3.vRef.computeLineDistances();
+  const ang = vr.angleTo(e), ax = new THREE.Vector3().crossVectors(vr, e).normalize(), ap = [];
+  for (let i = 0; i <= 16; i++) ap.push(C.clone().addScaledVector(vr.clone().applyAxisAngle(ax.lengthSq() > 0.5 ? ax : m, ang * i / 16), 0.12));
+  L3.arc.geometry.dispose(); L3.arc.geometry = new THREE.BufferGeometry().setFromPoints(ap);
+  const N = swingNums(w);
+  l3Text(L3.lbA, `raquette ${N.face}`, "#f2c94c");
+  L3.lbA.position.copy(C).addScaledVector(vr, 0.21);
+  l3Text(L3.lbP, `trajet : ${N.path} · ${N.sp} m/s`, "#f3f6fa");
+  L3.lbP.position.copy(C).addScaledVector(vr, -0.2);
+  // profil exact du geste, du côté opposé à ton corps
+  const d = m.clone(); if (d.dot(C.clone().sub(L3.meSh)) < 0) d.negate();
+  // cadrage : tout le geste, de l'armé à la fin
+  const bx = new THREE.Box3().setFromPoints(pts.concat([C.clone().addScaledVector(vr, 0.16)])), ctr = bx.getCenter(new THREE.Vector3()), size = bx.getSize(new THREE.Vector3()).length();
+  L3.edge = { yaw: Math.atan2(d.x, d.z), pitch: Math.max(-10 * DEG, Math.min(80 * DEG, Math.asin(d.y))), t: ctr, d: Math.max(0.55, size * 1.25 + 0.15) };
 }
 function l3Size() {
   if (!L3.ok) return;
@@ -2693,9 +2786,9 @@ function l3Size() {
 function l3Goal(k) {
   const v = L3_VIEWS[k]; L3.view = k; L3.free = false;
   const t = v.t ? new THREE.Vector3(...v.t) : (L3.cp ? L3.cp.clone() : new THREE.Vector3(0, 0.9, L));
-  // en vue « Contact », on se place du côté où la raquette ne cache pas la balle
-  const yaw = k === "contact" && st.inc && st.inc.bh ? -v.yaw : v.yaw;
-  L3.goal = { yaw: yaw * DEG, pitch: v.pitch * DEG, d: v.d, t };
+  // en vue « Contact », de profil exact par rapport au geste
+  const E = k === "contact" && L3.edge;
+  L3.goal = { yaw: E ? E.yaw : v.yaw * DEG, pitch: E ? E.pitch : v.pitch * DEG, d: E ? E.d : v.d, t: E ? E.t.clone() : t };
   $("labViews").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === k)));
 }
 function l3Ctl(cv) {
@@ -2750,15 +2843,14 @@ function l3Render(dtReal) {
     c.quaternion.setFromUnitVectors(UP, _l3t.set(-Math.sin(th), Math.cos(th), 0));
   });
   // les gestes : lui, puis toi
-  animRacket(L3.hisRk, L3.his, L3.hisRest, OPP_REST_Q, tau);
-  animRacket(L3.myRk, L3.my, L3.meRest, L3.meRestQ, tau);
+  if (L3.hisW) swingAt(L3.hisW, tau, L3.hisRk); else animRacket(L3.hisRk, L3.his, L3.hisRest, OPP_REST_Q, tau);
+  swingAt(L3.my, tau, L3.myRk);
   L3.him.g.position.copy(L3.hisPos); L3.me.g.position.copy(L3.mePos); L3.me.g.rotation.y = Math.PI;
   _l3v.set(0, -0.13, 0).applyQuaternion(L3.hisRk.quaternion);
   l3Arm(L3.him.arm, new THREE.Vector3(L3.hisPos.x - 0.2, 1.48, L3.hisPos.z + 0.02), L3.hisRk.position.clone().add(_l3v));
   _l3v.set(0, -0.11, 0).applyQuaternion(L3.myRk.quaternion);
-  l3Arm(L3.me.arm, new THREE.Vector3(L3.mePos.x + (st.inc.bh ? -0.2 : 0.2), 1.48, L3.mePos.z - 0.02), L3.myRk.position.clone().add(_l3v));
+  l3Arm(L3.me.arm, L3.meSh, L3.myRk.position.clone().add(_l3v));
   const near = Math.abs(tau - L3.tMe) < 0.06;
-  L3.arF.visible = near && L3.fOn; L3.arP.visible = near && L3.pOn;
   // caméra
   const o = L3.orb, g = L3.goal;
   if (g) {
@@ -2768,12 +2860,19 @@ function l3Render(dtReal) {
   }
   L3.cam.position.set(o.t.x + o.d * Math.sin(o.yaw) * Math.cos(o.pitch), o.t.y + o.d * Math.sin(o.pitch), o.t.z + o.d * Math.cos(o.yaw) * Math.cos(o.pitch));
   L3.cam.lookAt(o.t);
-  // ton corps (transparent) disparaît quand la caméra est juste derrière toi
-  L3.me.g.visible = L3.cam.position.distanceTo(_l3v.set(L3.mePos.x, 1.5, L3.mePos.z)) > 1.4;
+  // ton corps (transparent) disparaît quand la caméra est juste derrière toi ou tout près de la raquette
+  const dC = L3.cam.position.distanceTo(L3.my.C), close = dC < Math.max(1.6, L3.edge ? L3.edge.d * 1.4 : 0);
+  L3.me.g.visible = L3.cam.position.distanceTo(_l3v.set(L3.mePos.x, 1.5, L3.mePos.z)) > 1.4 && !close;
+  L3.me.arm.visible = !close;
+  // de près : positions successives, verticale, angle et chiffres du geste
+  L3.ghosts.forEach(g => { g.visible = close; });
+  L3.vRef.visible = L3.arc.visible = L3.lbA.visible = L3.lbP.visible = close;
+  for (const lb of [L3.lbA, L3.lbP]) { const sz = dC * 0.62; lb.scale.set(sz, sz * 96 / 1024, 1); lb.center.set(0.5, 0.5); }
   L3.r.render(L3.sc, L3.cam);
   // ce qui se passe, en une ligne
   const ph = tau < 0 ? "Son coup" : pre ? "Sa balle arrive" : near ? "Ton contact · ralenti" : "Ta balle part";
-  const hud = `${ph} · ${spinShort(s)} · ${kmh(s)} km/h`;
+  const N = near ? swingNums(L3.my) : null;
+  const hud = N ? `Contact · raquette ${N.face} · trajet ${N.path} · ${N.sp} m/s` : `${ph} · ${spinShort(s)} · ${kmh(s)} km/h`;
   if (hud !== L3.hud) { $("labHud").textContent = hud; L3.hud = hud; }
   if (!lab.scrub) $("labTime").value = String(Math.round((tau - L3.t0) / (L3.t1 - L3.t0) * 1000));
 }
@@ -2816,7 +2915,8 @@ function labPick(i) {
   $("labGrid").querySelectorAll(".lab-cell").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.i === i)));
   const M = { kind: "me", n: c.sh.n, V: c.sh.V };
   $("labTitle").innerHTML = `${esc(RX_L[c.k])} → <b style="color:${c.R.c}">${esc(c.R.t)}</b>`;
-  $("labLines").innerHTML = `<div class="lab-gest">${esc(strokeDesc(M))}</div><div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
+  const N = swingNums(swingMake(st.mySIn.p, v3n(c.sh.n), c.sh.V, true, new THREE.Vector3(0, 1.4, L + 0.6), new THREE.Vector3(), new THREE.Quaternion(), 0, 1));
+  $("labLines").innerHTML = `<div class="lab-gest">${esc(strokeDesc(M))}</div><div><span>Trajet</span> ${esc(N.path)} · <b>${N.sp} m/s</b> au contact · élan ${N.len} cm</div><div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
     + `<div><span>Latéral</span> ${latTxt(c.lat0)} → <b>${latTxt(c.lat1)}</b> tr/s · ${esc(latWord(c.lat0, c.lat1))}</div>`
     + (c.tape ? `<div><span>Pour lui</span> ${esc(tapeTxt(c.tape))}${i === lab.best ? " · <b style=\"color:#ffab66\">★ le plus dur pour lui</b>" : ""}</div>` : "");
   if (L3.ok) { l3Load(); L3.tau = L3.t0; }
