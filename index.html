@@ -153,7 +153,24 @@ button { font: inherit; color: inherit; }
 .sheet.lab { gap: 6px; }
 .lab-ball { font-weight: 700; font-size: 15px; }
 .lab-aim { font-size: 13px; color: #f2c94c; line-height: 1.3; }
-.lab-grid { display: grid; grid-template-columns: 78px repeat(3, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.lab-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.lab-grid .lab-cell { grid-column: span 3; }
+.lab-grid .lab-cell:nth-child(n+5) { grid-column: span 4; }
+.lab-k { font-weight: 700; font-size: 12px; line-height: 1.1; text-align: center; }
+.lab-k .key { display: none; }
+.lab-3d { position: relative; flex-shrink: 0; }
+.lab-3d canvas { display: block; width: 100%; height: min(42vh, 330px); border-radius: 12px; touch-action: none; cursor: grab; background: #26364b; }
+.lab-3d canvas:active { cursor: grabbing; }
+.lab-hud { position: absolute; left: 8px; top: 6px; right: 8px; font-size: 12.5px; font-weight: 700; color: #f3f6fa; text-shadow: 0 1px 3px #000, 0 0 2px #000; pointer-events: none; font-variant-numeric: tabular-nums; }
+.lab-leg { position: absolute; left: 8px; bottom: 6px; display: flex; gap: 10px; font-size: 11.5px; font-weight: 700; text-shadow: 0 1px 3px #000; pointer-events: none; }
+.lab-leg .in { color: #dfe7f0; } .lab-leg .out { color: #ffab66; }
+.lab-views { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
+.lab-views button { appearance: none; min-height: 32px; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--tile); font-weight: 700; font-size: 12.5px; cursor: pointer; }
+.lab-views button[aria-pressed="true"] { border-color: var(--ink); background: rgba(255, 255, 255, .16); }
+.shots.rx { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.shots.rx .shot { grid-column: span 3; font-size: 13px; padding: 6px 3px; }
+.shots.rx .shot:nth-child(n+5) { grid-column: span 4; }
+.shots.rx .shot small { font-size: 10.5px; }
 .lab-h { font-size: 11.5px; font-weight: 700; color: var(--muted); text-align: center; align-self: end; }
 .lab-row { text-align: left; align-self: center; color: var(--ink); font-size: 12.5px; }
 .lab-cell {
@@ -169,7 +186,7 @@ button { font: inherit; color: inherit; }
 .lab-ctl { display: flex; align-items: center; gap: 6px; }
 .lab-ctl button { appearance: none; min-width: 40px; min-height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--tile); font-weight: 700; font-size: 14px; cursor: pointer; }
 .lab-ctl input { flex: 1; min-width: 0; accent-color: #f2c94c;
-  background: linear-gradient(90deg, transparent calc(44.7% - 1px), #f2c94c calc(44.7% - 1px), #f2c94c calc(44.7% + 1px), transparent calc(44.7% + 1px)); }
+  background: linear-gradient(90deg, transparent calc(var(--tc, 50%) - 1px), #f2c94c calc(var(--tc, 50%) - 1px), #f2c94c calc(var(--tc, 50%) + 1px), transparent calc(var(--tc, 50%) + 1px)); }
 .lab-hint { font-size: 11px; color: var(--muted); text-align: center; }
 .lab-tape { font-size: 13.5px; line-height: 1.3; color: #ffab66; font-weight: 700; }
 .lab-tape:empty { display: none; }
@@ -490,19 +507,23 @@ button { font: inherit; color: inherit; }
     <div class="ana-top"><span class="eyebrow" id="labTop">Tes réponses sur cette balle</span><button type="button" id="labClose" aria-label="Fermer">✕</button></div>
     <div class="lab-ball" id="labBall"></div>
     <div class="lab-aim" id="labAim" hidden></div>
-    <div class="lab-grid" id="labGrid" role="group" aria-label="Tes réponses"></div>
-    <div class="lab-tape" id="labTape"></div>
-    <svg class="lab-svg" id="labSvg" viewBox="0 0 240 196" role="img" aria-label="Ta raquette frotte la balle, l’anneau montre la rotation avant puis après. Fais glisser pour tourner la vue, molette ou pincer pour zoomer." font-family="Atkinson Hyperlegible, sans-serif"></svg>
+    <div class="lab-3d" id="lab3d">
+      <canvas id="labCv" role="img" aria-label="La table en 3D : son coup, sa balle (trait blanc), ton contact au ralenti, ta balle (trait orange). Fais glisser pour tourner, molette ou pincer pour zoomer."></canvas>
+      <div class="lab-hud" id="labHud"></div>
+      <div class="lab-leg"><span class="in">━ sa balle</span><span class="out">━ ta réponse</span></div>
+    </div>
     <div class="lab-ctl">
       <button type="button" id="labPlay" aria-label="Pause">❚❚</button>
-      <input type="range" id="labTime" min="0" max="1000" value="0" aria-label="Moment du film (le trait jaune : le contact)">
+      <input type="range" id="labTime" min="0" max="1000" value="0" aria-label="Moment du film (le trait jaune : ton contact)">
       <button type="button" id="labZo" aria-label="Dézoomer">−</button>
       <button type="button" id="labZi" aria-label="Zoomer">+</button>
     </div>
+    <div class="lab-views" id="labViews" role="group" aria-label="Vues"></div>
     <div class="lab-hint">Glisse pour tourner · molette ou pince pour zoomer · double-clic pour revenir</div>
+    <div class="lab-tape" id="labTape"></div>
+    <div class="lab-grid" id="labGrid" role="group" aria-label="Tes réponses"></div>
     <div class="lab-title" id="labTitle"></div>
     <div class="lab-lines" id="labLines"></div>
-    <button type="button" class="ring-view" id="labView">Vue : auto</button>
   </div>
 </div>
 
@@ -858,7 +879,7 @@ const CH = {
   /* Top avec frottement sur le côté (c > 0 : vers ta droite) */
   latg:       { l: "Latéral gauche", s: "Top, frotte vers ta gauche", read: "peu tournée", win: [-15, 25], a: 3.2, b: 5, c: -3.2, depth: [0.9, 1.1], maxNet: 0.5, my: "ton latéral à gauche" },
   /* Le coup du tapeur : frappe à fond, beaucoup de vitesse vers l'avant ET beaucoup de frottement pour que ça retombe */
-  kill:       { l: "Top puissant", s: "À fond : raquette fermée, vite vers l’avant et vers le haut", read: "sans effet ou liftée", win: [-30, 60], a: 7.5, b: 7, depth: [0.95, 1.2], maxNet: 0.35, my: "ton top puissant" },
+  kill:       { l: "Top puissant", s: "À fond : raquette fermée, vite vers l’avant et vers le haut", read: "sans effet ou liftée", win: [-12, 40], a: 7.5, b: 7, depth: [0.95, 1.2], maxNet: 0.35, my: "ton top puissant" },
   latd:       { l: "Latéral droite", s: "Top, frotte vers ta droite", read: "peu tournée", win: [-15, 25], a: 3.2, b: 5, c: 3.2, depth: [0.9, 1.1], maxNet: 0.5, my: "ton latéral à droite" },
 };
 const CH_ORDER = ["tresouvert", "ouvert", "plat", "pous", "morte", "bloc"];
@@ -1076,7 +1097,7 @@ trail.frustumCulled = false; scene.add(trail);
 
 // Raquettes : face A (z local +) et face B (z local −)
 const RED = 0xc62828, BLACK = 0x161616;
-function makeRacket() {
+function makeRacket(parent) {
   const g = new THREE.Group(), rr = 0.1;
   const blade = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, 0.012, 28), mat(0xc9a26b));
   blade.rotation.x = Math.PI / 2; g.add(blade);
@@ -1084,7 +1105,7 @@ function makeRacket() {
   const fb = new THREE.Mesh(new THREE.CircleGeometry(rr * 0.97, 28), mat(BLACK)); fb.position.z = -0.0065; fb.rotation.y = Math.PI; g.add(fb);
   const h = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.025), mat(0x8a6a44)); h.position.y = -(rr + 0.045); g.add(h);
   g.userData = { fa, fb };
-  scene.add(g); return g;
+  (parent || scene).add(g); return g;
 }
 const oppRk = makeRacket(), meRk = makeRacket();
 meRk.scale.setScalar(0.8);
@@ -1265,8 +1286,9 @@ document.querySelectorAll("#latRow button").forEach(b => b.addEventListener("cli
 function prompt(txt, cls) { const p = $("prompt"); p.textContent = txt; p.className = "prompt" + (cls ? " " + cls : ""); }
 function showShots(enabled) {
   const box = $("shots"), g = guided();
-  box.classList.remove("serve", "reveal");
+  box.classList.remove("serve", "reveal", "rx");
   if (reflex()) {
+    box.classList.add("rx");
     box.innerHTML = RX_ORDER.map((k, i) => `<button class="shot" id="shot-${k}" data-k="${k}"${enabled ? "" : " disabled"}><span>${esc(RX_L[k])} <span class="key">${i + 1}</span></span><small>${esc(RX_S[k])}</small></button>`).join("");
     box.querySelectorAll(".shot").forEach(b => b.addEventListener("click", () => { audioOn(); choose(b.dataset.k); }));
     anim.minis = [];
@@ -1285,7 +1307,7 @@ function showShots(enabled) {
 function setShotsEnabled(on) { $("shots").querySelectorAll(".shot").forEach(b => { b.disabled = !on; }); }
 function showServe() {
   anim.minis = [];
-  $("shots").classList.remove("reveal");
+  $("shots").classList.remove("reveal", "rx");
   $("shots").classList.add("serve");
   $("shots").innerHTML = Object.keys(SV).map((k, i) =>
     `<button class="shot" id="serve-${k}" data-k="${k}"><span>${esc(SV[k].l)} <span class="key">${i + 1}</span></span><small>${esc(SV[k].s)}</small></button>`).join("");
@@ -1416,7 +1438,7 @@ function myContact() {
     st.rally++;
     if (reflex()) rxFeedback(sh);
     else prompt(`${sh.res === "haute" ? "Balle haute…" : "Bien lu"} · ${EFF[inc.eff]} · ${Math.round(Math.abs(inc.wMe))} tr/s`, sh.res === "haute" ? "bad" : "good");
-    st.lastMine = { k: sh.k, label: CH[sh.k].my, attack: sh.k === "plat" && inc.wMe > -6 && inc.kmh < 26 };
+    st.lastMine = { k: sh.k, label: CH[sh.k].my, attack: (sh.k === "plat" && inc.wMe > -6 && inc.kmh < 26) || sh.k === "kill", tape: tapeOf(sh.tr) };
     planOpp(sh.tr, sh);
   } else {
     if (reflex()) rxFeedback(sh);
@@ -1446,6 +1468,8 @@ function missProb() {
     else if (lm.attack) p = 0.42;
     else if (lm.k === "plat") p += 0.08;
     else if (lm.k === "tresouvert" || lm.k === "ouvert") p += 0.04;
+    // tapeur : moins il a de temps pour réagir, plus il rate
+    if (lm.tape && !lm.serve) p = Math.max(p, p + Math.max(0, 0.4 - lm.tape.t) * 1.5);
   }
   return Math.min(p, 0.6);
 }
@@ -2204,9 +2228,9 @@ $("atlBest").addEventListener("click", () => { const W = atl.scan.win; if (W) at
 $("atlClose").addEventListener("click", () => { atl.open = false; $("atl").hidden = true; });
 
 /* ================= Niveau Réflexe : son geste → la balle en 3D avec son anneau → ta réponse ================= */
-const RX_ORDER = ["tresouvert", "plat", "bloc", "pous", "latg", "latd"];
-const RX_L = { tresouvert: "Top ouvert", plat: "Top frappé", bloc: "Bloc", pous: "Coupe", latg: "◀ Latéral gauche", latd: "Latéral droite ▶" };
-const RX_S = { tresouvert: "la cloche, grosse rotation", plat: "fort, vers l’avant", bloc: "raquette fermée, court", pous: "sous la balle", latg: "frotte vers ta gauche", latd: "frotte vers ta droite" };
+const RX_ORDER = ["kill", "plat", "tresouvert", "bloc", "pous", "latg", "latd"];
+const RX_L = { kill: "Top puissant", tresouvert: "Top ouvert", plat: "Top frappé", bloc: "Bloc", pous: "Coupe", latg: "◀ Latéral gauche", latd: "Latéral droite ▶" };
+const RX_S = { kill: "à fond, pour tuer", tresouvert: "la cloche, grosse rotation", plat: "fort, vers l’avant", bloc: "raquette fermée, court", pous: "sous la balle", latg: "frotte vers ta gauche", latd: "frotte vers ta droite" };
 const reflex = () => !!LV[store.lvl].reflex;
 /* Latéral : tes réponses classiques visent juste ; tes latéraux doivent frotter du côté opposé à celui où elle part
    sur ta raquette (balle qui part à droite → latéral gauche). Du mauvais côté, tu ajoutes l'erreur au lieu de la corriger. */
@@ -2484,12 +2508,11 @@ $("ringPrev").addEventListener("click", () => ringShow(ring.idx - 1));
 $("ringNext").addEventListener("click", () => ringShow(ring.idx + 1));
 $("ringView").addEventListener("click", () => { if (ring.cam) { ring.cam = null; ring.zoom = 1; } else ring.view = VIEW_ORDER[(VIEW_ORDER.indexOf(ring.view) + 1) % VIEW_ORDER.length]; ringShow(ring.idx); });
 
-/* ================= Labo : teste toutes tes réponses sur la balle qui arrive =================
-   5 coups × 3 façons de frotter (dont le top puissant, le coup du tapeur). Pour chacun, le moteur calcule où part ta balle et avec quelle rotation,
-   en visant juste (son latéral compensé) : on voit ce que ton coup fait à son effet. */
-const LAB_SHOTS = [["kill", "Top puissant"], ["tresouvert", "Top ouvert"], ["plat", "Top frappé"], ["bloc", "Bloc"], ["pous", "Coupe"]];
-const LAB_SIDES = [[-1, "Frotte ◀"], [0, "Droit"], [1, "Frotte ▶"]];
-const lab = { cells: [], sel: null, tt: 0, last: 0, binds: null, open: false, view: "auto", cam: null, zoom: 1, paused: false, i: -1 };
+/* ================= Labo : teste tes réponses sur la balle qui arrive, en vraie 3D =================
+   Les mêmes 7 réponses que tes boutons de jeu, calculées exactement comme en match.
+   La scène rejoue tout l'échange autour de la vraie table : son coup, sa balle (trait blanc), ton contact au ralenti,
+   ta balle (trait orange) jusqu'à lui. Glisser pour tourner, molette ou pincer pour zoomer. */
+const lab = { cells: [], i: -1, best: -1, open: false, paused: false, scrub: false, last: 0 };
 /* ===== « Tapeur » : à quel point ta balle met l'adversaire en difficulté =====
    Le temps qu'il a pour réagir (de ton contact jusqu'au moment où ta balle passe à 30 cm derrière sa ligne de fond),
    la vitesse, la rotation qu'il reçoit après le rebond, la profondeur et la marge au-dessus du filet.
@@ -2512,13 +2535,6 @@ const s2 = v => v.toFixed(2).replace(".", ",");
 function tapeTxt(T) {
   return `il a ${s2(T.t)} s · ${T.kmh} km/h · rebond à ${Math.round(T.depth * 100)} cm de sa ligne · ${Math.max(0, Math.round(T.net * 100))} cm au-dessus du filet`;
 }
-function labShot(k, side, sIn) {
-  const c = Object.assign({}, CH[k], { c: side * 3.5 }), cur = PHYS.topRps(sIn);
-  const hyp = PHYS.clone(sIn); PHYS.setTop(hyp, Math.max(c.win[0], Math.min(c.win[1], cur)));
-  const sol = PHYS.solveAuto(hyp, -1, c, RUBP.inv, { x: 0, z: -(c.depth[0] + c.depth[1]) / 2 }, 0.5);
-  const hit = PHYS.hitWith(sIn, sol.d, sol.th, sol.st, RUBP.inv), tr = PHYS.fly(hit.s, 3), res = classify(tr, -1).res;
-  return { hit, res, tape: res === "in" ? tapeOf(tr) : null };
-}
 /* Latéral signé par le côté où il fait tourner la balle dans l'air, vu de chez toi : + = courbe vers ta droite ▶ */
 const latOf = s => s.w[1] / PHYS.TAU * Math.sign(s.v[2] || 1);
 /* Ce que ton coup fait à son effet, en mots simples */
@@ -2539,9 +2555,233 @@ function latWord(a, b) {
   return B > A + 5 ? "tu en rajoutes" : B < A - 5 ? "tu le diminues" : "tu le gardes";
 }
 const latTxt = l => Math.abs(l) < 6 ? "0" : `${Math.round(Math.abs(l))} ${l > 0 ? "▶" : "◀"}`;
+const spinShort = s => { const t = PHYS.topRps(s), l = latOf(s); return `${fmtW(t)}${Math.abs(l) >= 6 ? ` · lat ${latTxt(l)}` : ""}`; };
+
+/* ----- La scène 3D du Labo : une deuxième vue de la salle, avec sa propre caméra ----- */
+const L3 = { ok: false };
+const L3_VIEWS = {
+  tq: { l: "¾", yaw: 52, pitch: 26, d: 4.6, t: [0, 0.8, -0.1] },
+  moi: { l: "Ma vue", yaw: 0, pitch: 24, d: 3.4, t: [0, 0.8, -0.6] },
+  cote: { l: "Côté", yaw: 90, pitch: 10, d: 5.6, t: [0, 0.95, -0.35] },
+  dessus: { l: "Dessus", yaw: 0, pitch: 86, d: 5.2, t: [0, 0.76, -0.2] },
+  // de côté, du côté opposé à ton corps : on voit la face frotter la balle
+  contact: { l: "Contact", yaw: 100, pitch: 12, d: 0.55, t: null },
+};
+const L3_ORDER = ["tq", "moi", "cote", "dessus", "contact"];
+function l3Figure(parent, shirt, op) {
+  const g = new THREE.Group(), m = c => new THREE.MeshLambertMaterial({ color: c, transparent: op < 1, opacity: op, depthWrite: op >= 1 });
+  for (const x of [-0.11, 0.11]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.06, 0.78, 12), m(0x1b2230)); leg.position.set(x, 0.39, 0); g.add(leg); }
+  const hip = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.22, 0.22), m(0x161c27)); hip.position.y = 0.86; g.add(hip);
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 0.6, 16), m(shirt)); t.position.y = 1.27; g.add(t);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), m(0xd9a77f)); h.position.y = 1.7; g.add(h);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1, 10), m(shirt)); parent.add(arm);
+  parent.add(g);
+  return { g, arm };
+}
+function l3Arm(arm, a, b) {
+  const d = b.clone().sub(a), len = d.length();
+  arm.position.copy(a).add(b).multiplyScalar(0.5); arm.scale.set(1, len, 1);
+  arm.quaternion.setFromUnitVectors(UP, d.normalize());
+}
+function l3Init() {
+  const cv = $("labCv");
+  let r;
+  try { r = new THREE.WebGLRenderer({ canvas: cv, antialias: true }); } catch (e) { return false; }
+  r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const sc = new THREE.Scene(); sc.background = new THREE.Color(0x26364b); sc.fog = new THREE.Fog(0x26364b, 9, 20);
+  sc.add(new THREE.HemisphereLight(0xe8efff, 0x5a3a32, 0.95));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.6); sun.position.set(1.5, 6, 2.5); sc.add(sun);
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(12, 16), mat(0x6e3127)); fl.rotation.x = -Math.PI / 2; sc.add(fl);
+  // la table, ses lignes, le filet
+  box(1.525, 0.03, 2.74, 0x1b4f8c, 0, TY - 0.015, 0, sc);
+  box(0.02, 0.002, 2.74, WH, W - 0.01, TY + 0.001, 0, sc); box(0.02, 0.002, 2.74, WH, -W + 0.01, TY + 0.001, 0, sc);
+  box(1.525, 0.002, 0.02, WH, 0, TY + 0.001, L - 0.01, sc); box(1.525, 0.002, 0.02, WH, 0, TY + 0.001, -L + 0.01, sc);
+  box(0.004, 0.002, 2.74, WH, 0, TY + 0.001, 0, sc);
+  for (const x of [-0.65, 0.65]) for (const z of [-1.15, 1.15]) box(0.05, 0.73, 0.05, 0x1f262f, x, 0.365, z, sc);
+  const nt = new THREE.Mesh(new THREE.PlaneGeometry(1.83, 0.1525), new THREE.MeshLambertMaterial({ color: 0x0e1a2a, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+  nt.position.set(0, TY + 0.076, 0); sc.add(nt);
+  box(1.83, 0.014, 0.004, WH, 0, NETY - 0.007, 0, sc);
+  // les deux joueurs : lui (maillot vert), toi (bleu, en transparence pour ne pas cacher la vue)
+  const him = l3Figure(sc, 0x2e8a62, 1), me = l3Figure(sc, 0x2f5f9e, 0.32);
+  const hisRk = makeRacket(sc), myRk = makeRacket(sc); myRk.scale.setScalar(0.8);
+  // la balle et son anneau fléché (l'anneau tourne dans le sens de la rotation)
+  const bm = new THREE.Mesh(new THREE.SphereGeometry(RV, 24, 16), new THREE.MeshLambertMaterial({ map: ballTexture(true) })); sc.add(bm);
+  const shd = new THREE.Mesh(new THREE.CircleGeometry(RV * 0.9, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; sc.add(shd);
+  const ringM = new THREE.MeshBasicMaterial({ color: 0xffab66 }), RR = 0.07;
+  const ringG = new THREE.Group(); sc.add(ringG);
+  ringG.add(new THREE.Mesh(new THREE.TorusGeometry(RR, 0.0045, 8, 48), ringM));
+  const cones = [0, 1, 2].map(() => { const c = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.03, 12), ringM); ringG.add(c); return c; });
+  // au contact : ce que fait ta raquette (frotte en blanc, pousse en gris)
+  const arF = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.15, 0xffffff, 0.04, 0.025);
+  const arP = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(), 0.15, 0x9fb0c4, 0.04, 0.025);
+  sc.add(arF); sc.add(arP);
+  const cam = new THREE.PerspectiveCamera(48, 1, 0.01, 40);
+  Object.assign(L3, { ok: true, r, sc, cam, him, me, hisRk, myRk, bm, shd, ringG, ringM, cones, arF, arP, RR, inTube: null, outTube: null, marks: [],
+    view: "tq", orb: { yaw: 52 * DEG, pitch: 26 * DEG, d: 4.6, t: new THREE.Vector3(0, 0.8, -0.1) }, goal: null, free: false, spin: 0, q: new THREE.Quaternion() });
+  l3Ctl(cv);
+  return true;
+}
+const l3Faces = (rk, a, b) => { rk.userData.fa.material.color.setHex(a); rk.userData.fb.material.color.setHex(b); };
+function l3Tube(pts, color, op) {
+  if (pts.length < 2) return null;
+  const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), Math.min(220, pts.length * 2), 0.0055, 6, false);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, transparent: op < 1, opacity: op }));
+  L3.sc.add(m); return m;
+}
+const l3Drop = m => { if (m) { L3.sc.remove(m); m.geometry.dispose(); m.material.dispose(); } };
+function l3Mark(x, z, color) {
+  const m = new THREE.Mesh(new THREE.RingGeometry(0.025, 0.04, 24), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+  m.rotation.x = -Math.PI / 2; m.position.set(x, TY + 0.003, z); L3.sc.add(m); return m;
+}
+/* les points d'une trajectoire, de i0 jusqu'à la fin utile (filet, sol, ou derrière lui) */
+function l3Pts(tr, i0, i1) {
+  const pts = [];
+  for (let i = i0; i <= i1; i += 6) pts.push(new THREE.Vector3(tr.P[i * 3], tr.P[i * 3 + 1] + (RV - PHYS.r), tr.P[i * 3 + 2]));
+  pts.push(new THREE.Vector3(tr.P[i1 * 3], tr.P[i1 * 3 + 1] + (RV - PHYS.r), tr.P[i1 * 3 + 2]));
+  return pts;
+}
+function outEnd(tr) {
+  const ev = tr.events.find(e => e.type === "net" || e.type === "floor");
+  let end = ev ? ev.i : tr.n;
+  for (let i = 0; i <= end; i++) if (tr.P[i * 3 + 2] < -(L + 0.7)) { end = i; break; }
+  return Math.max(1, end);
+}
+/* Ralenti : très lent autour de ton contact, un peu autour du sien */
+function l3Speed(tau) {
+  const a = (tau - L3.tMe) / 0.05, b = tau / 0.05;
+  return 0.32 - 0.28 * Math.exp(-a * a) - 0.15 * Math.exp(-b * b);
+}
+/* La balle choisie : on prépare la scène (trajectoires, gestes, durée du film) */
+function l3Load() {
+  const c = lab.cells[lab.i], inc = st.inc; if (!c || !L3.ok) return;
+  const tr = inc.tr, im = inc.im;
+  L3.tr = tr; L3.im = im; L3.tMe = im * tr.dt; L3.out = c.sh.tr; L3.outN = outEnd(c.sh.tr);
+  L3.tEnd = L3.tMe + L3.outN * c.sh.tr.dt;
+  L3.t0 = -0.5; L3.t1 = L3.tEnd + 0.25;
+  l3Drop(L3.inTube); l3Drop(L3.outTube); L3.marks.forEach(l3Drop); L3.marks = [];
+  L3.inTube = l3Tube(l3Pts(tr, 0, im), 0xdfe7f0, 0.75);
+  L3.outTube = l3Tube(l3Pts(c.sh.tr, 0, L3.outN), c.sh.res === "in" ? 0xffab66 : 0xf2925f, 1);
+  for (const e of tr.events) if (e.type === "table" && e.i <= im) L3.marks.push(l3Mark(e.x, e.z, 0xdfe7f0));
+  for (const e of c.sh.tr.events) if (e.type === "table" && e.i <= L3.outN) L3.marks.push(l3Mark(e.x, e.z, 0xffab66));
+  // son geste (la balle qui arrive) et le tien (la réponse choisie)
+  L3.his = oppStroke ? Object.assign({}, oppStroke, { tc: 0 }) : null;
+  const hc = L3.his ? L3.his.C : new THREE.Vector3(tr.P[0], tr.P[1], tr.P[2]);
+  L3.hisPos = new THREE.Vector3(hc.x + 0.3, 0, Math.min(hc.z - 0.35, -L - 0.25));
+  L3.hisRest = new THREE.Vector3(L3.hisPos.x - 0.32, 1.0, L3.hisPos.z + 0.3);
+  L3.my = makeStroke(L3.tMe, st.mySIn.p, c.sh.n, c.sh.V, !inc.bh, 0.45);
+  const mc = L3.my.C;
+  L3.mePos = new THREE.Vector3(mc.x + (inc.bh ? 0.25 : -0.3), 0, Math.max(mc.z + 0.35, L + 0.25));
+  L3.meRest = new THREE.Vector3(inc.bh ? mc.x : mc.x, 0.9, L3.mePos.z - 0.1);
+  L3.meRestQ = inc.bh ? ME_REST_BH : ME_REST_Q;
+  l3Faces(L3.hisRk, picotRed ? RED : BLACK, picotRed ? BLACK : RED);
+  // frotte / pousse au contact
+  const n = v3n(c.sh.n), p = strokeParts(n, c.sh.V), cp = new THREE.Vector3(st.mySIn.p[0] - n[0] * RV, st.mySIn.p[1] - n[1] * RV + (RV - PHYS.r), st.mySIn.p[2] - n[2] * RV);
+  L3.cp = cp;
+  if (p.vtm > 0.5) { L3.arF.position.copy(cp); L3.arF.setDirection(new THREE.Vector3(...v3n(p.vt))); L3.arF.setLength(Math.min(0.24, 0.06 + p.vtm * 0.018), 0.04, 0.025); L3.fOn = true; } else L3.fOn = false;
+  if (p.vn > 0.2) { const d = new THREE.Vector3(...n), len = Math.min(0.2, 0.05 + p.vn * 0.02); L3.arP.position.copy(cp).addScaledVector(d, -len); L3.arP.setDirection(d); L3.arP.setLength(len, 0.035, 0.022); L3.pOn = true; } else L3.pOn = false;
+  $("labTime").style.setProperty("--tc", `${((L3.tMe - L3.t0) / (L3.t1 - L3.t0) * 100).toFixed(1)}%`);
+  if (L3.view === "contact") l3Goal("contact");
+  l3Size();
+}
+function l3Size() {
+  if (!L3.ok) return;
+  const cv = $("labCv"), w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  if (L3.w !== w || L3.h !== h) { L3.r.setSize(w, h, false); L3.cam.aspect = w / h; L3.cam.updateProjectionMatrix(); L3.w = w; L3.h = h; }
+}
+function l3Goal(k) {
+  const v = L3_VIEWS[k]; L3.view = k; L3.free = false;
+  const t = v.t ? new THREE.Vector3(...v.t) : (L3.cp ? L3.cp.clone() : new THREE.Vector3(0, 0.9, L));
+  // en vue « Contact », on se place du côté où la raquette ne cache pas la balle
+  const yaw = k === "contact" && st.inc && st.inc.bh ? -v.yaw : v.yaw;
+  L3.goal = { yaw: yaw * DEG, pitch: v.pitch * DEG, d: v.d, t };
+  $("labViews").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === k)));
+}
+function l3Ctl(cv) {
+  const pts = new Map(); let pinch0 = 0, d0 = 1;
+  const spread = () => { const [a, b] = [...pts.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+  const grab = () => { L3.goal = null; L3.free = true; $("labViews").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false")); };
+  cv.addEventListener("mousedown", e => { if (e.button === 1) e.preventDefault(); });
+  cv.addEventListener("pointerdown", e => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (_) {} pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 2) { pinch0 = spread(); d0 = L3.orb.d; } });
+  cv.addEventListener("pointermove", e => {
+    const p = pts.get(e.pointerId); if (!p) return;
+    const dx = e.clientX - p[0], dy = e.clientY - p[1]; p[0] = e.clientX; p[1] = e.clientY;
+    if (!dx && !dy) return;
+    grab();
+    if (pts.size >= 2) { if (pinch0 > 0) L3.orb.d = Math.max(0.12, Math.min(9, d0 * pinch0 / spread())); }
+    else { L3.orb.yaw -= dx * 0.009; L3.orb.pitch = Math.max(-8 * DEG, Math.min(89 * DEG, L3.orb.pitch + dy * 0.009)); }
+  });
+  const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch0 = 0; };
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  cv.addEventListener("wheel", e => { e.preventDefault(); L3.goal = null; L3.orb.d = Math.max(0.12, Math.min(9, L3.orb.d * Math.exp(e.deltaY * 0.0012))); }, { passive: false });
+  cv.addEventListener("dblclick", () => l3Goal(L3.view || "tq"));
+}
+const _l3v = new THREE.Vector3(), _l3a = new THREE.Vector3(), _l3t = new THREE.Vector3();
+function l3Render(dtReal) {
+  if (!L3.ok || !L3.tr) return;
+  l3Size();
+  // le temps du film
+  if (!lab.paused && !lab.scrub) {
+    L3.tau += dtReal * l3Speed(L3.tau);
+    if (L3.tau > L3.t1) L3.tau = L3.t0;
+  }
+  const tau = L3.tau, pre = tau < L3.tMe;
+  // la balle
+  let s;
+  if (tau <= 0) s = PHYS.stateAt(L3.tr, 0);
+  else if (pre) { sample(L3.tr, tau); s = { p: smp.p.slice(), w: smp.w.slice(), v: PHYS.stateAt(L3.tr, Math.round(tau / L3.tr.dt)).v }; }
+  else { const t2 = Math.min(tau - L3.tMe, L3.outN * L3.out.dt); sample(L3.out, t2); s = { p: smp.p.slice(), w: smp.w.slice(), v: PHYS.stateAt(L3.out, Math.round(t2 / L3.out.dt)).v }; }
+  L3.bm.position.set(s.p[0], s.p[1] + (RV - PHYS.r), s.p[2]);
+  const over = Math.abs(s.p[0]) < W && Math.abs(s.p[2]) < L;
+  L3.shd.position.set(s.p[0], over ? TY + 0.002 : 0.003, s.p[2]);
+  // rotation visible (ralentie pour rester lisible), anneau perpendiculaire à l'axe
+  const wn = Math.hypot(s.w[0], s.w[1], s.w[2]), mag = wn / PHYS.TAU, om = visOm(mag);
+  if (wn > 1e-3) {
+    _l3a.set(s.w[0] / wn, s.w[1] / wn, s.w[2] / wn);
+    if (!lab.paused) { L3.q.setFromAxisAngle(_l3a, om * dtReal); L3.bm.quaternion.premultiply(L3.q); L3.spin += om * dtReal; }
+    L3.ringG.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _l3a);
+  }
+  L3.ringG.visible = mag >= 6; L3.ringG.position.copy(L3.bm.position);
+  L3.ringM.color.set(ringCol(s));
+  L3.cones.forEach((c, k) => {
+    const th = L3.spin + k * 2 * Math.PI / 3;
+    c.position.set(L3.RR * Math.cos(th), L3.RR * Math.sin(th), 0);
+    c.quaternion.setFromUnitVectors(UP, _l3t.set(-Math.sin(th), Math.cos(th), 0));
+  });
+  // les gestes : lui, puis toi
+  animRacket(L3.hisRk, L3.his, L3.hisRest, OPP_REST_Q, tau);
+  animRacket(L3.myRk, L3.my, L3.meRest, L3.meRestQ, tau);
+  L3.him.g.position.copy(L3.hisPos); L3.me.g.position.copy(L3.mePos); L3.me.g.rotation.y = Math.PI;
+  _l3v.set(0, -0.13, 0).applyQuaternion(L3.hisRk.quaternion);
+  l3Arm(L3.him.arm, new THREE.Vector3(L3.hisPos.x - 0.2, 1.48, L3.hisPos.z + 0.02), L3.hisRk.position.clone().add(_l3v));
+  _l3v.set(0, -0.11, 0).applyQuaternion(L3.myRk.quaternion);
+  l3Arm(L3.me.arm, new THREE.Vector3(L3.mePos.x + (st.inc.bh ? -0.2 : 0.2), 1.48, L3.mePos.z - 0.02), L3.myRk.position.clone().add(_l3v));
+  const near = Math.abs(tau - L3.tMe) < 0.06;
+  L3.arF.visible = near && L3.fOn; L3.arP.visible = near && L3.pOn;
+  // caméra
+  const o = L3.orb, g = L3.goal;
+  if (g) {
+    const k = Math.min(1, dtReal * 4);
+    let dy = g.yaw - o.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    o.yaw += dy * k; o.pitch += (g.pitch - o.pitch) * k; o.d += (g.d - o.d) * k; o.t.lerp(g.t, k);
+  }
+  L3.cam.position.set(o.t.x + o.d * Math.sin(o.yaw) * Math.cos(o.pitch), o.t.y + o.d * Math.sin(o.pitch), o.t.z + o.d * Math.cos(o.yaw) * Math.cos(o.pitch));
+  L3.cam.lookAt(o.t);
+  // ton corps (transparent) disparaît quand la caméra est juste derrière toi
+  L3.me.g.visible = L3.cam.position.distanceTo(_l3v.set(L3.mePos.x, 1.5, L3.mePos.z)) > 1.4;
+  L3.r.render(L3.sc, L3.cam);
+  // ce qui se passe, en une ligne
+  const ph = tau < 0 ? "Son coup" : pre ? "Sa balle arrive" : near ? "Ton contact · ralenti" : "Ta balle part";
+  const hud = `${ph} · ${spinShort(s)} · ${kmh(s)} km/h`;
+  if (hud !== L3.hud) { $("labHud").textContent = hud; L3.hud = hud; }
+  if (!lab.scrub) $("labTime").value = String(Math.round((tau - L3.t0) / (L3.t1 - L3.t0) * 1000));
+}
+
+/* ----- Les 7 réponses, comme tes boutons ----- */
 function openLab() {
-  const sIn = st.mySIn; if (!sIn) return;
-  const inc = st.inc, top0 = PHYS.topRps(sIn), lat0 = latOf(sIn);
+  const sIn = st.mySIn, inc = st.inc; if (!sIn || !inc || !inc.tr) return;
+  const top0 = PHYS.topRps(sIn), lat0 = latOf(sIn);
   // son latéral : où part un top frappé si tu ne vises pas
   let aim = "";
   if (Math.abs(lat0) >= 6) {
@@ -2550,70 +2790,55 @@ function openLab() {
     const dx = e1 && e2 ? Math.round((e1.x - e2.x) * 100) : 0;
     if (Math.abs(dx) >= 5) aim = `Son latéral : si tu ne vises pas, ta balle part ${Math.abs(dx)} cm vers ta ${dx > 0 ? "droite" : "gauche"}. Vise un peu à ${dx > 0 ? "gauche" : "droite"}.`;
   }
-  $("labBall").textContent = `Elle arrive : ${fmtW(top0)}${Math.abs(lat0) >= 6 ? ` · latéral ${Math.round(Math.abs(lat0))} tr/s, courbe ${lat0 > 0 ? "▶" : "◀"}` : ""}`;
+  $("labBall").textContent = `Elle arrive : ${fmtW(top0)}${Math.abs(lat0) >= 6 ? ` · latéral ${Math.round(Math.abs(lat0))} tr/s, courbe ${lat0 > 0 ? "▶" : "◀"}` : ""} · ${kmh(sIn)} km/h`;
   $("labAim").textContent = aim; $("labAim").hidden = !aim;
-  lab.cells = [];
-  let html = `<span></span>${LAB_SIDES.map(s => `<span class="lab-h">${s[1]}</span>`).join("")}`;
-  for (const [k, l] of LAB_SHOTS) {
-    html += `<span class="lab-h lab-row">${esc(l)}</span>`;
-    for (const [side, sl] of LAB_SIDES) {
-      const r = labShot(k, side, sIn), R = REST[RESV[r.res] || "long"], out = r.hit.s, i = lab.cells.length;
-      const top1 = PHYS.topRps(out), lat1 = latOf(out);
-      lab.cells.push({ k, side, label: `${l}${side ? (side < 0 ? ", frotte vers ta gauche" : ", frotte vers ta droite") : ""}`, r, R, top0, top1, lat0, lat1, bh: !!(inc && inc.bh) });
-      html += `<button type="button" class="lab-cell" data-i="${i}" aria-label="${esc(l + " " + sl + " : " + R.t + (r.tape ? ", " + r.tape.kmh + " km/h" : ""))}"><b style="background:${R.c}">${esc(R.t)}</b><small>${top1 >= 0 ? "lift" : "coupé"} ${Math.round(Math.abs(top1))}</small><small>${Math.abs(lat1) < 6 ? "sans latéral" : "lat " + latTxt(lat1)}</small>${r.tape ? `<i>${r.tape.kmh} km/h</i>` : ""}</button>`;
-    }
-  }
-  $("labGrid").innerHTML = html;
-  // la meilleure attaque : celle qui passe et lui laisse le moins de chances
-  lab.best = -1;
-  // à quelques points près, on préfère frotter droit (plus simple, plus sûr)
-  const lsc = c => c.r.tape.score + (c.side === 0 ? 4 : 0);
-  lab.cells.forEach((c, i) => { if (c.r.tape && (lab.best < 0 || lsc(c) > lsc(lab.cells[lab.best]))) lab.best = i; });
-  if (lab.best >= 0) {
-    const B = lab.cells[lab.best];
-    $("labGrid").querySelector(`.lab-cell[data-i="${lab.best}"]`).classList.add("star");
-    $("labGrid").querySelector(`.lab-cell[data-i="${lab.best}"] b`).textContent = "★ " + B.R.t;
-    $("labTape").textContent = `★ Pour le mettre en difficulté : ${B.label.toLowerCase()} · ${B.r.tape.kmh} km/h, il a ${s2(B.r.tape.t)} s`;
-  } else $("labTape").textContent = "";
+  if (!inc.rxWorks) rxAdvise(inc, sIn);
+  lab.cells = RX_ORDER.map(k => {
+    const sh = computeMyShot(k, sIn, false, rxComp(k, sIn)), R = REST[RESV[sh.res] || "long"];
+    return { k, sh, R, top0, lat0, top1: PHYS.topRps(sh.s), lat1: latOf(sh.s), tape: sh.res === "in" ? tapeOf(sh.tr) : null };
+  });
+  lab.best = lab.cells.findIndex(c => c.k === inc.rxBest && c.tape);
+  $("labGrid").innerHTML = lab.cells.map((c, i) => `<button type="button" class="lab-cell${i === lab.best ? " star" : ""}" data-i="${i}" aria-label="${esc(RX_L[c.k] + " : " + c.R.t + (c.tape ? ", " + c.tape.kmh + " km/h" : ""))}">`
+    + `<span class="lab-k">${i === lab.best ? "★ " : ""}${esc(RX_L[c.k])} <span class="key">${i + 1}</span></span><b style="background:${c.R.c}">${esc(c.R.t)}</b>`
+    + `<small>${c.top1 >= 0 ? "lift" : "coupé"} ${Math.round(Math.abs(c.top1))}${Math.abs(c.lat1) >= 6 ? " · lat " + latTxt(c.lat1) : ""}</small>${c.tape ? `<i>${c.tape.kmh} km/h</i>` : ""}</button>`).join("");
   $("labGrid").querySelectorAll(".lab-cell").forEach(b => b.addEventListener("click", () => labPick(+b.dataset.i)));
-  if (!lab.binds) { $("labSvg").innerHTML = RING_SVG; lab.binds = anBind($("labSvg")); }
+  if (lab.best >= 0) { const B = lab.cells[lab.best]; $("labTape").textContent = `★ Pour le mettre en difficulté : ${RX_L[B.k].replace(/[◀▶] ?| ?[◀▶]/g, "").toLowerCase()} · ${B.tape.kmh} km/h, il a ${s2(B.tape.t)} s`; }
+  else $("labTape").textContent = "";
   lab.open = true; lab.i = -1; labPause(false); $("lab").hidden = false;
-  // on ouvre sur la réponse conseillée (frotte droit), sinon sur la première qui passe
-  if (inc && !inc.rxWorks) rxAdvise(inc, sIn);
-  const first = lab.cells.findIndex(c => c.r.res === "in");
-  labPick(lab.best >= 0 ? lab.best : first >= 0 ? first : 4);
+  if (!L3.ok && !l3Init()) $("lab3d").hidden = true;
+  if (L3.ok && !L3.goal && !L3.free) l3Goal("tq");
+  const first = lab.cells.findIndex(c => c.sh.res === "in");
+  labPick(lab.best >= 0 ? lab.best : first >= 0 ? first : 0);
 }
 function labPick(i) {
   const c = lab.cells[i]; if (!c) return;
-  lab.sel = { kind: "me", title: c.label, before: stLite(st.mySIn), after: stLite(c.r.hit.s), n: c.r.hit.n, V: c.r.hit.V, face: c.bh ? "#22262d" : "#e04848" };
-  if (lab.i !== i) lab.tt = 0;
   lab.i = i;
   $("labGrid").querySelectorAll(".lab-cell").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.i === i)));
-  $("labTitle").innerHTML = `${esc(c.label)} → <b style="color:${c.R.c}">${esc(c.R.t)}</b>`;
-  $("labView").textContent = `Vue : ${viewLabel(lab, lab.sel)}`;
-  $("labLines").innerHTML = `<div class="lab-gest">${esc(strokeDesc(lab.sel))}</div><div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
+  const M = { kind: "me", n: c.sh.n, V: c.sh.V };
+  $("labTitle").innerHTML = `${esc(RX_L[c.k])} → <b style="color:${c.R.c}">${esc(c.R.t)}</b>`;
+  $("labLines").innerHTML = `<div class="lab-gest">${esc(strokeDesc(M))}</div><div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
     + `<div><span>Latéral</span> ${latTxt(c.lat0)} → <b>${latTxt(c.lat1)}</b> tr/s · ${esc(latWord(c.lat0, c.lat1))}</div>`
-    + (c.r.tape ? `<div><span>Pour lui</span> ${esc(tapeTxt(c.r.tape))}${i === lab.best ? " · <b style=\"color:#ffab66\">★ le plus dur pour lui</b>" : ""}</div>` : "")
-    + `<div class="lab-note">▶ ◀ : le côté où le latéral fait tourner la balle dans l’air, vu de chez toi. Frotter vers ta gauche la fait tourner vers ta droite, et inversement. 1 tr/s = 60 tr/min.</div>`;
+    + (c.tape ? `<div><span>Pour lui</span> ${esc(tapeTxt(c.tape))}${i === lab.best ? " · <b style=\"color:#ffab66\">★ le plus dur pour lui</b>" : ""}</div>` : "");
+  if (L3.ok) { l3Load(); L3.tau = L3.t0; }
 }
 function tickLab(now) {
-  if (!lab.open || !lab.sel || now - lab.last < 33) return;
+  if (!lab.open || lab.i < 0) return;
   const dt = lab.last ? Math.min(0.1, (now - lab.last) / 1000) : 0;
-  lab.last = now; if (!lab.paused && !lab.scrub) lab.tt += dt * 0.5;
-  anApply(lab.binds, ringVals(lab.tt, lab.sel, lab.view, lab));
-  if (!lab.scrub) $("labTime").value = String(Math.round((lab.tt % RG_T) / RG_T * 1000));
+  lab.last = now;
+  l3Render(dt);
 }
 const labPause = p => { lab.paused = p; $("labPlay").textContent = p ? "▶" : "❚❚"; $("labPlay").setAttribute("aria-label", p ? "Lecture" : "Pause"); };
-const labViewTxt = () => { if (lab.sel) $("labView").textContent = `Vue : ${viewLabel(lab, lab.sel)}`; };
 $("labPlay").addEventListener("click", () => labPause(!lab.paused));
-$("labTime").addEventListener("input", () => { lab.scrub = true; labPause(true); lab.tt = +$("labTime").value / 1000 * RG_T; });
+$("labTime").addEventListener("input", () => { lab.scrub = true; labPause(true); if (L3.ok) L3.tau = L3.t0 + +$("labTime").value / 1000 * (L3.t1 - L3.t0); });
 $("labTime").addEventListener("change", () => { lab.scrub = false; });
-$("labZi").addEventListener("click", () => { lab.zoom = Math.min(4, lab.zoom * 1.3); labViewTxt(); });
-$("labZo").addEventListener("click", () => { lab.zoom = Math.max(0.5, lab.zoom / 1.3); labViewTxt(); });
-freeCam($("labSvg"), lab, labViewTxt);
+const labZoom = f => { if (!L3.ok) return; if (L3.goal) L3.goal.d = Math.max(0.12, Math.min(9, L3.goal.d * f)); else L3.orb.d = Math.max(0.12, Math.min(9, L3.orb.d * f)); };
+$("labZi").addEventListener("click", () => labZoom(1 / 1.3));
+$("labZo").addEventListener("click", () => labZoom(1.3));
+$("labViews").innerHTML = L3_ORDER.map(k => `<button type="button" data-v="${k}" aria-pressed="false">${L3_VIEWS[k].l}</button>`).join("");
+$("labViews").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { if (L3.ok) l3Goal(b.dataset.v); }));
 $("labBtn").addEventListener("click", openLab);
-$("labView").addEventListener("click", () => { if (lab.cam || Math.abs(lab.zoom - 1) > 0.05) { lab.cam = null; lab.zoom = 1; } else lab.view = VIEW_ORDER[(VIEW_ORDER.indexOf(lab.view) + 1) % VIEW_ORDER.length]; labPick(Math.max(0, lab.i)); });
 $("labClose").addEventListener("click", () => { lab.open = false; $("lab").hidden = true; });
+window.addEventListener("resize", () => { if (lab.open) l3Size(); });
 
 /* ================= Bilan du point ================= */
 function faceLabel(face) {
@@ -3008,7 +3233,7 @@ function frame(now) {
   const fov = baseFov * (1 - 0.38 * focus);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
 
-  if (!(frozen || paused) || now - lastRender > 40) { renderer.render(scene, camera); lastRender = now; }
+  if (!lab.open && (!(frozen || paused) || now - lastRender > 40)) { renderer.render(scene, camera); lastRender = now; }
   requestAnimationFrame(frame);
 }
 
