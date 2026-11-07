@@ -137,7 +137,13 @@ button { font: inherit; color: inherit; }
 .ring-nav button[disabled] { opacity: .3; cursor: default; }
 .ring-txt { font-size: 13px; font-weight: 700; text-align: center; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .ring-hint { font-size: 12px; color: var(--muted); text-align: center; }
-.ring-hint:empty { display: none; }
+.ring-hint:empty, .ring-gest:empty { display: none; }
+.ring-gest { font-size: 12.5px; text-align: center; line-height: 1.3; margin-top: 2px; }
+.ring-view {
+  appearance: none; margin-top: 4px; min-height: 34px; padding: 2px 12px; border-radius: 99px; border: 1px solid var(--line);
+  background: var(--tile); font-weight: 700; font-size: 12.5px; cursor: pointer;
+}
+.ring-card:not(.hist) .ring-view { display: none; }
 .ring-lab {
   appearance: none; margin-top: 6px; width: 100%; min-height: 40px; border-radius: 10px; border: 1.5px solid var(--accent);
   background: var(--accent-bg); font-weight: 700; font-size: 14px; cursor: pointer;
@@ -157,10 +163,12 @@ button { font: inherit; color: inherit; }
 .lab-cell b { font-size: 11px; color: #0f1c2e; border-radius: 99px; padding: 0 7px; }
 .lab-cell small { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .lab-cell[aria-pressed="true"] { border-color: var(--ink); background: rgba(255, 255, 255, .14); }
-.lab-svg { display: block; width: 100%; max-height: 24vh; background: #17263b; border-radius: 12px; }
+.lab-svg { display: block; width: 100%; max-height: 34vh; background: #17263b; border-radius: 12px; }
 .lab-title { font-weight: 700; font-size: 14.5px; }
 .lab-title b { color: inherit; }
 .lab-lines { display: flex; flex-direction: column; gap: 2px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.lab-gest { font-size: 13px; line-height: 1.35; margin-bottom: 2px; }
+.sheet.lab .ring-view { align-self: center; }
 .lab-note { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .lab-lines span { display: inline-block; width: 64px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
 .shot.rxbest { border-color: var(--good); background: rgba(82, 200, 138, .2); opacity: 1; }
@@ -388,7 +396,8 @@ button { font: inherit; color: inherit; }
   <svg id="ringSvg" viewBox="0 0 240 196" role="img" font-family="Atkinson Hyperlegible, sans-serif"></svg>
   <div class="ring-num"><b id="ringRps"></b><span>tr/s</span></div>
   <div class="ring-nav"><button type="button" id="ringPrev" aria-label="Moment précédent">◀</button><span id="ringLab"></span><button type="button" id="ringNext" aria-label="Moment suivant">▶</button></div>
-  <div class="ring-txt" id="ringTxt"></div><div class="ring-hint" id="ringHint"></div>
+  <div class="ring-txt" id="ringTxt"></div><div class="ring-gest" id="ringGest"></div><div class="ring-hint" id="ringHint"></div>
+  <button type="button" class="ring-view" id="ringView">Vue : auto</button>
   <button type="button" class="ring-lab" id="labBtn">Tester mes réponses</button>
 </div>
 
@@ -474,6 +483,7 @@ button { font: inherit; color: inherit; }
     <svg class="lab-svg" id="labSvg" viewBox="0 0 240 196" role="img" aria-label="Ta raquette frotte la balle, l’anneau montre la rotation avant puis après" font-family="Atkinson Hyperlegible, sans-serif"></svg>
     <div class="lab-title" id="labTitle"></div>
     <div class="lab-lines" id="labLines"></div>
+    <button type="button" class="ring-view" id="labView">Vue : auto</button>
   </div>
 </div>
 
@@ -2223,73 +2233,162 @@ function histBounces(tr, iMax) {
   }
 }
 const spinDesc = s => { if (!s) return "pas de rotation"; const l = Math.abs(s.w[1] / PHYS.TAU); return fmtW(PHYS.topRps(s)) + (l >= 6 ? ` · latéral ${Math.round(l)}` : ""); };
-const RING_SVG = `<ellipse cx="120" cy="178" rx="48" ry="9" fill="#000" opacity=".3"/>
-  <polygon fill="#1b4f8c" stroke="#f4f6f8" stroke-width="1.5" data-b="points:tab,opacity:tabo"/>
-  <polygon stroke="#e3e9f0" stroke-width="1.5" data-b="points:rk,fill:rkc,opacity:rkb"/>
+/* ===== Rendu 3D de la carte : la balle, son anneau, et la raquette (ou la table) au moment du contact =====
+   Le contact est rejoué avec les vraies vitesses du moteur (balle avant et après, vitesse de la raquette),
+   dans un ralenti extrême autour du choc. Trois vues : ¾ (la balle qui arrive), profil (top, coupé), dessus (latéral). */
+const VIEWS = { tq: { yaw: 32, pitch: 18, l: "¾" }, profil: { yaw: -88, pitch: 6, l: "Profil" }, dessus: { yaw: 0, pitch: 80, l: "Dessus" } };
+const VIEW_ORDER = ["auto", "profil", "dessus", "tq"];
+function setView(k, s) { const v = VIEWS[k]; RG.yaw = v.yaw * DEG; RG.pitch = v.pitch * DEG; RG.s = s; }
+const RK_RED = "#e04848", RK_BLACK = "#22262d";
+function rkLayer(sfx) {
+  return `<g data-b="opacity:L${sfx}">
+    <polygon fill="none" stroke="#f3f6fa" stroke-width="1.2" stroke-dasharray="3 3" data-b="points:g1${sfx},opacity:go1${sfx}"/>
+    <polygon fill="none" stroke="#f3f6fa" stroke-width="1.2" stroke-dasharray="3 3" data-b="points:g2${sfx},opacity:go2${sfx}"/>
+    <polygon fill="#c9a26b" stroke="#6b5233" stroke-width="1" data-b="points:hd${sfx}"/>
+    <polygon stroke="#0b0f14" stroke-width="1" data-b="points:dA${sfx},fill:cA${sfx}"/>
+    <polygon stroke="#e3e9f0" stroke-opacity=".6" stroke-width="1.2" data-b="points:dB${sfx},fill:cB${sfx}"/>
+  </g>`;
+}
+const RING_SVG = `<polygon fill="#1b4f8c" stroke="#f4f6f8" stroke-width="1.5" data-b="points:tab,opacity:tabo"/>
+  ${rkLayer("b")}
+  <path fill="none" stroke="#f3f6fa" stroke-width="1.6" stroke-dasharray="2 4" data-b="d:rp,opacity:rpo"/>
   <path fill="none" stroke="#a9b8ca" stroke-width="2" stroke-dasharray="5 5" data-b="d:dirD"/><polygon fill="#a9b8ca" data-b="points:dirH"/>
   <text font-size="11" font-weight="700" fill="#a9b8ca" data-b="x:dirTx,y:dirTy,text:dirT"></text>
-  <path fill="none" stroke-width="6" stroke-linecap="round" opacity=".35" data-b="d:back,stroke:col"/>
+  <path fill="none" stroke-width="5" stroke-linecap="round" opacity=".35" data-b="d:back,stroke:col"/>
   ${[0, 1, 2].map(i => `<polygon data-b="points:c${i},fill:col,opacity:bo${i}"/>`).join("")}
-  <circle cx="120" cy="92" r="50" fill="#efece3"/><circle cx="107" cy="78" r="33" fill="#fbfaf5"/>
-  <circle cx="120" cy="92" r="50" fill="none" stroke="#9aa3ad" stroke-width="1.5" opacity=".6"/>
-  <path fill="none" stroke="#ff7a1a" stroke-width="6" stroke-linecap="round" data-b="d:seam"/>
-  <circle cx="120" cy="92" r="76" fill="none" stroke="#e3e9f0" stroke-width="2" stroke-dasharray="3 7" data-b="opacity:none"/>
-  <path fill="none" stroke-width="6" stroke-linecap="round" data-b="d:front,stroke:col"/>
+  <circle fill="#efece3" data-b="cx:bx,cy:by,r:br"/><circle fill="#fbfaf5" data-b="cx:hx,cy:hy,r:hr"/>
+  <circle fill="none" stroke="#9aa3ad" stroke-width="1.5" opacity=".6" data-b="cx:bx,cy:by,r:br"/>
+  <path fill="none" stroke="#ff7a1a" stroke-width="5" stroke-linecap="round" data-b="d:seam"/>
+  <circle fill="none" stroke="#e3e9f0" stroke-width="2" stroke-dasharray="3 7" data-b="cx:bx,cy:by,r:nr,opacity:none"/>
+  <path fill="none" stroke-width="5" stroke-linecap="round" data-b="d:front,stroke:col"/>
   ${[0, 1, 2].map(i => `<polygon stroke="#0f1c2e" stroke-width="1.5" data-b="points:c${i},fill:col,opacity:fo${i}"/>`).join("")}
-  <polygon stroke="#e3e9f0" stroke-width="1.5" data-b="points:rk,fill:rkc,opacity:rkf"/>
-  <path fill="none" stroke="#f3f6fa" stroke-width="3" stroke-linecap="round" data-b="d:br,opacity:bro"/><polygon fill="#f3f6fa" data-b="points:brh,opacity:bro"/>
-  <circle cx="120" cy="92" fill="none" stroke="#fff" stroke-width="2.5" data-b="r:flr,opacity:flo"/>`;
-const ring = { live: null, idx: 0, tt: 0, last: 0, binds: null, ang: 0 };
+  ${rkLayer("f")}
+  <circle r="4" fill="#f2c94c" data-b="cx:cpx,cy:cpy,opacity:cpo"/>
+  <path fill="none" stroke="#f3f6fa" stroke-width="3.5" stroke-linecap="round" data-b="d:frD,opacity:fro"/><polygon fill="#f3f6fa" data-b="points:frH,opacity:fro"/>
+  <text font-size="12" font-weight="700" fill="#f3f6fa" stroke="#0b1424" stroke-width="3" paint-order="stroke" data-b="x:frTx,y:frTy,opacity:fro,text:frT"></text>
+  <path fill="none" stroke="#a9b8ca" stroke-width="3" stroke-linecap="round" data-b="d:puD,opacity:puo"/><polygon fill="#a9b8ca" data-b="points:puH,opacity:puo"/>
+  <text font-size="12" font-weight="700" fill="#a9b8ca" stroke="#0b1424" stroke-width="3" paint-order="stroke" data-b="x:puTx,y:puTy,opacity:puo">pousse</text>
+  <circle fill="none" stroke="#fff" stroke-width="2.5" data-b="cx:flx,cy:fly,r:flr,opacity:flo"/>`;
+const ring = { live: null, idx: 0, tt: 0, last: 0, binds: null, view: "auto" };
 /* Couleur de l'anneau : bleu coupé, orange lift, jaune quand le latéral domine, gris sans rotation (relatif au sens de la balle) */
 function ringCol(s) {
   const top = PHYS.topRps(s), lat = Math.abs(s.w[1] / PHYS.TAU);
   return lat >= 6 && lat >= Math.abs(top) ? "#f2c94c" : top <= -6 ? "#8ab8ff" : top >= 6 ? "#ffab66" : "#e3e9f0";
 }
 const rgPoly = pts => pts.map(q => `${an1(q[0])},${an1(q[1])}`).join(" ");
+const v3a = (a, b, k) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+const v3d = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 function rgArrow(o, from, dir, len, key) {
-  const a = rgView(from), b = rgView([from[0] + dir[0] * len, from[1] + dir[1] * len, from[2] + dir[2] * len]);
+  const a = rgView(from), b = rgView(v3a(from, dir, len));
   const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
   o[key + "D"] = `M${an1(a[0])} ${an1(a[1])} L${an1(b[0])} ${an1(b[1])}`;
-  o[key + "H"] = `${an1(b[0] + ux * 8)},${an1(b[1] + uy * 8)} ${an1(b[0] - uy * 6)},${an1(b[1] + ux * 6)} ${an1(b[0] + uy * 6)},${an1(b[1] - ux * 6)}`;
+  o[key + "H"] = `${an1(b[0] + ux * 9)},${an1(b[1] + uy * 9)} ${an1(b[0] - uy * 6)},${an1(b[1] + ux * 6)} ${an1(b[0] + uy * 6)},${an1(b[1] - ux * 6)}`;
   return b;
 }
-function ringVals(t, M) {
-  const T = 3.4, h = M.live ? 0 : t % T, tc = 1.3, after = M.live || h >= tc || !M.before;
-  const S = M.live ? M.live : after ? M.after : M.before;
-  const w = S.w, mag = Math.hypot(w[0], w[1], w[2]) / PHYS.TAU, spin = mag >= 6 && (after || !!M.before), a = spin ? v3n(w) : [1, 0, 0];
+/* La frappe décomposée : « pousse » (le long de la face vers la balle) et « frotte » (le long de la balle : c'est ce qui crée la rotation) */
+function strokeParts(n, V) { const vn = v3d(V, n), vt = v3a(V, n, -vn); return { vn, vt, vtm: Math.hypot(vt[0], vt[1], vt[2]) }; }
+/* Le geste en mots et en chiffres : angle de la raquette, sens du frottement, vitesses */
+function strokeDesc(M) {
+  if (M.kind === "table") return "La table frotte le dessous de la balle : c’est elle qui change la rotation au rebond.";
+  if (!M.n) return "";
+  const n = v3n(M.n), p = strokeParts(n, M.V), mine = M.kind === "me";
+  const open = Math.round(Math.asin(Math.max(-1, Math.min(1, n[1]))) / DEG);
+  const yaw = Math.round(Math.atan2(n[0], mine ? -n[2] : n[2]) / DEG);
+  const up = p.vt[1], side = p.vt[0], dirs = [];
+  if (Math.abs(up) > 0.35 * p.vtm) dirs.push(up > 0 ? "le haut" : "le bas");
+  if (Math.abs(side) > 0.35 * p.vtm) dirs.push(side > 0 ? "ta droite" : "ta gauche");
+  const ang = Math.abs(open) < 4 ? "verticale" : `${open > 0 ? "ouverte" : "fermée"} ${Math.abs(open)}°`;
+  const face = Math.abs(yaw) < 4 ? "" : `, face tournée ${Math.abs(yaw)}° vers ta ${yaw > 0 ? "droite" : "gauche"}`;
+  const fr = p.vtm < 0.8 ? "frotte à peine" : `frotte ${p.vtm.toFixed(1).replace(".", ",")} m/s vers ${dirs.join(" et ") || "l’avant"}`;
+  return `${mine ? "Ta raquette" : "Sa raquette"} ${ang}${face} · ${fr} · pousse ${Math.max(0, p.vn).toFixed(1).replace(".", ",")} m/s`;
+}
+function autoView(M) {
+  if (!M || M.live) return "tq";
+  if (M.kind === "table" || !M.n) return "profil";
+  const p = strokeParts(v3n(M.n), M.V);
+  return Math.abs(p.vt[0]) > 0.9 * Math.abs(p.vt[1]) ? "dessus" : "profil";
+}
+const visOm = mag => mag >= 6 ? 2 * Math.PI * 0.45 * Math.min(2, Math.max(0.6, mag / 25)) : 0;
+function ringVals(t, M, viewSel) {
+  const live = !!M.live, view = !viewSel || viewSel === "auto" ? autoView(M) : viewSel;
+  setView(view, live ? 50 : 30);
+  const T = 3.8, tc = 1.7, h = live ? 0 : t % T;
+  // temps du film : la balle arrive vite, presque immobile au contact, puis repart (ralenti extrême autour du choc)
+  const tau = live ? 0 : 0.32 * Math.sinh((h - tc) / 0.45), K = 0.42;
+  const B = live ? M.live : M.before || { w: [0, 0, 0], v: [0, 0.6, 0] }, A = live ? M.live : M.after;
+  const pre = !live && h < tc;
+  const bc = live ? [0, 0, 0] : pre ? v3a([0, 0, 0], B.v, K * tau) : v3a([0, 0, 0], A.v, K * tau);
+  // rotation : on passe de l'ancienne à la nouvelle pendant le choc
+  const k = live ? 1 : sm((h - tc + 0.1) / 0.25), w = [0, 1, 2].map(i => B.w[i] + (A.w[i] - B.w[i]) * k);
+  const magW = Math.hypot(w[0], w[1], w[2]) / PHYS.TAU, spin = magW >= 6, a = spin ? v3n(w) : [1, 0, 0];
   let u = v3x(a, [0, 0, 1]); if (Math.hypot(u[0], u[1], u[2]) < 0.1) u = v3x(a, [0, 1, 0]); u = v3n(u);
-  const v = v3x(a, u), R = 1.5, P = x => [0, 1, 2].map(i => R * (u[i] * Math.cos(x) + v[i] * Math.sin(x)));
+  const v = v3x(a, u), R = 1.5, P = x => v3a(bc, [0, 1, 2].map(i => u[i] * Math.cos(x) + v[i] * Math.sin(x)), R);
   const pts = []; for (let i = 0; i <= 72; i++) pts.push(rgView(P(i / 72 * 2 * Math.PI)));
-  const ang = spin ? t * 2 * Math.PI * 0.45 * Math.min(2, Math.max(0.6, mag / 25)) : 0;
-  const o = { front: spin ? rgPath(pts, true) : "M0 0", back: spin ? rgPath(pts, false) : "M0 0", none: spin ? 0 : 1 };
+  const cen = rgView(bc), dz = cen[2];
+  const rel = q => [q[0], q[1], q[2] - dz];            // devant / derrière la balle
+  const ringPts = pts.map(rel);
+  const ang = live ? t * visOm(magW) : 0;
+  const o = { front: spin ? rgPath(ringPts, true) : "M0 0", back: spin ? rgPath(ringPts, false) : "M0 0", none: spin ? 0 : 1 };
+  const chA = live ? ang : (pre ? h : h - tc) * visOm(magW) * 0.8;
   for (let i = 0; i < 3; i++) {
-    const th = ang + i * 2 * Math.PI / 3, p = rgView(P(th)), q = rgView(P(th + 0.14));
+    const th = chA + i * 2 * Math.PI / 3, p = rel(rgView(P(th))), q = rel(rgView(P(th + 0.14)));
     o["c" + i] = rgChev(p, q); o["fo" + i] = spin && p[2] >= 0 ? 1 : 0; o["bo" + i] = spin && p[2] < 0 ? 0.4 : 0;
   }
-  const seam = []; for (let i = 0; i <= 60; i++) { const ph = i / 60 * 2 * Math.PI; seam.push(rgView(v3rot([0, 1, 2].map(j => u[j] * Math.cos(ph) + a[j] * Math.sin(ph)), a, ang))); }
+  // la couture tourne avec la balle (d'abord autour de l'ancien axe, puis du nouveau)
+  const aB = Math.hypot(...B.w) > 1e-3 ? v3n(B.w) : [1, 0, 0], aA = Math.hypot(...A.w) > 1e-3 ? v3n(A.w) : [1, 0, 0];
+  const oB = visOm(Math.hypot(...B.w) / PHYS.TAU), oA = visOm(Math.hypot(...A.w) / PHYS.TAU);
+  const rotq = q => live ? v3rot(q, a, ang) : pre ? v3rot(q, aB, oB * h) : v3rot(v3rot(q, aB, oB * tc), aA, oA * (h - tc));
+  const seam = []; for (let i = 0; i <= 60; i++) { const ph = i / 60 * 2 * Math.PI; seam.push(rel(rgView(v3a(bc, rotq([0, 1, 2].map(j => (live ? u : [0, 1, 0])[j] * Math.cos(ph) + (live ? a : [0, 0, 1])[j] * Math.sin(ph))), 1)))); }
   o.seam = rgPath(seam, true);
-  o.col = ringCol(S);
+  o.col = ringCol({ w, v: pre ? B.v : A.v });
+  o.bx = an1(cen[0]); o.by = an1(cen[1]); o.br = an1(RG.s); o.hx = an1(cen[0] - 0.26 * RG.s); o.hy = an1(cen[1] - 0.28 * RG.s); o.hr = an1(0.66 * RG.s); o.nr = an1(1.5 * RG.s);
   // sens de la balle
-  const vh = v3n(S.v), b = rgArrow(o, [vh[0] * 1.15, vh[1] * 1.15 - 0.1, vh[2] * 1.15], vh, 1.1, "dir");
-  o.dirT = M.live ? "vers toi" : after ? "après" : "avant"; o.dirTx = an1(b[0] + 8); o.dirTy = an1(b[1] + 4);
-  // la raquette qui frotte, ou la table
-  o.rk = "0,0"; o.rkf = 0; o.rkb = 0; o.bro = 0; o.br = "M0 0"; o.brh = "0,0"; o.tab = "0,0"; o.tabo = 0; o.flo = 0; o.flr = 0;
-  if (!M.live && M.kind === "table") {
-    o.tab = rgPoly([[-2.6, -1.05, -2.6], [2.6, -1.05, -2.6], [2.6, -1.05, 2.6], [-2.6, -1.05, 2.6]].map(rgView));
-    o.tabo = h < tc - 0.5 ? 0.25 : h < tc + 0.6 ? 0.85 : 0.3;
+  const vv = live ? M.live.v : pre ? B.v : A.v, vh = v3n(vv);
+  const b = rgArrow(o, v3a(bc, vh, 1.15), vh, 1.1, "dir");
+  o.dirT = live ? "vers toi" : pre ? "avant" : "après"; o.dirTx = an1(b[0] + 8); o.dirTy = an1(b[1] + 4);
+  // par défaut, pas de raquette ni de table
+  Object.assign(o, { tab: "0,0", tabo: 0, Lb: 0, Lf: 0, rp: "M0 0", rpo: 0, cpo: 0, fro: 0, puo: 0, flo: 0, flr: 0, flx: 0, fly: 0, cpx: 0, cpy: 0,
+    frD: "M0 0", frH: "0,0", puD: "M0 0", puH: "0,0", frTx: 0, frTy: 0, puTx: 0, puTy: 0, frT: "frotte" });
+  for (const s of ["b", "f"]) Object.assign(o, { ["g1" + s]: "0,0", ["g2" + s]: "0,0", ["go1" + s]: 0, ["go2" + s]: 0, ["hd" + s]: "0,0", ["dA" + s]: "0,0", ["dB" + s]: "0,0", ["cA" + s]: RK_BLACK, ["cB" + s]: RK_RED });
+  if (live) return o;
+  const win = h > tc - 0.35 && h < tc + 0.75, cp = M.kind === "table" ? [0, -1, 0] : v3a([0, 0, 0], v3n(M.n), -1);
+  if (M.kind === "table") {
+    o.tab = rgPoly([[-3.5, -1, -3.5], [3.5, -1, -3.5], [3.5, -1, 3.5], [-3.5, -1, 3.5]].map(rgView)); o.tabo = 0.85;
+    // la table freine le dessous de la balle : frottement opposé au glissement du point de contact
+    const Bw = B.w, slip = [B.v[0] + 0.02 * Bw[2], 0, B.v[2] - 0.02 * Bw[0]], sl = Math.hypot(slip[0], slip[2]);
+    if (win && sl > 0.3) { const tip = rgArrow(o, cp, [-slip[0] / sl, 0, -slip[2] / sl], 1.6, "fr"); o.frD = o.frD; o.fro = 1; o.frT = "la table frotte"; o.frTx = an1(tip[0] + 6); o.frTy = an1(tip[1] + 14); }
+  } else if (M.n) {
+    const n = v3n(M.n), V = M.V, p = strokeParts(n, V);
+    let hd = v3a([0, -1, 0], n, -v3d([0, -1, 0], n)); if (Math.hypot(...hd) < 0.3) hd = v3a([0, 0, 1], n, -n[2]); hd = v3n(hd);
+    const e2 = v3x(n, hd), Rb = 2.8;
+    const c0 = v3a([0, 0, 0], n, -1.12);
+    const at = tt => v3a(c0, V, K * 0.32 * Math.sinh((tt - tc) / 0.45));
+    const disc = (c, r) => { const q = []; for (let i = 0; i < 32; i++) { const ph = i / 32 * 2 * Math.PI; q.push(rgView(v3a(v3a(c, hd, r * Math.cos(ph)), e2, r * Math.sin(ph)))); } return q; };
+    const c = at(h), cB = v3a(c, n, -0.35), dF = disc(c, Rb), dBk = disc(cB, Rb);
+    // le côté visible de la raquette : la face qui frappe (vers la balle) ou l'autre
+    const faceSeen = rgView(v3a([0, 0, 0], n, 1))[2] - rgView([0, 0, 0])[2] > 0, other = M.face === RK_RED ? RK_BLACK : RK_RED;
+    const near = faceSeen ? dF : dBk, far = faceSeen ? dBk : dF;
+    const h1 = v3a(c, hd, Rb * 0.92), h2 = v3a(c, hd, Rb + 2.3), w2 = 0.28;
+    const hdPts = [v3a(h1, e2, w2), v3a(h2, e2, w2), v3a(h2, e2, -w2), v3a(h1, e2, -w2)].map(rgView);
+    const front = rgView(c)[2] > dz, s = front ? "f" : "b";
+    const vis = h < tc - 1.15 ? 0 : h > tc + 1.5 ? Math.max(0, 1 - (h - tc - 1.5) / 0.4) : 1;
+    o["L" + s] = vis * (front ? 0.82 : 1);
+    o["dA" + s] = rgPoly(far); o["dB" + s] = rgPoly(near);
+    o["cA" + s] = faceSeen ? other : M.face; o["cB" + s] = faceSeen ? M.face : other; o["hd" + s] = rgPoly(hdPts);
+    if (h < tc) {
+      o["g1" + s] = rgPoly(disc(at(h - 0.22), Rb)); o["go1" + s] = 0.5;
+      o["g2" + s] = rgPoly(disc(at(h - 0.44), Rb)); o["go2" + s] = 0.3;
+    }
+    // le trajet de la raquette (son centre), de l'armé à l'accompagnement
+    const path = []; for (let i = -14; i <= 14; i++) path.push(rgView(v3a(c0, V, K * 0.32 * Math.sinh(i / 14 * 1.6))));
+    o.rp = "M" + path.map(q => `${an1(q[0])} ${an1(q[1])}`).join(" L"); o.rpo = 0.55;
+    if (win) {
+      if (p.vtm > 0.5) { const tip = rgArrow(o, cp, v3n(p.vt), Math.min(2.4, Math.max(0.7, p.vtm * 0.22)), "fr"); o.fro = 1; o.frT = "frotte"; o.frTx = an1(tip[0] + 6); o.frTy = an1(tip[1] - 6); }
+      if (p.vn > 0.2) { const tip = rgArrow(o, v3a(cp, n, -Math.min(2, Math.max(0.6, p.vn * 0.25))), n, Math.min(2, Math.max(0.6, p.vn * 0.25)) - 0.15, "pu"); o.puo = 1; o.puTx = an1(tip[0] - 52); o.puTy = an1(tip[1] + 16); }
+    }
   }
-  if (!M.live && M.n) {
-    const n = v3n(M.n), Vl = Math.hypot(M.V[0], M.V[1], M.V[2]) || 1, Vh = M.V.map(x => x / Vl);
-    const dn = Vh[0] * n[0] + Vh[1] * n[1] + Vh[2] * n[2], tg = v3n([Vh[0] - dn * n[0], Vh[1] - dn * n[1], Vh[2] - dn * n[2]]);
-    const s = h < tc ? -(tc - h) * 1.9 : (h - tc) * 1.2, dirv = h < tc ? Vh : tg;
-    const c = [-n[0] * 1.08 + dirv[0] * s, -n[1] * 1.08 + dirv[1] * s, -n[2] * 1.08 + dirv[2] * s];
-    let e1 = v3x(n, [0, 1, 0]); if (Math.hypot(e1[0], e1[1], e1[2]) < 0.2) e1 = v3x(n, [1, 0, 0]); e1 = v3n(e1); const e2 = v3x(n, e1);
-    const disc = []; for (let i = 0; i < 28; i++) { const ph = i / 28 * 2 * Math.PI; disc.push(rgView([0, 1, 2].map(j => c[j] + 1.35 * (e1[j] * Math.cos(ph) + e2[j] * Math.sin(ph))))); }
-    const vis = h < tc - 1.0 ? 0 : h < tc + 0.9 ? 1 : Math.max(0, 1 - (h - tc - 0.9) / 0.4), front = rgView(c)[2] > 0;
-    o.rk = rgPoly(disc); o.rkc = M.face; o.rkf = front ? vis * 0.6 : 0; o.rkb = front ? 0 : vis;
-    if (h > tc - 0.35 && h < tc + 1.0) { rgArrow(o, [c[0] - tg[0] * 0.6, c[1] - tg[1] * 0.6, c[2] - tg[2] * 0.6], tg, 1.3, "br"); o.br = o.brD; o.brh = o.brH; o.bro = 1; }
-  }
-  if (!M.live) { const f = (h - tc) / 0.35; if (f >= 0 && f <= 1) { o.flo = 1 - f; o.flr = an1(52 + 30 * f); } }
+  const cpv = rgView(cp); o.cpx = an1(cpv[0]); o.cpy = an1(cpv[1]); o.cpo = win ? 1 : 0;
+  const f = (h - tc) / 0.35; if (f >= 0 && f <= 1) { o.flo = 1 - f; o.flr = an1(5 + 16 * f); o.flx = an1(cpv[0]); o.fly = an1(cpv[1]); }
   return o;
 }
 /* Le moment affiché : l'historique de l'échange, puis la balle qui t'arrive maintenant */
@@ -2301,6 +2400,8 @@ function ringShow(i) {
   $("ringLab").textContent = `${ring.idx + 1}/${ms.length} · ${M.title}`;
   $("ringTxt").textContent = M.live ? spinDesc(M.live) : M.before ? `Avant : ${spinDesc(M.before)} → après : ${spinDesc(M.after)}` : `Départ : ${spinDesc(M.after)}`;
   $("ringHint").textContent = M.hint || "";
+  $("ringGest").textContent = M.live ? "" : strokeDesc(M);
+  $("ringView").textContent = `Vue : ${ring.view === "auto" ? "auto (" + VIEWS[autoView(M)].l.toLowerCase() + ")" : VIEWS[ring.view].l.toLowerCase()}`;
   $("ringPrev").disabled = ring.idx === 0; $("ringNext").disabled = ring.idx === ms.length - 1;
   $("ringCard").classList.toggle("hist", !M.live);
 }
@@ -2317,18 +2418,19 @@ const hideRing = () => { $("ringCard").hidden = true; ring.live = null; };
 function tickRing(now) {
   if (!ring.live || $("ringCard").hidden || now - ring.last < 33) return;
   const dt = ring.last ? Math.min(0.1, (now - ring.last) / 1000) : 0;
-  ring.last = now; ring.tt += dt * (ring.idx === ringMoments().length - 1 ? 0.6 : 0.45);
-  anApply(ring.binds, ringVals(ring.tt, ringMoments()[ring.idx]));
+  ring.last = now; ring.tt += dt * (ring.idx === ringMoments().length - 1 ? 0.6 : 0.5);
+  anApply(ring.binds, ringVals(ring.tt, ringMoments()[ring.idx], ring.view));
 }
 $("ringPrev").addEventListener("click", () => ringShow(ring.idx - 1));
 $("ringNext").addEventListener("click", () => ringShow(ring.idx + 1));
+$("ringView").addEventListener("click", () => { ring.view = VIEW_ORDER[(VIEW_ORDER.indexOf(ring.view) + 1) % VIEW_ORDER.length]; ringShow(ring.idx); });
 
 /* ================= Labo : teste toutes tes réponses sur la balle qui arrive =================
    4 coups × 3 façons de frotter. Pour chacun, le moteur calcule où part ta balle et avec quelle rotation,
    en visant juste (son latéral compensé) : on voit ce que ton coup fait à son effet. */
 const LAB_SHOTS = [["tresouvert", "Top ouvert"], ["plat", "Top frappé"], ["bloc", "Bloc"], ["pous", "Coupe"]];
 const LAB_SIDES = [[-1, "Frotte ◀"], [0, "Droit"], [1, "Frotte ▶"]];
-const lab = { cells: [], sel: null, tt: 0, last: 0, binds: null, open: false };
+const lab = { cells: [], sel: null, tt: 0, last: 0, binds: null, open: false, view: "auto" };
 function labShot(k, side, sIn) {
   const c = Object.assign({}, CH[k], { c: side * 3.5 }), cur = PHYS.topRps(sIn);
   const hyp = PHYS.clone(sIn); PHYS.setTop(hyp, Math.max(c.win[0], Math.min(c.win[1], cur)));
@@ -2396,17 +2498,19 @@ function labPick(i) {
   lab.tt = 0;
   $("labGrid").querySelectorAll(".lab-cell").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.i === i)));
   $("labTitle").innerHTML = `${esc(c.label)} → <b style="color:${c.R.c}">${esc(c.R.t)}</b>`;
-  $("labLines").innerHTML = `<div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
+  $("labView").textContent = `Vue : ${lab.view === "auto" ? "auto (" + VIEWS[autoView(lab.sel)].l.toLowerCase() + ")" : VIEWS[lab.view].l.toLowerCase()}`;
+  $("labLines").innerHTML = `<div class="lab-gest">${esc(strokeDesc(lab.sel))}</div><div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
     + `<div><span>Latéral</span> ${latTxt(c.lat0)} → <b>${latTxt(c.lat1)}</b> tr/s · ${esc(latWord(c.lat0, c.lat1))}</div>`
     + `<div class="lab-note">▶ ◀ : le côté où le latéral fait tourner la balle dans l’air, vu de chez toi. Frotter vers ta gauche la fait tourner vers ta droite, et inversement. 1 tr/s = 60 tr/min.</div>`;
 }
 function tickLab(now) {
   if (!lab.open || !lab.sel || now - lab.last < 33) return;
   const dt = lab.last ? Math.min(0.1, (now - lab.last) / 1000) : 0;
-  lab.last = now; lab.tt += dt * 0.45;
-  anApply(lab.binds, ringVals(lab.tt, lab.sel));
+  lab.last = now; lab.tt += dt * 0.5;
+  anApply(lab.binds, ringVals(lab.tt, lab.sel, lab.view));
 }
 $("labBtn").addEventListener("click", openLab);
+$("labView").addEventListener("click", () => { lab.view = VIEW_ORDER[(VIEW_ORDER.indexOf(lab.view) + 1) % VIEW_ORDER.length]; const i = lab.cells.findIndex((c, k) => $("labGrid").querySelector(`.lab-cell[data-i="${k}"]`).getAttribute("aria-pressed") === "true"); labPick(Math.max(0, i)); });
 $("labClose").addEventListener("click", () => { lab.open = false; $("lab").hidden = true; });
 
 /* ================= Bilan du point ================= */
