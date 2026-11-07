@@ -187,6 +187,9 @@ button { font: inherit; color: inherit; }
 .lab-ctl button { appearance: none; min-width: 40px; min-height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--tile); font-weight: 700; font-size: 14px; cursor: pointer; }
 .lab-ctl input { flex: 1; min-width: 0; accent-color: #f2c94c;
   background: linear-gradient(90deg, transparent calc(var(--tc, 50%) - 1px), #f2c94c calc(var(--tc, 50%) - 1px), #f2c94c calc(var(--tc, 50%) + 1px), transparent calc(var(--tc, 50%) + 1px)); }
+.lab-spd input { background: none; accent-color: #8ab8ff; }
+.lab-spl, .lab-spv { font-size: 12.5px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.lab-spv { min-width: 42px; text-align: center; color: #8ab8ff; font-variant-numeric: tabular-nums; }
 .lab-hint { font-size: 11px; color: var(--muted); text-align: center; }
 .lab-tape { font-size: 13.5px; line-height: 1.3; color: #ffab66; font-weight: 700; }
 .lab-tape:empty { display: none; }
@@ -517,6 +520,13 @@ button { font: inherit; color: inherit; }
       <input type="range" id="labTime" min="0" max="1000" value="0" aria-label="Moment du film (le trait jaune : ton contact)">
       <button type="button" id="labZo" aria-label="Dézoomer">−</button>
       <button type="button" id="labZi" aria-label="Zoomer">+</button>
+    </div>
+    <div class="lab-ctl lab-spd">
+      <button type="button" id="labBack" aria-label="Image précédente">‹</button>
+      <span class="lab-spl">Vitesse</span>
+      <input type="range" id="labSpeed" min="0" max="100" value="100" aria-label="Vitesse de l’animation (vers la gauche : jusqu’à 50 fois plus lent)">
+      <span class="lab-spv" id="labSpv">×1</span>
+      <button type="button" id="labFwd" aria-label="Image suivante">›</button>
     </div>
     <div class="lab-views" id="labViews" role="group" aria-label="Vues"></div>
     <div class="lab-hint">Glisse pour tourner · molette ou pince pour zoomer · double-clic pour revenir</div>
@@ -2503,7 +2513,7 @@ $("ringView").addEventListener("click", () => { if (ring.cam) { ring.cam = null;
    Les mêmes 7 réponses que tes boutons de jeu, calculées exactement comme en match.
    La scène rejoue tout l'échange autour de la vraie table : son coup, sa balle (trait blanc), ton contact au ralenti,
    ta balle (trait orange) jusqu'à lui. Glisser pour tourner, molette ou pincer pour zoomer. */
-const lab = { cells: [], i: -1, best: -1, open: false, paused: false, scrub: false, last: 0 };
+const lab = { cells: [], i: -1, best: -1, open: false, paused: false, scrub: false, last: 0, speed: 1 };
 /* ===== « Tapeur » : à quel point ta balle met l'adversaire en difficulté =====
    Le temps qu'il a pour réagir (de ton contact jusqu'au moment où ta balle passe à 30 cm derrière sa ligne de fond),
    la vitesse, la rotation qu'il reçoit après le rebond, la profondeur et la marge au-dessus du filet.
@@ -2605,14 +2615,14 @@ function swingMake(ballP, n, V, faceA, S, restP, restQ, tc, amp) {
   const rho = Math.max(0.35, Math.min(0.65, 0.3 + 0.04 * sp)), O = C.clone().addScaledVector(k, rho);
   const m = new THREE.Vector3().crossVectors(k.clone().negate(), t).normalize();
   const sb = Math.max(0.12, Math.min(0.6, 0.1 + 0.045 * sp)) * (amp || 1), sf = sb * 0.85;
-  return { C, O, k, m, t, rho, sb, sf, Ta: 2 * sb / sp, Td: 2 * sf / sp, sp, q0: faceQuat(n, faceA), restP, restQ, tc, n: v3n(n), V: V.slice() };
+  return { C, O, k, m, t, rho, sb, sf, Ta: 2 * sb / sp, Td: 2 * sf / sp, sp, q0: faceQuat(n, faceA), faceA, restP, restQ, tc, n: v3n(n), V: V.slice() };
 }
 /* la raquette à l'abscisse s (m) le long de son chemin : s < 0 avant le contact, 0 au contact */
 function swingPose(w, s, pos, q) {
   const ph = s / w.rho;
   _sq.setFromAxisAngle(w.m, ph);
   pos.copy(w.C).sub(w.O).applyQuaternion(_sq).add(w.O);
-  q.setFromAxisAngle(w.m, ph * 0.5).multiply(w.q0);
+  q.setFromAxisAngle(w.m, ph * 0.2).multiply(w.q0);
 }
 /* abscisse au temps t (s, 0 = contact) : accélère depuis l'armé, passe au contact à la vitesse exacte, freine */
 function swingS(w, t) {
@@ -2629,6 +2639,18 @@ function swingAt(w, tau, rk) {
   if (t > w.Td) { swingPose(w, w.sf, _sp1, _sq1); const u = sm((t - w.Td) / 0.5); rk.position.copy(_sp1).lerp(w.restP, u); rk.quaternion.copy(_sq1).slerp(w.restQ, u); return; }
   swingPose(w, swingS(w, t), rk.position, rk.quaternion);
 }
+/* La raquette à l'instant affiché : son angle et sa vitesse (elle accélère jusqu'au contact, puis freine) */
+const _sn = new THREE.Vector3();
+function swingLive(w, rk, tau) {
+  const t = tau - w.tc;
+  if (t < -w.Ta - 0.06 || t > w.Td) return null;
+  const v = t > -w.Ta && t < 0 ? 2 * w.sb * ((t + w.Ta) / w.Ta) / w.Ta : t >= 0 ? 2 * w.sf * (1 - t / w.Td) / w.Td : 0;
+  _sn.set(0, 0, w.faceA ? 1 : -1).applyQuaternion(rk.quaternion);
+  const fa = Math.round(Math.asin(Math.max(-1, Math.min(1, _sn.y))) / DEG);
+  const ms = Math.round(Math.abs(t) * 1000);
+  return { face: Math.abs(fa) < 3 ? "verticale" : `${fa > 0 ? "ouverte" : "fermée"} ${Math.abs(fa)}°`, v: v.toFixed(1).replace(".", ","),
+    when: ms <= 1 ? "contact !" : t < 0 ? `contact dans ${ms} ms` : `contact il y a ${ms} ms` };
+}
 /* Les chiffres du geste, vus de chez toi */
 function swingNums(w) {
   const n = w.n, t = w.t;
@@ -2638,7 +2660,9 @@ function swingNums(w) {
   return {
     face: Math.abs(face) < 3 ? "verticale" : `${face > 0 ? "ouverte" : "fermée"} ${Math.abs(face)}°`,
     path: `${Math.abs(up) < 3 ? "à plat" : up > 0 ? `monte ${up}°` : `descend ${-up}°`}${Math.abs(side) >= 6 && Math.abs(side) <= 174 ? `, ${Math.abs(side)}° vers ta ${side > 0 ? "droite" : "gauche"}` : ""}`,
-    sp: w.sp.toFixed(1).replace(".", ","), len: Math.round((w.sb + w.sf) * 100)
+    sp: w.sp.toFixed(1).replace(".", ","), len: Math.round((w.sb + w.sf) * 100), up: Math.asin(Math.max(-1, Math.min(1, t.y))) / DEG,
+    // l'angle entre le trajet et la face : petit = la raquette frotte, grand = elle pousse
+    att: Math.round(Math.asin(Math.min(1, Math.abs(t.x * n[0] + t.y * n[1] + t.z * n[2]))) / DEG)
   };
 }
 function l3Init() {
@@ -2679,8 +2703,10 @@ function l3Init() {
   const vRef = new THREE.Line(new THREE.BufferGeometry(), refM); vRef.renderOrder = 9; sc.add(vRef);
   const arc = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xf2c94c, depthTest: false, transparent: true })); arc.renderOrder = 9; sc.add(arc);
   const lbA = l3Label(sc), lbP = l3Label(sc);
+  const hRef = new THREE.Line(new THREE.BufferGeometry(), refM.clone()); hRef.renderOrder = 9; sc.add(hRef);
+  const arc2 = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xf3f6fa, depthTest: false, transparent: true })); arc2.renderOrder = 9; sc.add(arc2);
   const cam = new THREE.PerspectiveCamera(48, 1, 0.01, 40);
-  Object.assign(L3, { ok: true, r, sc, cam, him, me, hisRk, myRk, bm, shd, ringG, ringM, cones, ghosts, vRef, arc, lbA, lbP, RR, pathTube: null, inTube: null, outTube: null, marks: [],
+  Object.assign(L3, { ok: true, r, sc, cam, him, me, hisRk, myRk, bm, shd, ringG, ringM, cones, ghosts, vRef, arc, hRef, arc2, lbA, lbP, RR, pathTube: null, inTube: null, outTube: null, marks: [],
     view: "tq", orb: { yaw: 52 * DEG, pitch: 26 * DEG, d: 4.6, t: new THREE.Vector3(0, 0.8, -0.1) }, goal: null, free: false, spin: 0, q: new THREE.Quaternion() });
   l3Ctl(cv);
   return true;
@@ -2769,8 +2795,16 @@ function l3SwingVis() {
   const N = swingNums(w);
   l3Text(L3.lbA, `raquette ${N.face}`, "#f2c94c");
   L3.lbA.position.copy(C).addScaledVector(vr, 0.21);
-  l3Text(L3.lbP, `trajet : ${N.path} · ${N.sp} m/s`, "#f3f6fa");
-  L3.lbP.position.copy(C).addScaledVector(vr, -0.2);
+  // l'inclinaison du trajet : l'horizontale (pointillés) et l'arc jusqu'à la direction de la raquette au contact
+  const tt = w.t.clone(), hz = new THREE.Vector3(tt.x, 0, tt.z);
+  if (hz.lengthSq() < 1e-4) hz.set(0, 0, -1); hz.normalize();
+  L3.hRef.geometry.dispose(); L3.hRef.geometry = new THREE.BufferGeometry().setFromPoints([C.clone().addScaledVector(hz, -0.05), C.clone().addScaledVector(hz, 0.3)]); L3.hRef.computeLineDistances();
+  const a2 = hz.angleTo(tt), ax2 = new THREE.Vector3().crossVectors(hz, tt), ap2 = [];
+  if (ax2.lengthSq() < 1e-6) ax2.copy(m); ax2.normalize();
+  for (let i = 0; i <= 16; i++) ap2.push(C.clone().addScaledVector(hz.clone().applyAxisAngle(ax2, a2 * i / 16), 0.24));
+  L3.arc2.geometry.dispose(); L3.arc2.geometry = new THREE.BufferGeometry().setFromPoints(ap2);
+  l3Text(L3.lbP, `trajet ${N.path} · ${N.sp} m/s`, "#f3f6fa");
+  L3.lbP.position.copy(C).addScaledVector(vr, -0.22);
   // profil exact du geste, du côté opposé à ton corps
   const d = m.clone(); if (d.dot(C.clone().sub(L3.meSh)) < 0) d.negate();
   // cadrage : tout le geste, de l'armé à la fin
@@ -2816,7 +2850,7 @@ function l3Render(dtReal) {
   l3Size();
   // le temps du film
   if (!lab.paused && !lab.scrub) {
-    L3.tau += dtReal * l3Speed(L3.tau);
+    L3.tau += dtReal * l3Speed(L3.tau) * lab.speed;
     if (L3.tau > L3.t1) L3.tau = L3.t0;
   }
   const tau = L3.tau, pre = tau < L3.tMe;
@@ -2832,7 +2866,7 @@ function l3Render(dtReal) {
   const wn = Math.hypot(s.w[0], s.w[1], s.w[2]), mag = wn / PHYS.TAU, om = visOm(mag);
   if (wn > 1e-3) {
     _l3a.set(s.w[0] / wn, s.w[1] / wn, s.w[2] / wn);
-    if (!lab.paused) { L3.q.setFromAxisAngle(_l3a, om * dtReal); L3.bm.quaternion.premultiply(L3.q); L3.spin += om * dtReal; }
+    if (!lab.paused) { const a = om * dtReal * Math.sqrt(lab.speed); L3.q.setFromAxisAngle(_l3a, a); L3.bm.quaternion.premultiply(L3.q); L3.spin += a; }
     L3.ringG.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _l3a);
   }
   L3.ringG.visible = mag >= 6; L3.ringG.position.copy(L3.bm.position);
@@ -2866,13 +2900,13 @@ function l3Render(dtReal) {
   L3.me.arm.visible = !close;
   // de près : positions successives, verticale, angle et chiffres du geste
   L3.ghosts.forEach(g => { g.visible = close; });
-  L3.vRef.visible = L3.arc.visible = L3.lbA.visible = L3.lbP.visible = close;
+  L3.vRef.visible = L3.arc.visible = L3.hRef.visible = L3.arc2.visible = L3.lbA.visible = L3.lbP.visible = close;
   for (const lb of [L3.lbA, L3.lbP]) { const sz = dC * 0.62; lb.scale.set(sz, sz * 96 / 1024, 1); lb.center.set(0.5, 0.5); }
   L3.r.render(L3.sc, L3.cam);
   // ce qui se passe, en une ligne
   const ph = tau < 0 ? "Son coup" : pre ? "Sa balle arrive" : near ? "Ton contact · ralenti" : "Ta balle part";
-  const N = near ? swingNums(L3.my) : null;
-  const hud = N ? `Contact · raquette ${N.face} · trajet ${N.path} · ${N.sp} m/s` : `${ph} · ${spinShort(s)} · ${kmh(s)} km/h`;
+  const me = swingLive(L3.my, L3.myRk, tau), him = L3.hisW ? swingLive(L3.hisW, L3.hisRk, tau) : null;
+  const hud = me ? `Ta raquette · ${me.face} · ${me.v} m/s · ${me.when}` : him ? `Sa raquette · ${him.face} · ${him.v} m/s · ${him.when}` : `${ph} · ${spinShort(s)} · ${kmh(s)} km/h`;
   if (hud !== L3.hud) { $("labHud").textContent = hud; L3.hud = hud; }
   if (!lab.scrub) $("labTime").value = String(Math.round((tau - L3.t0) / (L3.t1 - L3.t0) * 1000));
 }
@@ -2916,7 +2950,7 @@ function labPick(i) {
   const M = { kind: "me", n: c.sh.n, V: c.sh.V };
   $("labTitle").innerHTML = `${esc(RX_L[c.k])} → <b style="color:${c.R.c}">${esc(c.R.t)}</b>`;
   const N = swingNums(swingMake(st.mySIn.p, v3n(c.sh.n), c.sh.V, true, new THREE.Vector3(0, 1.4, L + 0.6), new THREE.Vector3(), new THREE.Quaternion(), 0, 1));
-  $("labLines").innerHTML = `<div class="lab-gest">${esc(strokeDesc(M))}</div><div><span>Trajet</span> ${esc(N.path)} · <b>${N.sp} m/s</b> au contact · élan ${N.len} cm</div><div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
+  $("labLines").innerHTML = `<div class="lab-gest">${esc(strokeDesc(M))}</div><div><span>Trajet</span> ${esc(N.path)} · <b>${N.sp} m/s</b> au contact · élan ${N.len} cm</div><div><span>Attaque</span> la raquette arrive à <b>${N.att}°</b> de sa face · ${N.att < 35 ? "elle frotte surtout" : N.att > 55 ? "elle pousse surtout" : "elle frotte et pousse"}</div><div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
     + `<div><span>Latéral</span> ${latTxt(c.lat0)} → <b>${latTxt(c.lat1)}</b> tr/s · ${esc(latWord(c.lat0, c.lat1))}</div>`
     + (c.tape ? `<div><span>Pour lui</span> ${esc(tapeTxt(c.tape))}${i === lab.best ? " · <b style=\"color:#ffab66\">★ le plus dur pour lui</b>" : ""}</div>` : "");
   if (L3.ok) { l3Load(); L3.tau = L3.t0; }
@@ -2929,6 +2963,15 @@ function tickLab(now) {
 }
 const labPause = p => { lab.paused = p; $("labPlay").textContent = p ? "▶" : "❚❚"; $("labPlay").setAttribute("aria-label", p ? "Lecture" : "Pause"); };
 $("labPlay").addEventListener("click", () => labPause(!lab.paused));
+/* Jauge de vitesse : de ×1 à 50 fois plus lent (échelle logarithmique) */
+$("labSpeed").addEventListener("input", () => {
+  const v = +$("labSpeed").value; lab.speed = Math.pow(50, v / 100 - 1);
+  $("labSpv").textContent = lab.speed > 0.97 ? "×1" : `×1/${Math.round(1 / lab.speed)}`;
+});
+/* Image par image : tout petits pas autour de ton contact */
+const labStep = d => { if (!L3.ok || !L3.tr) return; labPause(true); const fine = Math.abs(L3.tau - L3.tMe) < 0.08 || Math.abs(L3.tau) < 0.06; L3.tau = Math.max(L3.t0, Math.min(L3.t1, L3.tau + d * (fine ? 0.002 : 0.012))); };
+$("labBack").addEventListener("click", () => labStep(-1));
+$("labFwd").addEventListener("click", () => labStep(1));
 $("labTime").addEventListener("input", () => { lab.scrub = true; labPause(true); if (L3.ok) L3.tau = L3.t0 + +$("labTime").value / 1000 * (L3.t1 - L3.t0); });
 $("labTime").addEventListener("change", () => { lab.scrub = false; });
 const labZoom = f => { if (!L3.ok) return; if (L3.goal) L3.goal.d = Math.max(0.12, Math.min(9, L3.goal.d * f)); else L3.orb.d = Math.max(0.12, Math.min(9, L3.orb.d * f)); };
@@ -3178,6 +3221,12 @@ $("pauseBtn").addEventListener("click", () => {
 $("resumeBtn").addEventListener("click", () => { $("pause").hidden = true; paused = false; });
 $("quitBtn").addEventListener("click", () => { $("pause").hidden = true; openMenu(); });
 window.addEventListener("keydown", e => {
+  // Labo : flèches = image par image, espace = pause
+  if (lab.open) {
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); labStep(e.key === "ArrowLeft" ? -1 : 1); }
+    else if (e.key === " ") { e.preventDefault(); labPause(!lab.paused); }
+    return;
+  }
   if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowDown") { setComp(e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0); return; }
   const n = parseInt(e.key, 10);
   if (!(n >= 1)) return;
