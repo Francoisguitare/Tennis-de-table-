@@ -358,6 +358,40 @@ button { font: inherit; color: inherit; }
 .card .best { color: var(--accent); font-size: 11.5px; font-weight: 700; }
 .card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
 .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+/* Menu : ce que tu travailles (grandes tuiles), puis adversaire et vitesse en pastilles */
+.themes .card:first-child { grid-column: 1 / -1; }
+.themes .card { padding: 9px 12px; }
+.card .stat { color: var(--accent); font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  appearance: none; border: 2px solid var(--line); background: var(--tile); border-radius: 99px; padding: 6px 12px; min-height: 40px;
+  font-weight: 700; font-size: 14px; cursor: pointer; flex: 1 1 auto;
+}
+.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
+.opp-desc { font-size: 12.5px; color: var(--muted); margin-top: -6px !important; }
+.more { border-top: 1px solid var(--line); padding-top: 8px; }
+.more summary { cursor: pointer; font-weight: 700; font-size: 13px; color: var(--muted); min-height: 32px; }
+.more[open] { display: flex; flex-direction: column; gap: 8px; }
+.opp-name .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 3px 0 5px; border: 1px solid rgba(255, 255, 255, .6); vertical-align: -1px; }
+/* Après une erreur : pourquoi, et quoi faire */
+.why {
+  position: fixed; z-index: 5; top: calc(env(safe-area-inset-top, 0px) + 62px); left: 50%; transform: translateX(-50%);
+  width: min(360px, calc(100% - 20px)); background: rgba(9, 18, 31, .96); border: 2px solid var(--bad); border-radius: 18px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.why[hidden] { display: none; }
+.why-t { font: 800 26px/1 var(--f-display); text-transform: uppercase; color: var(--bad); }
+.why-ball { font-weight: 700; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+.why p { margin: 0; font-size: 14px; line-height: 1.4; }
+.why-fix { border-radius: 10px; background: rgba(82, 200, 138, .14); border: 1px solid var(--good); padding: 7px 10px; font-size: 14px; line-height: 1.35; }
+.why-fix b { color: var(--good); }
+.why-rule { color: #f2c94c; font-weight: 700; }
+.why .btn { min-height: 44px; padding: 8px 12px; font-size: 15px; }
+/* Aide-mémoire */
+.memo-t { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: start; font-size: 14px; line-height: 1.35; }
+.memo-t i { font-style: normal; font-weight: 700; border-radius: 8px; padding: 3px 8px; color: #0f1c2e; white-space: nowrap; text-align: center; }
+.memo-t b { display: block; }
+.memo-t small { color: var(--muted); }
 .seg .card b { font-size: 16px; }
 .switch {
   display: flex; gap: 12px; align-items: center; border: 2px solid var(--line); background: var(--tile);
@@ -437,8 +471,8 @@ button { font: inherit; color: inherit; }
     <div class="prompt" id="prompt">Choisis ton adversaire</div>
     <div class="lec-line" id="lecLine" hidden></div>
     <div class="lat-row" id="latRow" hidden role="group" aria-label="Effet latéral : où la balle part sur ta raquette">
-      <span>Latéral : elle part</span>
-      <button type="button" data-c="-1">◀ à gauche</button><button type="button" data-c="0">droit</button><button type="button" data-c="1">à droite ▶</button>
+      <span>Elle part</span>
+      <button type="button" data-c="-1">◀ à gauche</button><button type="button" data-c="0">tout droit</button><button type="button" data-c="1">à droite ▶</button>
     </div>
     <div class="shots" id="shots"></div>
   </div>
@@ -449,26 +483,53 @@ button { font: inherit; color: inherit; }
   <div class="sheet">
     <span class="eyebrow">Tennis de table · lecture du jeu</span>
     <h1 class="title">Face au <span>picot</span></h1>
-    <p>Regarde son geste. La balle s’arrête et tourne devant toi avec son anneau et ses tours/s. Choisis ta réponse. On répète.</p>
-    <h2 class="h">Ton adversaire</h2>
-    <div class="cards" id="oppCards"></div>
+    <h2 class="h">Je travaille</h2>
+    <div class="cards themes" id="thCards"></div>
+    <h2 class="h">Contre</h2>
+    <div class="chips" id="oppCards"></div>
+    <p class="opp-desc" id="oppDesc"></p>
     <h2 class="h">Vitesse</h2>
-    <div class="seg" id="lvlCards"></div>
-    <h2 class="h">Il joue sur</h2>
-    <div class="seg" id="placeCards"></div>
-    <h2 class="h">Effets latéraux · difficile</h2>
-    <div class="seg" id="latCards"></div>
-    <label class="switch" for="aide">
-      <input type="checkbox" id="aide" checked>
-      <span><b>Aide visuelle</b><small>Balle bicolore pour voir la rotation, nom de la face au contact, trace de la balle</small></span>
-    </label>
-    <label class="switch" for="son">
-      <input type="checkbox" id="son" checked>
-      <span><b>Son</b><small>Chaque revêtement a son bruit : écoute-le</small></span>
-    </label>
-    <button class="btn primary" id="playBtn">Jouer le match</button>
-    <a class="link" id="quizLink" href="quiz.html" target="_blank" rel="noopener">Quiz et fiches « Lire le picot »</a>
+    <div class="chips" id="lvlCards"></div>
+    <button class="btn primary" id="playBtn">Commencer</button>
+    <button class="btn" id="memoBtn">Aide-mémoire : quoi répondre à quoi</button>
+    <details class="more">
+      <summary>Réglages</summary>
+      <label class="switch" for="aide">
+        <input type="checkbox" id="aide" checked>
+        <span><b>Aide visuelle</b><small>Balle bicolore pour voir la rotation, nom de la face au contact, trace de la balle</small></span>
+      </label>
+      <label class="switch" for="son">
+        <input type="checkbox" id="son" checked>
+        <span><b>Son</b><small>Chaque revêtement a son bruit : écoute-le</small></span>
+      </label>
+      <a class="link" id="quizLink" href="quiz.html" target="_blank" rel="noopener">Quiz et fiches « Lire le picot »</a>
+    </details>
     <p class="sign">par <b>François Daoud</b></p>
+  </div>
+</div>
+
+<!-- Aide-mémoire : quoi répondre à quoi -->
+<div class="overlay center" id="memo" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="memoT">
+    <div class="ana-top"><span class="eyebrow" id="memoT">Aide-mémoire</span><button type="button" id="memoClose" aria-label="Fermer">✕</button></div>
+    <h2 class="h">1 · Lis l’anneau autour de la balle</h2>
+    <div class="memo-t">
+      <i style="background:#8ab8ff">bleu</i><span>elle est <b style="display:inline">coupée</b> : elle plonge sur ta raquette</span>
+      <i style="background:#ffab66">orange</i><span>elle est <b style="display:inline">liftée</b> : elle remonte sur ta raquette</span>
+      <i style="background:#f2c94c">jaune</i><span>elle tourne <b style="display:inline">sur le côté</b> : devant la balle, les flèches vont vers la gauche → elle part à droite (et l’inverse)</span>
+      <i style="background:#e3e9f0">pointillés</i><span><b style="display:inline">sans effet</b> : elle repart tout droit</span>
+    </div>
+    <p style="font-size:13px;color:var(--muted)">Le chiffre = tours par seconde. Plus il est gros, plus tu dois corriger.</p>
+    <h2 class="h">2 · Ta réponse</h2>
+    <div class="memo-t">
+      <i style="background:#8ab8ff">Coupée</i><span><b>Ouvre : Top ouvert, ou Coupe</b><small>Raquette fermée = filet. Top puissant seulement si elle est peu coupée.</small></span>
+      <i style="background:#e3e9f0">Sans effet</i><span><b>Attaque : Top puissant ou Top frappé</b><small>Rien ne la dévie : c’est la balle à tuer. Top ouvert ou Coupe = dehors.</small></span>
+      <i style="background:#ffab66">Liftée</i><span><b>Ferme : Bloc. Top puissant si le lift est moyen</b><small>Raquette ouverte = dehors. Au-delà de 40 tr/s environ, bloque.</small></span>
+      <i style="background:#f2c94c">Latérale</i><span><b>Frotte du côté opposé à celui où elle part</b><small>Elle part à droite → ◀ Latéral gauche. Séance « Les latéraux » : dis d’abord de quel côté elle part, tes coups visent alors de l’autre côté.</small></span>
+    </div>
+    <h2 class="h">3 · Contre cet adversaire</h2>
+    <p class="gold" id="memoGold"></p>
+    <button class="btn primary" id="memoOk">Compris</button>
   </div>
 </div>
 
@@ -502,6 +563,16 @@ button { font: inherit; color: inherit; }
     <button type="button" class="btn" id="atlBest">Montre-moi le bon angle</button>
     <p class="atl-rule">Plus elle est liftée, plus tu fermes. Trop fermé : filet. Pas assez : dehors.</p>
   </div>
+</div>
+
+<!-- Après une erreur : pourquoi, et quoi faire -->
+<div class="why" id="why" hidden role="dialog" aria-labelledby="whyT">
+  <div class="why-t" id="whyT"></div>
+  <div class="why-ball" id="whyBall"></div>
+  <p id="whyTxt"></p>
+  <div class="why-fix" id="whyFix"></div>
+  <p class="why-rule" id="whyRule"></p>
+  <div class="row"><button type="button" class="btn" id="whyLab">Voir en 3D</button><button type="button" class="btn primary" id="whyGo">Continuer</button></div>
 </div>
 
 <!-- Labo : toutes tes réponses sur cette balle -->
@@ -559,8 +630,9 @@ button { font: inherit; color: inherit; }
     <h2 class="verdict">Pause</h2>
     <div class="row">
       <button class="btn primary" id="resumeBtn">Reprendre</button>
-      <button class="btn" id="quitBtn">Quitter le match</button>
+      <button class="btn" id="quitBtn">Quitter</button>
     </div>
+    <button class="btn" id="memoBtn2">Aide-mémoire : quoi répondre à quoi</button>
   </div>
 </div>
 
@@ -948,6 +1020,27 @@ if (![0.25, 0.5, 1].includes(store.animSp)) store.animSp = 0.5;
 if (typeof store.nums !== "boolean") store.nums = true;
 if (typeof store.lat !== "boolean") store.lat = false;
 if (typeof store.latAll !== "boolean") store.latAll = false;
+/* Ce que tu travailles : un seul choix au menu, qui règle où il joue, les latéraux et la famille d'effets qu'il t'envoie */
+const TH = {
+  tout:   { l: "Tout mélangé", s: "Tous les effets, coup droit et revers", place: "tout", lat: true, latAll: false, fam: null, stat: "all" },
+  lat:    { l: "Les latéraux", s: "Chaque balle tourne sur le côté", place: "tout", lat: true, latAll: true, fam: null, stat: "lat" },
+  revers: { l: "Mon revers", s: "Tout arrive sur ton revers", place: "revers", lat: false, latAll: false, fam: null, stat: "bh" },
+  lift:   { l: "Contre le lift", s: "Il tope : bloc ou top puissant", place: "tout", lat: false, latAll: false, fam: "lift", stat: "lift" },
+  coupe:  { l: "Contre le coupé", s: "Il coupe : ouvre en top", place: "tout", lat: false, latAll: false, fam: "coupe", stat: "coupe" },
+};
+if (!TH[store.theme]) store.theme = store.latAll ? "lat" : store.place === "revers" ? "revers" : "tout";
+function applyTheme() { const t = TH[store.theme]; store.place = t.place; store.lat = t.lat; store.latAll = t.latAll; }
+applyTheme();
+/* Tes résultats par famille de balles, d'une séance à l'autre : [réussies, jouées] */
+if (!store.stats || typeof store.stats !== "object") store.stats = {};
+if (!store.seen || typeof store.seen !== "object") store.seen = {};
+function statAdd(inc, sIn, ok) {
+  const keys = ["all", inc.wMe >= 6 ? "lift" : inc.wMe <= -6 ? "coupe" : "flot"];
+  if (latDir(sIn)) keys.push("lat");
+  if (inc.bh) keys.push("bh");
+  for (const k of keys) { const v = store.stats[k] || [0, 0]; store.stats[k] = [v[0] + (ok ? 1 : 0), v[1] + 1]; }
+  save();
+}
 if (![0.1, 0.25, 0.5, 1].includes(store.anaSp)) store.anaSp = 0.25;
 if (!["tout", "revers", "cd"].includes(store.place)) store.place = "tout";
 if (typeof store.sound !== "boolean") store.sound = true;
@@ -1266,7 +1359,8 @@ function worksList(sIn) {
 /* ================= Interface : coups ================= */
 /* Ta lecture du latéral : où la balle va partir sur ta raquette */
 function syncComp() {
-  const row = $("latRow"), on = store.lat && st.phase === "play" && !reflex();
+  // Séance « Les latéraux » : tu dis d'abord de quel côté elle part, c'est la lecture qu'on entraîne
+  const row = $("latRow"), on = store.lat && st.phase === "play" && (!reflex() || store.latAll);
   row.hidden = !on;
   row.querySelectorAll("button").forEach(b => {
     b.setAttribute("aria-pressed", String(+b.dataset.c === (st.comp || 0)));
@@ -1318,7 +1412,8 @@ function updateHUD() {
   $("sMe").textContent = st.score[0]; $("sOpp").textContent = st.score[1];
   $("srvMe").classList.toggle("on", st.server === "me");
   $("srvOpp").classList.toggle("on", st.server === "opp");
-  $("oppName").innerHTML = `<b>${esc(P.name)}</b>${esc(RUBL[P.rub])}`;
+  const dot = c => `<span class="dot" style="background:${c ? "#c62828" : "#141414"}"></span>`;
+  $("oppName").innerHTML = `<b>${esc(P.name)}</b>${esc(RUBL[P.rub])}${P.rub !== "inv" && st.phase !== "menu" ? ` ${dot(picotRed)}${picotRed ? "rouge" : "noir"}` : ""}`;
 }
 
 /* ================= Déroulement d'un point ================= */
@@ -1359,8 +1454,10 @@ function myServe(k) {
   });
 }
 function oppServe() {
-  const picot = Math.random() < 0.25;
-  const rps = picot ? pickW({ "0": .6, "-15": .4 }) : pickW({ "-55": .45, "-30": .15, "0": .25, "25": .15 });
+  const fam = TH[store.theme].fam;
+  const picot = !fam && Math.random() < 0.25;
+  const rps = fam === "lift" ? pickW({ "25": .5, "35": .5 }) : fam === "coupe" ? pickW({ "-55": .6, "-30": .4 })
+    : picot ? pickW({ "0": .6, "-15": .4 }) : pickW({ "-55": .45, "-30": .15, "0": .25, "25": .15 });
   const r = +rps, long = r > 0 || Math.random() < 0.2;
   const p0 = [store.place === "revers" ? rnd(-0.45, -0.2) : store.place === "cd" ? rnd(0.2, 0.45) : rnd(-0.25, 0.25), long ? 0.95 : 0.97, -(L + 0.13)];
   const lat = !picot && store.lat && Math.random() < (store.latAll ? 1 : 0.6) ? (Math.random() < 0.5 ? -1 : 1) * rnd(25, 45) : 0;
@@ -1394,7 +1491,7 @@ function startDecision(tr, inc) {
   inc.bz = evB ? evB.z : null; inc.h = sIn.p[1] - TY;
   inc.works = null;
   inc.wLat = latRps(sIn); inc.latDir = latDir(sIn);
-  inc.tr = tr; inc.im = im; inc.sIn = sIn;
+  inc.tr = tr; inc.im = im; inc.sIn = sIn; inc.strokeHis = oppStroke;
   inc.bh = sIn.p[0] < -0.06;          // balle sur ta gauche : tu joues en revers
   st.comp = 0; syncComp();
   st.inc = inc;
@@ -1410,7 +1507,9 @@ function choose(k) {
   st.choice = k;
   const b = $("shot-" + k); if (b) b.classList.add("chosen");
   setShotsEnabled(false); syncComp();
-  st.myShot = computeMyShot(k, st.mySIn, true, reflex() ? rxComp(k, st.mySIn) : store.lat ? st.comp : null);
+  // Séance « Les latéraux » : tes coups classiques visent selon TA lecture du côté ; ailleurs ils visent juste tout seuls
+  const lu = k === "latg" || k === "latd" || !store.latAll ? rxComp(k, st.mySIn) : (st.comp || 0);
+  st.myShot = computeMyShot(k, st.mySIn, true, reflex() ? lu : store.lat ? st.comp : null);
   hideRing();
   meStroke = makeStroke(st.myTc, st.mySIn.p, st.myShot.n, st.myShot.V, !st.inc.bh, 0.45);
   const rb = $("replayBtn"); if (rb) rb.disabled = true;
@@ -1422,7 +1521,7 @@ function myContact() {
   const inc = st.inc;
   if (!st.choice) {
     if (LV[store.lvl].freeze) { frozen = true; prompt(st.inc && st.inc.bh ? "Choisis ton coup · revers" : "Choisis ton coup", "hot"); if (guided()) { anim.tt = 0; showLecture(true); revealShots(); }
-      if (reflex()) { showRing(st.mySIn); prompt(st.inc && st.inc.bh ? "Revers · comment tu réponds ?" : "Comment tu réponds ?", "hot"); }
+      if (reflex()) { showRing(st.mySIn); prompt(store.latAll ? "Elle part de quel côté ? Puis ton coup" : st.inc && st.inc.bh ? "Revers · comment tu réponds ?" : "Comment tu réponds ?", "hot"); }
       return; }
     st.awaiting = false; setShotsEnabled(false);
     st.log.push({ w: inc.wMe, ok: false, type: "tard" });
@@ -1433,6 +1532,7 @@ function myContact() {
   st.awaiting = false;
   const sh = st.myShot, ok = sh.res === "in" || sh.res === "haute";
   st.log.push({ w: inc.wMe, ok: sh.res === "in", type: sh.res, choice: sh.k });
+  statAdd(inc, st.mySIn, sh.res === "in");
   launch(sh.tr, "inv", Math.hypot(sh.V[0], sh.V[1], sh.V[2]) / 6);
   histPush({ kind: "me", title: `Ta raquette · ${(reflex() ? RX_L[sh.k] : CH[sh.k].l).replace(/[◀▶] ?| ?[◀▶]/g, "")}`, before: stLite(st.mySIn), after: stLite(sh.s), n: sh.n, V: sh.V, face: inc.bh ? "#22262d" : "#e04848" });
   if (ok) {
@@ -1458,7 +1558,10 @@ function rxFeedback(sh) {
   const mine = inc.rxTape && inc.rxTape[sh.k], top = inc.rxTape && inc.rxTape[best];
   const softer = good && best && best !== sh.k && top && (!mine || top.score - mine.score >= 8);
   const tail = good ? (softer ? ` · plus offensif : ${nm(best)} (${top.kmh} km/h)` : st.rxRun >= 3 ? ` · série de ${st.rxRun}` : "") : best ? ` · il fallait : ${nm(best)}` : " · rien ne passait proprement";
-  prompt(`${R}${tail}`, good ? "good" : "bad");
+  // Séance « Les latéraux » : ta balle passe, mais tu avais mal lu le côté : on te le dit
+  const dirL = latDir(st.mySIn), malLu = store.latAll && good && sh.k !== "latg" && sh.k !== "latd" && sh.comp != null && sh.comp !== dirL;
+  if (malLu) prompt(`Ça passe, mais elle partait ${dirL > 0 ? "à droite ▶" : dirL < 0 ? "◀ à gauche" : "tout droit"}`, "hot");
+  else prompt(`${R}${tail}`, good ? "good" : "bad");
   if ((!good || softer) && best) { const b = $("shot-" + best); if (b) b.classList.add("rxbest"); }
 }
 function missProb() {
@@ -1480,19 +1583,34 @@ const placeX = () => store.place === "revers" ? rnd(-0.62, -0.22) : store.place 
 /* « Que du latéral » : chaque geste frotte la balle sur le côté, plus fort */
 const latPush = () => store.lat && Math.random() < (store.latAll ? 1 : 0.6) ? (Math.random() < 0.5 ? -1 : 1) * (store.latAll ? rnd(3.5, 5) : rnd(2.5, 4.5)) : 0;
 function oppRespond(sh) {
-  const wHis = PHYS.topRps(sh), top = wHis > 8;
+  const wHis = PHYS.topRps(sh), top = wHis > 8, fam = TH[store.theme].fam;
+  // les gestes possibles avec une face, dans l'ordre de ses habitudes
+  const tryFace = (usePicot, first) => {
+    const rubKey = usePicot ? P.rub : "inv", G = usePicot ? GEST_PICOT : GEST_BS, out = [];
+    const order = (first ? [first] : []).concat(G[top ? "top" : "low"].filter(g => g !== first));
+    for (const gest of order) {
+      const og = OG[gest], c = latPush(), st0 = Object.assign({}, usePicot ? og.picot : og.bs, { c });
+      const tgt = { x: placeX(), z: rnd(og.depth[0], og.depth[1]) };
+      const sol = PHYS.solveAuto(sh, 1, st0, RUBP[rubKey], tgt);
+      if (sol.ok) { out.push({ face: usePicot ? "picot" : "bs", rubKey, gest, wHis, sol, lat: c !== 0, brush: -c }); if (!fam) break; }
+    }
+    return out;
+  };
   const usePicot = Math.random() < P.picot;
-  const rubKey = usePicot ? P.rub : "inv";
   const first = pickW(usePicot ? (top ? P.pTop : P.pLow) : (top ? P.bTop : P.bLow));
-  const G = usePicot ? GEST_PICOT : GEST_BS;
-  const order = [first].concat(G[top ? "top" : "low"].filter(g => g !== first));
-  for (const gest of order) {
-    const og = OG[gest], c = latPush(), st0 = Object.assign({}, usePicot ? og.picot : og.bs, { c });
-    const tgt = { x: placeX(), z: rnd(og.depth[0], og.depth[1]) };
-    const sol = PHYS.solveAuto(sh, 1, st0, RUBP[rubKey], tgt);
-    if (sol.ok) return { face: usePicot ? "picot" : "bs", rubKey, gest, wHis, sol, lat: c !== 0, brush: -c };
-  }
-  return null;
+  let cands = tryFace(usePicot, first);
+  if (!fam) return cands[0] || null;
+  // Séance « Contre le lift » / « Contre le coupé » : il choisit un geste dont la balle t'arrive avec cet effet
+  if (P.picot > 0 && P.picot < 1) cands = cands.concat(tryFace(!usePicot, null));
+  const bons = cands.filter(r => { const w = arriveSpin(sh, r); return w != null && (fam === "lift" ? w >= 12 : w <= -12); });
+  return bons.length ? bons[Math.floor(Math.random() * bons.length)] : cands[0] || null;
+}
+/* La rotation qu'aura sa balle à ton contact (null si elle ne passe pas) */
+function arriveSpin(sh, r) {
+  const hit = PHYS.hitWith(sh, r.sol.d, r.sol.th, r.sol.st, RUBP[r.rubKey]), tr = PHYS.fly(hit.s, 3);
+  if (classify(tr, 1).res !== "in") return null;
+  const im = PHYS.contactIdx(tr, 1, Z_BACK, 0.13, true, L + 0.1);
+  return im < 0 ? null : PHYS.topRps(PHYS.stateAt(tr, im));
 }
 function planOpp(tr, myShot) {
   const io = PHYS.contactIdx(tr, -1, oppZ(), P.yLow, P.early);
@@ -2251,7 +2369,10 @@ function rxAdvise(inc, sIn) {
   inc.rxTape = {};
   for (const k of inc.rxWorks) { const T = tapeOf(computeMyShot(k, sIn, false, rxComp(k, sIn)).tr); if (T) inc.rxTape[k] = T; }
   const sc = k => inc.rxTape[k] ? inc.rxTape[k].score : -999;
-  inc.rxBest = inc.rxWorks.length ? inc.rxWorks.reduce((a, k) => sc(k) > sc(a) + 2 ? k : a, inc.rxSafe) : null;
+  // sans latéral sur la balle, on ne conseille pas un coup latéral : la réponse à retenir reste un coup « droit »
+  const cand = d ? inc.rxWorks : inc.rxWorks.filter(k => k !== "latg" && k !== "latd");
+  const pool = cand.length ? cand : inc.rxWorks;
+  inc.rxBest = pool.length ? pool.reduce((a, k) => sc(k) > sc(a) + 2 ? k : a, pool.includes(inc.rxSafe) ? inc.rxSafe : pool[0]) : null;
 }
 /* L'anneau-flèche autour de la balle, vu de trois quarts et un peu de dessus (de derrière, l'anneau d'un lift serait vu par la tranche) */
 const RG = { yaw: 32 * DEG, pitch: 18 * DEG, cx: 120, cy: 92, s: 50 };
@@ -2754,7 +2875,8 @@ function l3Load() {
   for (const e of tr.events) if (e.type === "table" && e.i <= im) L3.marks.push(l3Mark(e.x, e.z, 0xdfe7f0));
   for (const e of c.sh.tr.events) if (e.type === "table" && e.i <= L3.outN) L3.marks.push(l3Mark(e.x, e.z, 0xffab66));
   // son geste (la balle qui arrive) et le tien (la réponse choisie)
-  L3.his = oppStroke ? Object.assign({}, oppStroke, { tc: 0 }) : null;
+  const hisS = inc.strokeHis || oppStroke;
+  L3.his = hisS ? Object.assign({}, hisS, { tc: 0 }) : null;
   const hc = L3.his ? L3.his.C : new THREE.Vector3(tr.P[0], tr.P[1], tr.P[2]);
   L3.hisPos = new THREE.Vector3(hc.x + 0.3, 0, Math.min(hc.z - 0.35, -L - 0.25));
   L3.hisRest = new THREE.Vector3(L3.hisPos.x - 0.32, 1.0, L3.hisPos.z + 0.3);
@@ -3043,6 +3165,8 @@ function pointEnd(winner, info) {
     hideRing();
     if (winner === "me") prompt(info.type === "faute" ? "Il fait la faute · point pour toi" : "Point pour toi", "good");
     else if (info.type === "haute") prompt("Il smashe ta balle haute", "bad");
+    // Tu t'es trompé de réponse : on s'arrête pour comprendre, tu continues quand tu veux
+    if (winner === "opp" && st.myShot && st.inc && ["net", "own", "long", "wide", "haute"].includes(st.myShot.res) && showWhy()) return;
     setTimeout(() => { if (st.phase !== "sheet") return; if (isOver()) endMatch(); else newPoint(); }, winner === "me" ? 1100 : 1700);
     return;
   }
@@ -3092,6 +3216,62 @@ function pointEnd(winner, info) {
     if (over) endMatch(); else newPoint();
   });
 }
+/* ===== Comprendre l'erreur : la balle, pourquoi ton coup ne passait pas, la bonne réponse, la règle ===== */
+const RULES = {
+  tcoupe: "À retenir · très coupée → ouvre la raquette : Top ouvert, ou Coupe.",
+  coupe: "À retenir · coupée → ouvre la raquette : Top ouvert, ou Coupe.",
+  lcoupe: "À retenir · peu coupée (moins de 15 tr/s) → tu peux encore attaquer : Top puissant. Sinon Coupe.",
+  flot: "À retenir · sans effet → attaque : Top puissant ou Top frappé.",
+  llift: "À retenir · peu liftée → attaque : Top puissant ou Top frappé.",
+  lift: "À retenir · liftée → ferme la raquette : Bloc, ou Top puissant jusqu’à 40 tr/s environ.",
+  lat: "À retenir · latérale → frotte du côté opposé à celui où elle part.",
+};
+function whyMiss(inc, sh, sIn) {
+  const c = CH[sh.k], nom = RX_L[sh.k].replace(/[◀▶] ?| ?[◀▶]/g, ""), d = Math.round(inc.wMe - sh.assumed), dir = latDir(sIn);
+  const isLat = sh.k === "latg" || sh.k === "latd", badSide = isLat && dir && rxComp(sh.k, sIn) !== dir;
+  // mal lu = tu as indiqué le mauvais côté ET c'est bien ça qui fait sortir la balle (le même coup passait, bien visé)
+  const malLu = !isLat && sh.comp != null && sh.comp !== dir && (sh.res === "wide" || (inc.rxWorks || []).includes(sh.k));
+  if ((dir || malLu) && (sh.res === "wide" || badSide || malLu)) {
+    const cote = c => c > 0 ? "à droite" : c < 0 ? "à gauche" : "tout droit";
+    if (!dir) return `Cette balle n’avait pas de latéral : elle repart tout droit. Tu as visé comme si elle partait ${cote(sh.comp)}.`;
+    return `Son latéral (${Math.round(Math.abs(latRps(sIn)))} tr/s) fait partir la balle vers ta ${dir > 0 ? "droite" : "gauche"} sur ta raquette.`
+      + (badSide ? " En frottant du même côté, tu ajoutes l’écart au lieu de le corriger." : malLu ? ` Tu as répondu « ${cote(sh.comp)} » : ta balle sort sur le côté.` : " Ta balle sort sur le côté.");
+  }
+  if ((sh.res === "net" || sh.res === "own") && d <= -3) return `${nom} est réglé pour une balle ${c.read}. Celle-ci avait ${Math.abs(d)} tr/s de coupé en plus : elle plonge sur ta raquette, filet.`;
+  if ((sh.res === "long" || sh.res === "haute") && d >= 3) return `${nom} est réglé pour une balle ${c.read}. Celle-ci avait ${d} tr/s de lift en plus : elle remonte sur ta raquette${sh.res === "haute" ? ", ta balle part trop haut." : ", dehors."}`;
+  if (sh.res === "haute") return `${nom} passe, mais ta balle monte trop : il la smashe.`;
+  return `Tu avais bien lu l’effet, mais ${nom} ne passait pas sur cette balle (${sh.res === "net" || sh.res === "own" ? "filet" : "dehors"}).`;
+}
+function showWhy() {
+  const inc = st.inc, sh = st.myShot, sIn = st.mySIn;
+  if (!inc || !sh || !sIn) return false;
+  if (!inc.rxWorks) rxAdvise(inc, sIn);
+  const nm = k => RX_L[k].replace(/[◀▶] ?| ?[◀▶]/g, "");
+  $("whyT").textContent = { haute: "Balle haute", net: "Filet", own: "Filet", long: "Dehors", wide: "À côté" }[sh.res] || "Faute";
+  const dir = latDir(sIn);
+  $("whyBall").textContent = `La balle : ${fmtW(inc.wMe)}${dir ? ` · latéral ${Math.round(Math.abs(latRps(sIn)))} tr/s, elle part vers ta ${dir > 0 ? "droite" : "gauche"}` : ""}${inc.bh ? " · sur ton revers" : ""}`;
+  $("whyTxt").textContent = whyMiss(inc, sh, sIn);
+  const best = inc.rxBest, autres = (inc.rxWorks || []).filter(k => k !== best);
+  const lire = store.latAll && sh.comp != null && sh.comp !== dir && sh.k !== "latg" && sh.k !== "latd" ? `Il fallait lire : <b>${dir > 0 ? "à droite ▶" : dir < 0 ? "◀ à gauche" : "tout droit"}</b><br>` : "";
+  const bonCoup = lire && (inc.rxWorks || []).includes(sh.k);
+  $("whyFix").innerHTML = bonCoup ? `${lire}Ton ${esc(nm(sh.k))} passait, avec la bonne lecture.`
+    : best ? `${lire}${lire ? "Et jouer" : "Il fallait"} : <b>${esc(nm(best))}</b> (${esc(RX_S[best])})${autres.length ? `<br>Passait aussi : ${esc(autres.map(nm).join(", "))}` : ""}` : "Rien ne passait proprement sur cette balle.";
+  $("whyRule").textContent = lire && (sh.res === "wide" || bonCoup) ? "À retenir · anneau jaune : devant la balle, les flèches vont vers la gauche → elle part à droite (et l’inverse)." : latDir(sIn) && (sh.res === "wide" || sh.k === "latg" || sh.k === "latd") ? RULES.lat : RULES[inc.eff];
+  $("why").hidden = false;
+  return true;
+}
+function whyGo() {
+  if ($("why").hidden) return;
+  $("why").hidden = true;
+  if (st.phase !== "sheet") return;
+  if (isOver()) endMatch(); else newPoint();
+}
+$("whyGo").addEventListener("click", whyGo);
+$("whyLab").addEventListener("click", openLab);
+function openMemo() { $("memoGold").textContent = PROF[store.prof].gold; $("memo").hidden = false; }
+for (const id of ["memoBtn", "memoBtn2"]) $(id).addEventListener("click", openMemo);
+for (const id of ["memoClose", "memoOk"]) $(id).addEventListener("click", () => { $("memo").hidden = true; });
+
 function isOver() { const [a, b] = st.score; return (a >= 11 || b >= 11) && Math.abs(a - b) >= 2; }
 
 function endMatch() {
@@ -3132,7 +3312,7 @@ function endMatch() {
     <ul class="tips">${tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
     <div class="row">
       <button class="btn primary" id="againBtn">Rejouer</button>
-      <button class="btn" id="menuBtn">Changer d’adversaire</button>
+      <button class="btn" id="menuBtn">Changer de séance</button>
     </div>`;
   $("end").hidden = false;
   $("againBtn").addEventListener("click", () => { $("end").hidden = true; openCheck(); });
@@ -3141,25 +3321,17 @@ function endMatch() {
 
 /* ================= Menus ================= */
 function renderMenu() {
-  $("oppCards").innerHTML = Object.keys(PROF).map(k => {
-    const p = PROF[k], b = store.best[k];
-    return `<button class="card" id="opp-${k}" data-k="${k}" aria-pressed="${store.prof === k}"><b>${esc(p.name)}</b><small>${esc(p.desc)}</small>${b != null ? `<span class="best">Meilleure lecture : ${b} %</span>` : ""}</button>`;
-  }).join("");
-  $("oppCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => { store.prof = c.dataset.k; save(); renderMenu(); previewOpp(); }));
+  const pct = k => { const v = store.stats[k]; return v && v[1] >= 5 ? `<span class="stat">${Math.round(100 * v[0] / v[1])} % réussi · ${v[1]} balles</span>` : ""; };
+  $("thCards").innerHTML = Object.keys(TH).map(k =>
+    `<button class="card" id="th-${k}" data-k="${k}" aria-pressed="${store.theme === k}"><b>${esc(TH[k].l)}</b><small>${esc(TH[k].s)}</small>${pct(TH[k].stat)}</button>`).join("");
+  $("thCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => { store.theme = c.dataset.k; applyTheme(); save(); renderMenu(); }));
+  $("oppCards").innerHTML = Object.keys(PROF).map(k =>
+    `<button class="chip" id="opp-${k}" data-k="${k}" aria-pressed="${store.prof === k}">${esc(PROF[k].name.replace(/^(Le |L’)/, "").replace(/^./, c => c.toUpperCase()))}</button>`).join("");
+  $("oppCards").querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => { store.prof = c.dataset.k; save(); renderMenu(); previewOpp(); }));
+  $("oppDesc").textContent = PROF[store.prof].desc;
   $("lvlCards").innerHTML = Object.keys(LV).map(k =>
-    `<button class="card" id="lvl-${k}" data-k="${k}" aria-pressed="${store.lvl === k}"><b>${esc(LV[k].l)}</b><small>${esc(LV[k].s)}</small></button>`).join("");
-  $("lvlCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => { store.lvl = c.dataset.k; save(); renderMenu(); }));
-  const PL = { tout: ["Partout", "Coup droit et revers"], revers: ["Ton revers", "Pour travailler ton revers"], cd: ["Ton coup droit", "Tout sur ton coup droit"] };
-  $("placeCards").innerHTML = Object.keys(PL).map(k =>
-    `<button class="card" id="place-${k}" data-k="${k}" aria-pressed="${store.place === k}"><b>${esc(PL[k][0])}</b><small>${esc(PL[k][1])}</small></button>`).join("");
-  $("placeCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => { store.place = c.dataset.k; save(); renderMenu(); }));
-  const LT = { non: ["Aucun", "Effets classiques"], parfois: ["Parfois", "Mélangés aux autres"], toujours: ["Que du latéral", "Chaque balle en a"] };
-  const ltCur = !store.lat ? "non" : store.latAll ? "toujours" : "parfois";
-  $("latCards").innerHTML = Object.keys(LT).map(k =>
-    `<button class="card" id="lat-${k}" data-k="${k}" aria-pressed="${ltCur === k}"><b>${esc(LT[k][0])}</b><small>${esc(LT[k][1])}</small></button>`).join("");
-  $("latCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => {
-    store.lat = c.dataset.k !== "non"; store.latAll = c.dataset.k === "toujours"; save(); renderMenu();
-  }));
+    `<button class="chip" id="lvl-${k}" data-k="${k}" aria-pressed="${store.lvl === k}">${esc(LV[k].l)}</button>`).join("");
+  $("lvlCards").querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => { store.lvl = c.dataset.k; save(); renderMenu(); }));
   $("aide").checked = !!store.aide;
   $("son").checked = !!store.sound;
 }
@@ -3172,7 +3344,7 @@ function previewOpp() {
 }
 function openMenu() {
   paused = true; st.phase = "menu"; ball.tr = null; ball.handP = null; ball.hold = "me"; oppStroke = meStroke = null; events = [];
-  renderMenu(); previewOpp(); showShots(false); prompt("Choisis ton adversaire");
+  renderMenu(); previewOpp(); showShots(false); prompt("Choisis ce que tu travailles"); $("why").hidden = true;
   $("panel").classList.remove("guided", "big"); lecLine.hidden = true; $("latRow").hidden = true; hideRing(); showLecture(false); anim.strip = null; anim.minis = []; resize();
   $("menu").hidden = false;
 }
@@ -3186,7 +3358,7 @@ function racketSVG(color, label, sub) {
     }).join("")).join("") : ""}
   </svg><figcaption><b>Face ${color}</b>${esc(sub)}</figcaption></figure>`;
 }
-function openCheck() {
+function openCheck(force) {
   P = PROF[store.prof];
   picotRed = Math.random() < 0.5;
   oppRk.userData.fa.material.color.setHex(picotRed ? RED : BLACK);
@@ -3201,10 +3373,14 @@ function openCheck() {
     ? "Backside des deux côtés : la couleur ne change rien. Ici, tout se lit dans son geste : d’où part sa raquette, où elle va, et si elle frotte la balle."
     : "Demande toujours à voir la raquette de ton adversaire. Retiens quelle couleur porte son picot : pendant le match, c’est la face qui touche la balle qui te dit ce qui arrive.";
   $("checkGold").textContent = P.gold;
+  // la raquette se regarde une fois par adversaire ; ensuite la couleur de son picot reste affichée en haut à droite
+  if (store.seen[store.prof] && !force) { startPlay(); return; }
+  store.seen[store.prof] = true; save();
   $("check").hidden = false;
 }
 $("playBtn").addEventListener("click", () => { audioOn(); $("menu").hidden = true; openCheck(); });
-$("goBtn").addEventListener("click", () => {
+$("goBtn").addEventListener("click", startPlay);
+function startPlay() {
   audioOn();
   $("check").hidden = true;
   timeScale = LV[store.lvl].ts;
@@ -3213,7 +3389,7 @@ $("goBtn").addEventListener("click", () => {
   lecLine.hidden = !guided(); showLecture(false);
   paused = false;
   newPoint();
-});
+}
 $("pauseBtn").addEventListener("click", () => {
   if (st.phase !== "play") return;
   paused = true; $("pause").hidden = false;
@@ -3221,12 +3397,14 @@ $("pauseBtn").addEventListener("click", () => {
 $("resumeBtn").addEventListener("click", () => { $("pause").hidden = true; paused = false; });
 $("quitBtn").addEventListener("click", () => { $("pause").hidden = true; openMenu(); });
 window.addEventListener("keydown", e => {
+  if (!$("memo").hidden) { if (e.key === "Escape" || e.key === "Enter") $("memo").hidden = true; return; }
   // Labo : flèches = image par image, espace = pause
   if (lab.open) {
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); labStep(e.key === "ArrowLeft" ? -1 : 1); }
     else if (e.key === " ") { e.preventDefault(); labPause(!lab.paused); }
     return;
   }
+  if (!$("why").hidden) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); whyGo(); } return; }
   if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowDown") { setComp(e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0); return; }
   const n = parseInt(e.key, 10);
   if (!(n >= 1)) return;
