@@ -106,6 +106,24 @@ button { font: inherit; color: inherit; }
 .why { animation: whyIn .22s ease-out; }
 @keyframes whyIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @media (prefers-reduced-motion: reduce) { .vig.ok, .vig.ko, .fx i, .why, .shot.chosen { animation: none; } }
+/* Accueil : prochaine étape et parcours */
+.next { border: 2px solid var(--accent); background: var(--accent-bg); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.next b { font: 800 24px/1.05 var(--f-display); text-transform: uppercase; letter-spacing: .02em; }
+.next small { color: var(--ink); font-size: 14px; line-height: 1.35; }
+.next .goal { color: #f2c94c; font-weight: 700; font-size: 13.5px; }
+.chap { border: 1px solid var(--line); border-radius: 12px; background: var(--tile); }
+.chap summary { cursor: pointer; padding: 10px 12px; font-weight: 700; font-size: 14.5px; display: flex; justify-content: space-between; gap: 8px; align-items: center; min-height: 44px; }
+.chap summary span { color: #f2c94c; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chap .list { display: flex; flex-direction: column; gap: 4px; padding: 0 8px 8px; }
+.pstep { appearance: none; text-align: left; border: 1.5px solid var(--line); background: rgba(0, 0, 0, .18); border-radius: 10px; padding: 7px 10px; min-height: 48px; cursor: pointer; display: grid; grid-template-columns: 26px 1fr auto; gap: 2px 8px; align-items: center; color: var(--ink); }
+.pstep .num { grid-row: span 2; font: 800 20px/1 var(--f-display); color: var(--muted); text-align: center; }
+.pstep b { font-size: 14.5px; }
+.pstep small { color: var(--muted); font-size: 12px; grid-column: 2; }
+.pstep .st { grid-row: span 2; grid-column: 3; grid-row-start: 1; color: #f2c94c; font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
+.pstep[disabled] { opacity: .45; cursor: default; }
+.pstep.now { border-color: var(--accent); background: var(--accent-bg); }
+.back { appearance: none; align-self: flex-start; border: 1px solid var(--line); background: var(--tile); border-radius: 99px; padding: 4px 12px; min-height: 36px; font-weight: 700; font-size: 13px; cursor: pointer; color: var(--ink); }
+.stars { font-size: 34px; letter-spacing: 4px; color: #f2c94c; line-height: 1; }
 /* Profil (menu) et tableau de bord */
 .prof {
   appearance: none; text-align: left; border: 2px solid rgba(242, 201, 76, .5); background: rgba(242, 201, 76, .08); border-radius: 12px;
@@ -522,9 +540,9 @@ button { font: inherit; color: inherit; }
 <div class="hud">
   <div class="hud-l">
     <div class="score" aria-live="polite">
-      <div class="side"><span class="n" id="sMe">0</span><span class="l"><i id="srvMe"></i>Toi</span></div>
+      <div class="side"><span class="n" id="sMe">0</span><span class="l"><i id="srvMe"></i><span id="lblMe">Toi</span></span></div>
       <span class="vs">–</span>
-      <div class="side"><span class="n" id="sOpp">0</span><span class="l"><i id="srvOpp"></i>Lui</span></div>
+      <div class="side"><span class="n" id="sOpp">0</span><span class="l"><i id="srvOpp"></i><span id="lblOpp">Lui</span></span></div>
     </div>
     <div class="combo" id="combo" hidden></div>
   </div>
@@ -560,10 +578,28 @@ button { font: inherit; color: inherit; }
 </div>
 
 <!-- Menu -->
-<div class="overlay center" id="menu">
+<!-- Accueil : tableau de bord et parcours -->
+<div class="overlay center" id="home">
   <div class="sheet">
     <h1 class="title">Face au <span>picot</span></h1>
-    <button type="button" class="prof" id="profBtn" aria-label="Ma progression"></button>
+    <button type="button" class="prof" id="homeProf" aria-label="Ma progression"></button>
+    <div class="next" id="homeNext"></div>
+    <div id="homeChart"></div>
+    <h2 class="h">Le parcours</h2>
+    <div id="pathList" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div class="row">
+      <button class="btn" id="freeBtn">Entraînement libre</button>
+      <button class="btn" id="memoBtn3">Aide-mémoire</button>
+    </div>
+    <p class="sign">par <b>François Daoud</b></p>
+  </div>
+</div>
+
+<div class="overlay center" id="menu" hidden>
+  <div class="sheet">
+    <button type="button" class="back" id="homeBtn">‹ Accueil</button>
+    <h1 class="title" style="font-size:34px">Entraînement libre</h1>
+    <button type="button" class="prof" id="profBtn" aria-label="Ma progression" hidden></button>
     <h2 class="h">Je travaille</h2>
     <div class="cards themes" id="thCards"></div>
     <h2 class="h">Contre</h2>
@@ -1115,6 +1151,7 @@ if (typeof store.lat !== "boolean") store.lat = false;
 if (typeof store.latAll !== "boolean") store.latAll = false;
 /* Ce que tu travailles : un seul choix au menu, qui règle où il joue, les latéraux et la famille d'effets qu'il t'envoie */
 const TH = {
+  base:   { l: "Coupé, lift, sans effet", s: "Sans latéral", place: "tout", lat: false, latAll: false, fam: null, stat: "all", hid: true },
   tout:   { l: "Tout mélangé", s: "Tous les effets, coup droit et revers", place: "tout", lat: true, latAll: false, fam: null, stat: "all" },
   lat:    { l: "Les latéraux", s: "Chaque balle tourne sur le côté", place: "tout", lat: true, latAll: true, fam: null, stat: "lat" },
   revers: { l: "Mon revers", s: "Tout arrive sur ton revers", place: "revers", lat: false, latAll: false, fam: null, stat: "bh" },
@@ -1122,6 +1159,50 @@ const TH = {
   coupe:  { l: "Contre le coupé", s: "Il coupe : ouvre en top", place: "tout", lat: false, latAll: false, fam: "coupe", stat: "coupe" },
 };
 if (!TH[store.theme]) store.theme = store.latAll ? "lat" : store.place === "revers" ? "revers" : "tout";
+/* ===== Le parcours : des mini-exercices de plus en plus longs, jusqu'aux vrais matchs =====
+   n balles, « need » à réussir pour valider (1 étoile) ; 2 étoiles à mi-chemin du sans-faute, 3 étoiles au sans-faute.
+   match : nombre de points du match (1 étoile si tu gagnes, 2 à 65 % de bonnes lectures, 3 à 85 %). */
+const PATH = [
+  { ch: "Les bases, avec l’anneau", steps: [
+    { id: "b1", t: "Les balles coupées", d: "Il coupe : la balle plonge sur ta raquette. Ouvre : Top ouvert ou Coupe.", th: "coupe", rd: "n1", opp: "inv", n: 8, need: 6 },
+    { id: "b2", t: "Les balles liftées", d: "Il tope : la balle remonte sur ta raquette. Ferme : Bloc, ou Top puissant si le lift est moyen.", th: "lift", rd: "n1", opp: "inv", n: 8, need: 6 },
+    { id: "b3", t: "Coupé, lift ou sans effet ?", d: "Les trois mélangés. La balle sans effet est celle qu’on attaque.", th: "base", rd: "n1", opp: "inv", n: 10, need: 7 },
+    { id: "b4", t: "Sur ton revers", d: "Mêmes réponses, mais tout arrive sur ton revers.", th: "revers", rd: "n1", opp: "inv", n: 10, need: 7 },
+    { id: "b5", t: "Les latéraux", d: "Dis d’abord de quel côté elle part, puis choisis ton coup.", th: "lat", rd: "n1", opp: "inv", n: 10, need: 7 },
+  ] },
+  { ch: "Lire sans l’anneau", steps: [
+    { id: "s1", t: "Coupé ou lift, sans l’anneau", d: "Plus d’anneau : regarde sa raquette au contact, puis le vol et le rebond de la balle.", th: "base", rd: "n2", opp: "inv", n: 10, need: 7 },
+    { id: "s2", t: "Ton revers, sans l’anneau", d: "La même lecture, côté revers.", th: "revers", rd: "n2", opp: "inv", n: 12, need: 8 },
+    { id: "s3", t: "Les latéraux, sans l’anneau", d: "Regarde de quel côté sa raquette frotte la balle, et comment elle tourne en vol.", th: "lat", rd: "n2", opp: "inv", n: 12, need: 8 },
+    { id: "s4", t: "Tout mélangé, sans l’anneau", d: "Tous les effets, coup droit et revers.", th: "tout", rd: "n2", opp: "inv", n: 15, need: 11 },
+  ] },
+  { ch: "Face au picot", steps: [
+    { id: "p1", t: "Le mur, avec l’anneau", d: "Picot long : ton top revient coupé, ta poussette revient liftée. Vérifie-le sur l’anneau.", th: "base", rd: "n1", opp: "pl", n: 12, need: 9 },
+    { id: "p2", t: "Le mur, sans l’anneau", d: "Regarde quelle face touche la balle : picot ou backside.", th: "base", rd: "n2", opp: "pl", n: 15, need: 11 },
+    { id: "p3", t: "Le défenseur", d: "Picot long sans mousse, loin de la table : l’effet s’inverse encore plus.", th: "base", rd: "n2", opp: "ox", n: 15, need: 11 },
+    { id: "p4", t: "Le frappeur", d: "Picot court : des balles tendues, presque sans rotation.", th: "base", rd: "n2", opp: "pc", n: 15, need: 11 },
+    { id: "p5", t: "L’endormeur", d: "Anti-top : son geste ment, regarde la balle.", th: "base", rd: "n2", opp: "anti", n: 15, need: 11 },
+  ] },
+  { ch: "Comme en match", steps: [
+    { id: "m1", t: "Le chrono", d: "Sans anneau, 3 secondes pour répondre.", th: "tout", rd: "n3", opp: "inv", n: 15, need: 11 },
+    { id: "m2", t: "Mini-match en 5 points", d: "Premier à 5 points, au chrono, contre le mur.", th: "tout", rd: "n3", opp: "pl", match: 5 },
+    { id: "m3", t: "Un set contre le mur", d: "11 points, au chrono, vitesse rapide.", th: "tout", rd: "n3", opp: "pl", match: 11, lvl: "rapide" },
+    { id: "m4", t: "Un set contre le défenseur", d: "11 points, au chrono, vitesse rapide.", th: "tout", rd: "n3", opp: "ox", match: 11, lvl: "rapide" },
+    { id: "m5", t: "Le grand match", d: "Un adversaire tiré au sort, 11 points, au chrono, vitesse rapide.", th: "tout", rd: "n3", opp: "rand", match: 11, lvl: "rapide" },
+  ] },
+];
+const STEPS = PATH.flatMap((c, ci) => c.steps.map(x => Object.assign(x, { ci })));
+STEPS.forEach((x, i) => { x.i = i; });
+if (!store.path || typeof store.path !== "object") store.path = {};
+const starsOf = x => store.path[x.id] || 0;
+const stepOpen = x => x.i === 0 || starsOf(STEPS[x.i - 1]) >= 1;
+const stepNow = () => STEPS.find(x => !starsOf(x)) || STEPS[STEPS.length - 1];
+const stepGoal = x => (x.match ? `match en ${x.match} points` : `${x.n} balles, ${x.need} à réussir`);
+const starTxt = n => "★".repeat(n) + "☆".repeat(3 - n);
+function stepStars(x, ok, n, won) {
+  if (x.match) { const p = n ? ok / n : 0; return !won ? 0 : p >= 0.85 ? 3 : p >= 0.65 ? 2 : 1; }
+  return ok >= x.n ? 3 : ok >= Math.ceil((x.need + x.n) / 2) ? 2 : ok >= x.need ? 1 : 0;
+}
 function applyTheme() { const t = TH[store.theme]; store.place = t.place; store.lat = t.lat; store.latAll = t.latAll; }
 applyTheme();
 /* ===== Niveau de lecture : avec l'anneau (apprendre), sans l'anneau (lire comme en vrai), chrono =====
@@ -1184,7 +1265,7 @@ function progAdd(ok) {
     const r = { t: S.t0, th: store.theme, rd: store.rd, n: S.n, ok: S.ok, run: S.best };
     if (S.rec) Object.assign(S.rec, r); else { S.rec = r; store.hist.push(r); if (store.hist.length > 150) store.hist.shift(); }
   }
-  save(); syncCombo();
+  save(); syncCombo(); updateHUD();
 }
 function tone(f, d, when, g, type) {
   if (!actx || !store.sound || actx.state !== "running") return;
@@ -1633,9 +1714,11 @@ function showServe() {
   $("shots").querySelectorAll(".shot").forEach(b => b.addEventListener("click", () => { audioOn(); myServe(b.dataset.k); }));
 }
 function updateHUD() {
-  $("sMe").textContent = st.score[0]; $("sOpp").textContent = st.score[1];
-  $("srvMe").classList.toggle("on", st.server === "me");
-  $("srvOpp").classList.toggle("on", st.server === "opp");
+  const X = st.exo && !st.exo.match ? st.exo : null, S = st.sess;
+  $("sMe").textContent = X && S ? S.ok : st.score[0]; $("sOpp").textContent = X && S ? `${Math.min(S.n, X.n)}/${X.n}` : st.score[1];
+  $("lblMe").textContent = X ? "Réussies" : "Toi"; $("lblOpp").textContent = X ? "Balles" : "Lui";
+  $("srvMe").classList.toggle("on", !X && st.server === "me");
+  $("srvOpp").classList.toggle("on", !X && st.server === "opp");
   const dot = c => `<span class="dot" style="background:${c ? "#c62828" : "#141414"}"></span>`;
   $("oppName").innerHTML = `<b>${esc(P.name)}</b>${esc(RUBL[P.rub])}${P.rub !== "inv" && st.phase !== "menu" ? ` ${dot(picotRed)}${picotRed ? "rouge" : "noir"}` : ""}`;
 }
@@ -1647,6 +1730,7 @@ function newPoint() {
   st.hist = [];
   const tot = st.score[0] + st.score[1];
   st.server = (st.score[0] >= 10 && st.score[1] >= 10) ? (tot % 2 === 0 ? "me" : "opp") : (Math.floor(tot / 2) % 2 === 0 ? "me" : "opp");
+  if (TH[store.theme].fam) st.server = "opp";                    // séance « contre le lift / le coupé » : c'est lui qui sert, avec cet effet
   ball.hold = st.server;
   hold = 0; rkHist.length = 0;
   updateHUD();
@@ -1680,7 +1764,7 @@ function myServe(k) {
 function oppServe() {
   const fam = TH[store.theme].fam;
   const picot = !fam && Math.random() < 0.25;
-  const rps = fam === "lift" ? pickW({ "25": .5, "35": .5 }) : fam === "coupe" ? pickW({ "-55": .6, "-30": .4 })
+  const rps = fam === "lift" ? pickW({ "25": .5, "35": .5 }) : fam === "coupe" ? pickW({ "-55": .6, "-45": .4 })
     : picot ? pickW({ "0": .6, "-15": .4 }) : pickW({ "-55": .45, "-30": .15, "0": .25, "25": .15 });
   const r = +rps, long = r > 0 || Math.random() < 0.2;
   const p0 = [store.place === "revers" ? rnd(-0.45, -0.2) : store.place === "cd" ? rnd(0.2, 0.45) : rnd(-0.25, 0.25), long ? 0.95 : 0.97, -(L + 0.13)];
@@ -1789,7 +1873,9 @@ function myContact() {
     if (reflex()) rxFeedback(sh);
     else prompt(`${sh.res === "haute" ? "Balle haute…" : "Bien lu"} · ${EFF[inc.eff]} · ${Math.round(Math.abs(inc.wMe))} tr/s`, sh.res === "haute" ? "bad" : "good");
     st.lastMine = { k: sh.k, label: CH[sh.k].my, attack: (sh.k === "plat" && inc.wMe > -6 && inc.kmh < 26) || sh.k === "kill", tape: tapeOf(sh.tr) };
-    planOpp(sh.tr, sh);
+    // exercice du parcours : c'était la dernière balle, on s'arrête là
+    if (st.exo && !st.exo.match && st.sess.n >= st.exo.n) at(clock + 1.2, () => pointEnd("me", { type: "exo" }));
+    else planOpp(sh.tr, sh);
   } else {
     if (reflex()) rxFeedback(sh);
     else prompt({ net: "Filet", own: "Filet", long: "Dehors", wide: "Dehors" }[sh.res] || "Faute", "bad");
@@ -1813,7 +1899,11 @@ function rxFeedback(sh) {
   const dirL = latDir(st.mySIn), malLu = store.latAll && good && sh.k !== "latg" && sh.k !== "latd" && sh.comp != null && sh.comp !== dirL;
   flash(good);
   if (good) burst(st.mySIn.p[0], st.mySIn.p[1], st.mySIn.p[2], softer ? 0x8ad8a8 : 0xf2c94c, softer ? 14 : 26, 1.6, 0.5);
-  if (malLu) prompt(`Ça passe, mais elle partait ${dirL > 0 ? "à droite ▶" : dirL < 0 ? "◀ à gauche" : "tout droit"}`, "hot");
+  // bon coup mais côté mal lu : c'est la lecture qu'on corrige, pas le coup
+  const coteL = dirL > 0 ? "à droite ▶" : dirL < 0 ? "◀ à gauche" : "tout droit";
+  const malLuKo = store.latAll && !good && sh.k !== "latg" && sh.k !== "latd" && sh.comp != null && sh.comp !== dirL && (inc.rxWorks || []).includes(sh.k);
+  if (malLuKo) prompt(`${R} · mal lu : elle partait ${coteL}`, "bad");
+  else if (malLu) prompt(`Ça passe, mais elle partait ${coteL}`, "hot");
   else prompt(`${R}${tail}`, good ? "good" : "bad");
   if ((!good || softer) && best) { const b = $("shot-" + best); if (b) b.classList.add("rxbest"); }
 }
@@ -1855,8 +1945,13 @@ function oppRespond(sh) {
   if (!fam) return cands[0] || null;
   // Séance « Contre le lift » / « Contre le coupé » : il choisit un geste dont la balle t'arrive avec cet effet
   if (P.picot > 0 && P.picot < 1) cands = cands.concat(tryFace(!usePicot, null));
-  const bons = cands.filter(r => { const w = arriveSpin(sh, r); return w != null && (fam === "lift" ? w >= 12 : w <= -12); });
-  return bons.length ? bons[Math.floor(Math.random() * bons.length)] : cands[0] || null;
+  cands = cands.concat(tryFace(usePicot, null));               // un deuxième essai, placé ailleurs
+  const sg = fam === "lift" ? 1 : -1, notes = cands.map(r => ({ r, w: arriveSpin(sh, r) })).filter(x => x.w != null);
+  const au = lim => notes.filter(x => sg * x.w >= lim), hasard = A => A[Math.floor(Math.random() * A.length)].r;
+  if (au(12).length) return hasard(au(12));
+  if (au(6).length) return hasard(au(6));
+  // rien de franc : le geste qui s'en approche le plus
+  return notes.length ? notes.reduce((m, x) => (sg * x.w > sg * m.w ? x : m)).r : cands[0] || null;
 }
 /* La rotation qu'aura sa balle à ton contact (null si elle ne passe pas) */
 function arriveSpin(sh, r) {
@@ -3327,6 +3422,7 @@ function labPick(i) {
   const N = swingNums(swingMake(st.mySIn.p, v3n(c.sh.n), c.sh.V, true, new THREE.Vector3(0, 1.4, L + 0.6), new THREE.Vector3(), new THREE.Quaternion(), 0, 1));
   $("labLines").innerHTML = `<div class="lab-gest">${esc(strokeDesc(M))}</div><div><span>Trajet</span> ${esc(N.path)} · <b>${N.sp} m/s</b> au contact · élan ${N.len} cm</div><div><span>Attaque</span> la raquette arrive à <b>${N.att}°</b> de sa face · ${N.att < 35 ? "elle frotte surtout" : N.att > 55 ? "elle pousse surtout" : "elle frotte et pousse"}</div><div><span>Rotation</span> ${esc(fmtW(c.top0))} → <b>${esc(fmtW(c.top1))}</b> · ${esc(topWord(c.top0, c.top1))}</div>`
     + `<div><span>Latéral</span> ${latTxt(c.lat0)} → <b>${latTxt(c.lat1)}</b> tr/s · ${esc(latWord(c.lat0, c.lat1))}</div>`
+    + `<div><span>Couvre</span> ${esc(couvreTxt(c.couv || (c.couv = couvre(c.k, st.mySIn)), true))}</div>`
     + (c.tape ? `<div><span>Pour lui</span> ${esc(tapeTxt(c.tape))}${i === lab.best ? " · <b style=\"color:#ffab66\">★ le plus dur pour lui</b>" : ""}</div>` : "");
   if (L3.ok) { l3Load(); L3.tau = L3.t0; }
 }
@@ -3416,7 +3512,7 @@ function pointEnd(winner, info) {
   updateHUD(); setShotsEnabled(false);
   if (reflex()) {
     hideRing();
-    if (winner === "me") prompt(info.type === "faute" ? "Il fait la faute · point pour toi" : "Point pour toi", "good");
+    if (winner === "me" && info.type !== "exo") prompt(info.type === "faute" ? "Il fait la faute · point pour toi" : "Point pour toi", "good");
     else if (info.type === "haute") prompt("Il smashe ta balle haute", "bad");
     // Tu t'es trompé de réponse : on s'arrête pour comprendre, tu continues quand tu veux
     if (winner === "opp" && st.myShot && st.inc && ["net", "own", "long", "wide", "haute"].includes(st.myShot.res) && showWhy()) return;
@@ -3469,6 +3565,67 @@ function pointEnd(winner, info) {
     if (over) endMatch(); else newPoint();
   });
 }
+/* ===== Ce que couvre un coup, en chiffres =====
+   Pour la balle reçue (même vitesse, même hauteur, même placement), on fait varier sa rotation et on demande au moteur
+   si le coup passe. Deux plages : la rotation avant/arrière (coupé ↔ lift) au latéral de cette balle, et le latéral
+   (elle part à gauche ↔ à droite) à la rotation de cette balle. Balayage tous les 5 tr/s, bords affinés à 1 tr/s. */
+function plage(test, cur, lo, hi) {
+  const pas = 5, pts = [];
+  for (let w = lo; w <= hi; w += pas) pts.push([w, test(w)]);
+  // les segments où ça passe ; on garde celui qui contient la balle, sinon le plus proche
+  const segs = []; let a = null;
+  pts.forEach(([w, ok], i) => { if (ok && a === null) a = i; if ((!ok || i === pts.length - 1) && a !== null) { segs.push([a, ok ? i : i - 1]); a = null; } });
+  if (!segs.length) return null;
+  const dist = ([i, j]) => (cur < pts[i][0] ? pts[i][0] - cur : cur > pts[j][0] ? cur - pts[j][0] : 0);
+  const [i, j] = segs.reduce((m, sg) => (dist(sg) < dist(m) ? sg : m));
+  const bord = (dedans, dehors) => { while (Math.abs(dedans - dehors) > 1) { const m = Math.round((dedans + dehors) / 2); if (test(m)) dedans = m; else dehors = m; } return dedans; };
+  return { lo: i === 0 ? pts[0][0] : bord(pts[i][0], pts[i - 1][0]), hi: j === pts.length - 1 ? pts[j][0] : bord(pts[j][0], pts[j + 1][0]), ouvertBas: i === 0, ouvertHaut: j === pts.length - 1 };
+}
+/* latéral signé par le côté où la balle part sur ta raquette : + = à droite */
+const latSigne = s => -latRps(s);
+function couvre(k, sIn) {
+  const passe = s => computeMyShot(k, s, false, rxComp(k, s)).res === "in";
+  const top0 = PHYS.topRps(sIn), lat0 = latSigne(sIn);
+  const top = plage(w => { const s = PHYS.clone(sIn); PHYS.setTop(s, w); return passe(s); }, top0, -80, 80);
+  // le latéral se mesure à une rotation que le coup accepte (celle de la balle si elle est dans la plage, sinon le bord le plus proche)
+  const topRef = !top ? top0 : top0 >= top.lo + 5 && top0 <= top.hi - 5 ? top0 : Math.max(top.lo, Math.min(top.hi, (Math.max(top.lo, -60) + Math.min(top.hi, 60)) / 2));
+  const lat = top ? plage(l => { const s = PHYS.clone(sIn); PHYS.setTop(s, topRef); s.w[1] = -l * PHYS.TAU; return passe(s); }, lat0, -50, 50) : null;
+  return { top, lat, top0, lat0 };
+}
+const rotMot = w => (Math.abs(w) < 3 ? "sans effet" : `${w > 0 ? "lift" : "coupé"} ${Math.abs(Math.round(w))} tr/s`);
+const latMot = l => (Math.abs(l) < 3 ? "sans latéral" : `${Math.abs(Math.round(l))} à ${l > 0 ? "droite" : "gauche"}`);
+/* « de coupé 12 à lift 31 tr/s » ; aux bornes du balayage : « jusqu'à », « à partir de » */
+function plageTopTxt(p) {
+  if (!p) return "aucune rotation sur cette balle-là";
+  if (p.ouvertBas && p.ouvertHaut) return "toutes les rotations";
+  if (p.ouvertBas) return `tout le coupé, jusqu’à ${rotMot(p.hi)}`;
+  if (p.ouvertHaut) return `à partir de ${rotMot(p.lo)}, et tout le lift au-delà`;
+  return `de ${rotMot(p.lo)} à ${rotMot(p.hi)}`;
+}
+function plageLatTxt(p) {
+  if (!p) return "aucun latéral";
+  if (p.ouvertBas && p.ouvertHaut) return "tous les latéraux";
+  if (p.lo <= 0 && p.hi >= 0) return `jusqu’à ${Math.abs(p.lo)} tr/s à gauche et ${p.hi} tr/s à droite`;
+  return p.lo > 0 ? `de ${p.lo} à ${p.hi} tr/s à droite` : `de ${Math.abs(p.hi)} à ${Math.abs(p.lo)} tr/s à gauche`;
+}
+/* où est la balle par rapport à la plage du coup : « 34 tr/s trop coupée », « 12 tr/s trop liftée », ou dedans (null) */
+function horsTop(p, v) {
+  if (!p) return "";
+  if (v < p.lo) { const d = Math.max(1, Math.round(p.lo - v)); return v < -3 ? `est ${d} tr/s trop coupée` : `n’est pas assez liftée (il manque ${d} tr/s)`; }
+  if (v > p.hi) { const d = Math.max(1, Math.round(v - p.hi)); return v > 3 ? `est ${d} tr/s trop liftée` : `n’est pas assez coupée (il manque ${d} tr/s)`; }
+  return null;
+}
+function horsLat(p, v) {
+  if (!p) return "";
+  if (v < p.lo) return `${Math.max(1, Math.round(p.lo - v))} tr/s de trop vers la gauche`;
+  if (v > p.hi) return `${Math.max(1, Math.round(v - p.hi))} tr/s de trop vers la droite`;
+  return null;
+}
+/* « Top frappé couvre de coupé 9 tr/s à lift 35 tr/s, avec un latéral jusqu'à … » */
+function couvreTxt(C, avecLat) {
+  return plageTopTxt(C.top) + (avecLat && C.top ? ` ; côté latéral : ${plageLatTxt(C.lat)}` : "");
+}
+
 /* ===== Comprendre l'erreur : la balle, pourquoi ton coup ne passait pas, la bonne réponse, la règle ===== */
 const RULES = {
   tcoupe: "À retenir · très coupée → ouvre la raquette : Top ouvert, ou Coupe.",
@@ -3490,10 +3647,13 @@ function whyMiss(inc, sh, sIn) {
     return `Son latéral (${Math.round(Math.abs(latRps(sIn)))} tr/s) fait partir la balle vers ta ${dir > 0 ? "droite" : "gauche"} sur ta raquette.`
       + (badSide ? " En frottant du même côté, tu ajoutes l’écart au lieu de le corriger." : malLu ? ` Tu as répondu « ${cote(sh.comp)} » : ta balle sort sur le côté.` : " Ta balle sort sur le côté.");
   }
-  if ((sh.res === "net" || sh.res === "own") && d <= -3) return `${nom} est réglé pour une balle ${c.read}. Celle-ci avait ${Math.abs(d)} tr/s de coupé en plus : elle plonge sur ta raquette, filet.`;
-  if ((sh.res === "long" || sh.res === "haute") && d >= 3) return `${nom} est réglé pour une balle ${c.read}. Celle-ci avait ${d} tr/s de lift en plus : elle remonte sur ta raquette${sh.res === "haute" ? ", ta balle part trop haut." : ", dehors."}`;
-  if (sh.res === "haute") return `${nom} passe, mais ta balle monte trop : il la smashe.`;
-  return `Tu avais bien lu l’effet, mais ${nom} ne passait pas sur cette balle (${sh.res === "net" || sh.res === "own" ? "filet" : "dehors"}).`;
+  // en chiffres : ce que ton coup couvre sur une balle comme celle-ci, et de combien la balle en sort
+  const C = inc.couv[sh.k], ht = horsTop(C.top, C.top0), hl = horsLat(C.lat, C.lat0), suite = sh.res === "net" || sh.res === "own" ? "filet" : sh.res === "haute" ? "ta balle part trop haut" : "dehors";
+  if (ht === "") return `${nom} ne passe sur aucune rotation avec cette balle-là (trop basse ou trop rapide pour lui).`;
+  if (ht) return `${nom} couvre ${plageTopTxt(C.top)}. Cette balle (${rotMot(C.top0)}) ${ht} : ${C.top0 < C.top.lo ? "elle plonge sur ta raquette" : "elle remonte sur ta raquette"}, ${suite}.`;
+  if (hl) return `${nom} couvre bien ${rotMot(C.top0)}, mais côté latéral il couvre ${plageLatTxt(C.lat)}. Cette balle : ${latMot(C.lat0)}, soit ${hl}.`;
+  if (sh.res === "haute") return `${nom} couvre ${plageTopTxt(C.top)} : cette balle (${rotMot(C.top0)}) passe, mais elle monte trop et il la smashe.`;
+  return `${nom} couvre ${plageTopTxt(C.top)} : cette balle (${rotMot(C.top0)}) est à la limite, ${suite}.`;
 }
 function showWhy() {
   const inc = st.inc, sh = st.myShot, sIn = st.mySIn;
@@ -3503,12 +3663,17 @@ function showWhy() {
   $("whyT").textContent = { haute: "Balle haute", net: "Filet", own: "Filet", long: "Dehors", wide: "À côté" }[sh.res] || "Faute";
   const dir = latDir(sIn);
   $("whyBall").textContent = `La balle : ${fmtW(inc.wMe)}${dir ? ` · latéral ${Math.round(Math.abs(latRps(sIn)))} tr/s, elle part vers ta ${dir > 0 ? "droite" : "gauche"}` : ""}${inc.bh ? " · sur ton revers" : ""}`;
-  $("whyTxt").textContent = whyMiss(inc, sh, sIn);
+  // les plages chiffrées des coups cités (le tien, le bon, ceux qui passaient aussi)
   const best = inc.rxBest, autres = (inc.rxWorks || []).filter(k => k !== best);
+  inc.couv = inc.couv || {};
+  for (const k of [sh.k, best].concat(autres.slice(0, 2))) if (k && !inc.couv[k]) inc.couv[k] = couvre(k, sIn);
+  const aLat = Math.abs(latRps(sIn)) >= LAT_MIN;
+  $("whyTxt").textContent = whyMiss(inc, sh, sIn);
   const lire = store.latAll && sh.comp != null && sh.comp !== dir && sh.k !== "latg" && sh.k !== "latd" ? `Il fallait lire : <b>${dir > 0 ? "à droite ▶" : dir < 0 ? "◀ à gauche" : "tout droit"}</b><br>` : "";
   const bonCoup = lire && (inc.rxWorks || []).includes(sh.k);
   $("whyFix").innerHTML = bonCoup ? `${lire}Ton ${esc(nm(sh.k))} passait, avec la bonne lecture.`
-    : best ? `${lire}${lire ? "Et jouer" : "Il fallait"} : <b>${esc(nm(best))}</b> (${esc(RX_S[best])})${autres.length ? `<br>Passait aussi : ${esc(autres.map(nm).join(", "))}` : ""}` : "Rien ne passait proprement sur cette balle.";
+    : best ? `${lire}${lire ? "Et jouer" : "Il fallait"} : <b>${esc(nm(best))}</b>, qui couvre ${esc(couvreTxt(inc.couv[best], aLat))}`
+      + `${autres.length ? `<br>Passait aussi : ${autres.map((k, i) => esc(nm(k)) + (inc.couv[k] ? ` (${esc(plageTopTxt(inc.couv[k].top))})` : "")).join(", ")}` : ""}` : "Rien ne passait proprement sur cette balle.";
   $("whyRule").textContent = lire && (sh.res === "wide" || bonCoup) ? "À retenir · anneau jaune : devant la balle, les flèches vont vers la gauche → elle part à droite (et l’inverse)." : latDir(sIn) && (sh.res === "wide" || sh.k === "latg" || sh.k === "latd") ? RULES.lat : RULES[inc.eff];
   $("why").hidden = false;
   return true;
@@ -3576,12 +3741,26 @@ function openMemo() { $("memoGold").textContent = PROF[store.prof].gold; $("memo
 for (const id of ["memoBtn", "memoBtn2"]) $(id).addEventListener("click", openMemo);
 for (const id of ["memoClose", "memoOk"]) $(id).addEventListener("click", () => { $("memo").hidden = true; });
 
-function isOver() { const [a, b] = st.score; return (a >= 11 || b >= 11) && Math.abs(a - b) >= 2; }
+function isOver() {
+  const [a, b] = st.score, X = st.exo;
+  if (X && !X.match) return st.sess.n >= X.n;                   // exercice : n balles
+  const pts = X && X.match ? X.match : 11;
+  return (a >= pts || b >= pts) && (pts < 11 || Math.abs(a - b) >= 2);
+}
 
 function endMatch() {
   st.phase = "end"; paused = true;
-  const [a, b] = st.score, won = a > b;
+  const [a, b] = st.score, won = a > b, X = st.exo;
   const dec = st.log, ok = dec.filter(d => d.ok).length, n = dec.length;
+  // étape du parcours : étoiles gagnées, points bonus la première fois
+  let etoiles = 0, bonus = 0, suivante = null;
+  if (X) {
+    etoiles = stepStars(X, ok, n, won);
+    const avant = starsOf(X);
+    if (etoiles > avant) { bonus = (etoiles - avant) * 40; store.xp += bonus; if (st.sess) st.sess.xp += bonus; store.path[X.id] = etoiles; }
+    suivante = (etoiles || avant) && X.i < STEPS.length - 1 ? STEPS[X.i + 1] : null;
+    if (etoiles) { fxParty(); [523, 659, 784, 1047].forEach((fq, i) => tone(fq, 0.22, 0.12 * i, 0.11)); }
+  }
   const pct = n ? Math.round(100 * ok / n) : 0;
   const prev = store.best[store.prof];
   if (prev == null || pct > prev) store.best[store.prof] = pct;
@@ -3610,11 +3789,16 @@ function endMatch() {
   if (S.best > S.run0 && S.best >= 5) faits.push(`Nouveau record : série de ${S.best}`);
   if (d0[0] >= GOAL) faits.push("Objectif du jour atteint"); else faits.push(`Objectif du jour : ${d0[0]} / ${GOAL}`);
   // prêt pour le niveau de lecture suivant : 80 % sur au moins 12 balles
-  const suiv = store.rd === "n1" ? "n2" : store.rd === "n2" ? "n3" : null, pret = suiv && n >= 12 && pct >= 80;
+  const suiv = store.rd === "n1" ? "n2" : store.rd === "n2" ? "n3" : null, pret = !X && suiv && n >= 12 && pct >= 80;
   $("endBody").innerHTML = `
-    <span class="eyebrow">${esc(TH[store.theme].l)} · ${esc(RD[store.rd].l)} · ${esc(P.name)}</span>
-    <p class="verdict ${won ? "ok" : "ko"}">${won ? "Victoire" : "Défaite"}</p>
-    <div class="big-score">${a} – ${b}</div>
+    <span class="eyebrow">${X ? `Parcours · étape ${X.i + 1} sur ${STEPS.length} · ${esc(X.t)}` : `${esc(TH[store.theme].l)} · ${esc(RD[store.rd].l)} · ${esc(P.name)}`}</span>
+    ${X ? `<p class="verdict ${etoiles ? "ok" : "ko"}">${etoiles ? "Étape réussie" : "Pas encore"}</p>
+      <div class="stars" aria-label="${etoiles} étoile${etoiles > 1 ? "s" : ""} sur 3">${starTxt(etoiles)}</div>
+      <div class="big-score">${X.match ? `${a} – ${b}` : `${ok} / ${X.n}`}</div>
+      <p style="color:var(--muted);font-size:14px">${X.match ? (etoiles ? (etoiles < 3 ? "Gagne avec plus de bonnes lectures pour gagner des étoiles (65 % : 2 étoiles, 85 % : 3)." : "Match gagné avec une lecture presque parfaite.") : "Il faut gagner le match pour valider l’étape.")
+        : etoiles ? (etoiles < 3 ? `Sans-faute pour 3 étoiles (${Math.ceil((X.need + X.n) / 2)} pour 2).` : "Sans-faute.") : `Il en fallait ${X.need}. Relis les cartes d’explication et recommence.`}${bonus ? ` Bonus : +${bonus} points.` : ""}</p>`
+    : `<p class="verdict ${won ? "ok" : "ko"}">${won ? "Victoire" : "Défaite"}</p>
+    <div class="big-score">${a} – ${b}</div>`}
     <div class="end-xp"><b>+${S.xp} points · série max ${S.best}</b>
       <span class="xpbar"><i style="width:${Math.round(100 * (store.xp - a0) / (b0 - a0))}%"></i></span>
       <small>${Lf > S.L0 ? "" : `Niveau ${Lf} · ${esc(rankOf(Lf))} · `}${faits.map(esc).join(" · ")}</small></div>
@@ -3625,22 +3809,25 @@ function endMatch() {
     </div>
     <h2 class="h">À retenir</h2>
     <ul class="tips">${tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
+    ${suivante ? `<button class="btn primary" id="nextStepBtn">Étape suivante : ${esc(suivante.t)}</button>` : ""}
     <div class="row">
-      <button class="btn primary" id="againBtn">Rejouer</button>
-      <button class="btn" id="menuBtn">Changer de séance</button>
+      <button class="btn${suivante ? "" : " primary"}" id="againBtn">${X ? "Recommencer" : "Rejouer"}</button>
+      <button class="btn" id="menuBtn">${X ? "Accueil" : "Changer de séance"}</button>
     </div>
     <button class="btn" id="dashBtn2">Ma progression</button>`;
   $("dashBtn2").addEventListener("click", openDash);
   if (pret) $("nextRdBtn").addEventListener("click", () => { store.rd = suiv; save(); $("end").hidden = true; openCheck(); });
   $("end").hidden = false;
   $("againBtn").addEventListener("click", () => { $("end").hidden = true; openCheck(); });
-  $("menuBtn").addEventListener("click", () => { $("end").hidden = true; openMenu(); });
+  $("menuBtn").addEventListener("click", () => { $("end").hidden = true; if (X) openHome(); else openMenu(); });
+  if (suivante) $("nextStepBtn").addEventListener("click", () => { $("end").hidden = true; startStep(suivante); });
 }
 
 /* ================= Menus ================= */
 function renderMenu() {
   const pct = k => { const v = store.stats[k]; return v && v[1] >= 5 ? `<span class="stat">${Math.round(100 * v[0] / v[1])} % réussi · ${v[1]} balles</span>` : ""; };
-  $("thCards").innerHTML = Object.keys(TH).map(k =>
+  if (TH[store.theme].hid) { store.theme = "tout"; applyTheme(); }
+  $("thCards").innerHTML = Object.keys(TH).filter(k => !TH[k].hid).map(k =>
     `<button class="card" id="th-${k}" data-k="${k}" aria-pressed="${store.theme === k}"><b>${esc(TH[k].l)}</b><small>${esc(TH[k].s)}</small>${pct(TH[k].stat)}</button>`).join("");
   $("thCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => { store.theme = c.dataset.k; applyTheme(); save(); renderMenu(); }));
   $("oppCards").innerHTML = Object.keys(PROF).map(k =>
@@ -3668,12 +3855,55 @@ function previewOpp() {
   P = PROF[store.prof]; shirtMat.color.setHex(P.shirt);
   opp.position.set(0, 0, oppZ() - 0.3); updateHUD();
 }
-function openMenu() {
+/* Retour au calme : plus de balle en jeu ; les réglages de l'entraînement libre reviennent après une étape du parcours */
+function auRepos() {
+  if (st.back) { Object.assign(store, st.back); st.back = null; applyTheme(); save(); }
+  st.exo = null;
   paused = true; st.phase = "menu"; ball.tr = null; ball.handP = null; ball.hold = "me"; oppStroke = meStroke = null; events = [];
-  chronoStop(); renderMenu(); previewOpp(); showShots(false); prompt("Choisis ce que tu travailles"); $("why").hidden = true; $("combo").hidden = true;
+  chronoStop(); renderMenu(); previewOpp(); showShots(false); prompt(""); $("why").hidden = true; $("combo").hidden = true;
   $("panel").classList.remove("guided", "big"); lecLine.hidden = true; $("latRow").hidden = true; hideRing(); showLecture(false); anim.strip = null; anim.minis = []; resize();
-  $("menu").hidden = false;
+  $("menu").hidden = true; $("home").hidden = true;
 }
+function openMenu() { auRepos(); prompt("Choisis ce que tu travailles"); $("menu").hidden = false; }
+/* L'accueil : ton niveau, la prochaine étape du parcours, ta courbe, tout le parcours */
+function renderHome() {
+  const L = lvlOf(store.xp), d0 = store.days[dayKey()] || [0, 0], js = dayStreak(), X = stepNow(), fini = STEPS.every(x => starsOf(x));
+  const tot = STEPS.reduce((s, x) => s + starsOf(x), 0);
+  $("homeProf").innerHTML = `<b>Niveau ${L} · ${esc(rankOf(L))}</b><span class="go">Ma progression ›</span>
+    <span class="xpbar"><i style="width:${Math.round(100 * (store.xp - xpAt(L)) / (xpAt(L + 1) - xpAt(L)))}%"></i></span>
+    <small style="grid-column:1/-1">Aujourd’hui : ${d0[0]} / ${GOAL} bonnes lectures${js >= 2 ? ` · ${js} jours de suite` : ""}${store.bestRun >= 3 ? ` · record : série de ${store.bestRun}` : ""}</small>`;
+  $("homeNext").innerHTML = `<span class="eyebrow">${fini ? "Parcours terminé · rejoue pour les étoiles" : `Étape ${X.i + 1} sur ${STEPS.length} · ${esc(PATH[X.ci].ch)}`}</span>
+    <b>${esc(X.t)}</b><small>${esc(X.d)}</small><span class="goal">${esc(stepGoal(X))} · ${esc(RD[X.rd].l.replace(/^\d · /, ""))}</span>
+    <button class="btn primary" id="goStep">${STEPS.some(x => starsOf(x)) ? "Continuer le parcours" : "Commencer le parcours"}</button>`;
+  $("goStep").addEventListener("click", () => startStep(X));
+  const H = store.hist.slice(-24);
+  $("homeChart").innerHTML = H.length >= 2 ? `<h2 class="h" style="margin-bottom:6px">Ta réussite, séance après séance</h2>${chartSVG(H)}` : "";
+  $("pathList").innerHTML = PATH.map((c, ci) => {
+    const got = c.steps.reduce((s, x) => s + starsOf(x), 0);
+    return `<details class="chap"${ci === X.ci ? " open" : ""}><summary>${ci + 1} · ${esc(c.ch)}<span>${got} / ${c.steps.length * 3} ★</span></summary><div class="list">${c.steps.map(x =>
+      `<button type="button" class="pstep${x === X && !fini ? " now" : ""}" data-i="${x.i}"${stepOpen(x) ? "" : " disabled"} aria-label="Étape ${x.i + 1} : ${esc(x.t)}, ${esc(stepGoal(x))}${stepOpen(x) ? "" : ", verrouillée"}">
+        <span class="num">${x.i + 1}</span><b>${esc(x.t)}</b><span class="st">${stepOpen(x) ? starTxt(starsOf(x)) : "verrouillée"}</span><small>${esc(stepGoal(x))}</small></button>`).join("")}</div></details>`;
+  }).join("") + `<p style="font-size:12.5px;color:var(--muted)">${tot} étoile${tot > 1 ? "s" : ""} sur ${STEPS.length * 3}. Une étape s’ouvre quand la précédente est réussie.</p>`;
+  $("pathList").querySelectorAll(".pstep").forEach(b => b.addEventListener("click", () => startStep(STEPS[+b.dataset.i])));
+}
+function openHome() { auRepos(); renderHome(); $("home").hidden = false; }
+/* Une étape du parcours : elle règle la séance toute seule (thème, niveau de lecture, adversaire, vitesse) */
+function startStep(X) {
+  if (!stepOpen(X)) return;
+  audioOn();
+  if (!st.back) st.back = { theme: store.theme, rd: store.rd, prof: store.prof, lvl: store.lvl };
+  const profs = Object.keys(PROF);
+  store.theme = X.th; applyTheme(); store.rd = X.rd; store.lvl = X.lvl || "moyen";
+  store.prof = X.opp === "rand" ? profs[Math.floor(Math.random() * profs.length)] : X.opp;
+  st.exo = X;
+  $("home").hidden = true; $("menu").hidden = true;
+  openCheck();
+  toast(X.match ? `Match en ${X.match} points` : `${X.n} balles · ${X.need} à réussir`);
+}
+$("homeProf").addEventListener("click", openDash);
+$("freeBtn").addEventListener("click", openMenu);
+$("homeBtn").addEventListener("click", openHome);
+$("memoBtn3").addEventListener("click", openMemo);
 function racketSVG(color, label, sub) {
   const fill = color === "rouge" ? "#c62828" : "#141414";
   return `<figure><svg width="92" height="132" viewBox="0 0 92 132" aria-hidden="true">
@@ -3722,7 +3952,7 @@ $("pauseBtn").addEventListener("click", () => {
   paused = true; $("pause").hidden = false; chronoStop();
 });
 $("resumeBtn").addEventListener("click", () => { $("pause").hidden = true; paused = false; if (frozen) chronoStart(); });
-$("quitBtn").addEventListener("click", () => { $("pause").hidden = true; openMenu(); });
+$("quitBtn").addEventListener("click", () => { $("pause").hidden = true; openHome(); });
 window.addEventListener("keydown", e => {
   if (!$("memo").hidden) { if (e.key === "Escape" || e.key === "Enter") $("memo").hidden = true; return; }
   // Labo : flèches = image par image, espace = pause
@@ -3918,6 +4148,7 @@ scene.traverse(o => {
 });
 floor.receiveShadow = true; tableTop.receiveShadow = true;
 renderMenu(); applyAide(); previewOpp(); showShots(false); resize();
+openHome();
 requestAnimationFrame(frame);
 })();
 
