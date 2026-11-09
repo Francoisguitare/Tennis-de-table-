@@ -64,6 +64,79 @@ button { font: inherit; color: inherit; }
 .side .l i.on { visibility: visible; }
 .vs { color: var(--muted); font-weight: 700; }
 .hud-r { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.hud-l { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+/* Série en cours, points gagnés, annonces */
+.combo {
+  background: #ff8a3d; color: #1b0f05; border-radius: 99px; padding: 3px 11px; font: 800 17px/1.2 var(--f-display);
+  text-transform: uppercase; letter-spacing: .03em; font-variant-numeric: tabular-nums;
+}
+.combo[hidden] { display: none; }
+.combo.pop { animation: comboPop .35s ease-out; }
+@keyframes comboPop { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
+.panel-in { position: relative; }
+.xp-pop { position: absolute; left: 50%; top: -34px; transform: translateX(-50%); font: 800 24px/1 var(--f-display); color: #f2c94c; text-shadow: 0 2px 6px #000; opacity: 0; pointer-events: none; white-space: nowrap; }
+.xp-pop.go { animation: xpRise .9s ease-out; }
+@keyframes xpRise { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.8); } 20% { opacity: 1; transform: translate(-50%, 0) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -34px) scale(1); } }
+.toast {
+  position: fixed; z-index: 6; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 120px); transform: translateX(-50%);
+  background: #f2c94c; color: #1b1405; border-radius: 12px; padding: 8px 16px; font: 800 20px/1.15 var(--f-display); text-transform: uppercase;
+  letter-spacing: .03em; text-align: center; box-shadow: 0 6px 24px rgba(0, 0, 0, .5); pointer-events: none; max-width: calc(100% - 32px);
+}
+.toast[hidden] { display: none; }
+.toast.go { animation: toastIn 2.4s ease-out forwards; }
+@keyframes toastIn { 0% { opacity: 0; transform: translate(-50%, -12px) scale(.9); } 10% { opacity: 1; transform: translate(-50%, 0) scale(1.06); } 16% { transform: translate(-50%, 0) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
+.timer { height: 6px; border-radius: 99px; background: var(--tile); overflow: hidden; margin-bottom: 6px; }
+.timer[hidden] { display: none; }
+.timer i { display: block; height: 100%; width: 100%; background: #f2c94c; transform-origin: left; }
+.timer.go i { animation: timerRun linear forwards; }
+@keyframes timerRun { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* Vignette de salle, flash de verdict, confettis */
+.vig { position: fixed; inset: 0; z-index: 1; pointer-events: none; background: radial-gradient(ellipse at 50% 42%, transparent 52%, rgba(3, 8, 16, .5) 100%); }
+.vig.ok { animation: vigOk .5s ease-out; }
+.vig.ko { animation: vigKo .5s ease-out; }
+@keyframes vigOk { 0% { box-shadow: inset 0 0 0 6px rgba(82, 200, 138, .95), inset 0 0 90px rgba(82, 200, 138, .55); } 100% { box-shadow: inset 0 0 0 0 rgba(82, 200, 138, 0), inset 0 0 90px rgba(82, 200, 138, 0); } }
+@keyframes vigKo { 0% { box-shadow: inset 0 0 0 6px rgba(242, 146, 95, .95), inset 0 0 90px rgba(242, 146, 95, .5); } 100% { box-shadow: inset 0 0 0 0 rgba(242, 146, 95, 0), inset 0 0 90px rgba(242, 146, 95, 0); } }
+.fx { position: fixed; inset: 0; z-index: 6; pointer-events: none; overflow: hidden; }
+.fx i { position: absolute; top: -14px; width: 9px; height: 14px; border-radius: 2px; animation: confetti 1.5s cubic-bezier(.2, .6, .4, 1) forwards; }
+@keyframes confetti { 0% { transform: translate(0, 0) rotate(0); opacity: 1; } 100% { transform: translate(var(--dx), 70vh) rotate(var(--rot)); opacity: 0; } }
+#playBtn { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -10px 16px var(--sheet); }
+.shot:active:not([disabled]), .chip:active, .card:active, .btn:active { transform: scale(.97); }
+.shot.chosen { animation: shotPick .25s ease-out; }
+@keyframes shotPick { 0% { transform: scale(.92); } 100% { transform: scale(1); } }
+.why { animation: whyIn .22s ease-out; }
+@keyframes whyIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .vig.ok, .vig.ko, .fx i, .why, .shot.chosen { animation: none; } }
+/* Profil (menu) et tableau de bord */
+.prof {
+  appearance: none; text-align: left; border: 2px solid rgba(242, 201, 76, .5); background: rgba(242, 201, 76, .08); border-radius: 12px;
+  padding: 8px 12px; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; color: var(--ink);
+}
+.prof b { font: 800 19px/1.05 var(--f-display); text-transform: uppercase; letter-spacing: .02em; color: #f2c94c; }
+.prof small { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.prof .go { font-weight: 700; font-size: 13px; color: #f2c94c; white-space: nowrap; }
+.xpbar { grid-column: 1 / -1; height: 7px; border-radius: 99px; background: var(--tile); overflow: hidden; }
+.xpbar i { display: block; height: 100%; background: #f2c94c; border-radius: 99px; }
+#dash, #memo { z-index: 8; }
+.dtiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.dtile { border: 1px solid var(--line); background: var(--tile); border-radius: 10px; padding: 7px 4px; text-align: center; }
+.dtile b { display: block; font: 800 26px/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.dtile small { display: block; font-size: 10.5px; color: var(--muted); line-height: 1.2; margin-top: 2px; }
+.dchart { display: block; width: 100%; height: auto; background: rgba(255, 255, 255, .03); border-radius: 12px; }
+.dleg { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted); }
+.dleg i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+.dtrend { font-size: 14px; font-weight: 700; }
+.fam { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 14px; align-items: center; }
+.fam .val { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+.fam .meter { grid-column: 1 / -1; height: 8px; border-radius: 99px; background: var(--tile); overflow: hidden; }
+.fam .meter i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.fam.weak .meter i { background: var(--bad); }
+.fam.weak b { color: var(--bad); }
+.fam button { appearance: none; border: 1.5px solid var(--bad); background: rgba(242, 146, 95, .12); color: var(--ink); border-radius: 99px; padding: 3px 10px; min-height: 32px; font-weight: 700; font-size: 12.5px; cursor: pointer; }
+.rd-desc { font-size: 12.5px; color: var(--muted); margin-top: -6px !important; line-height: 1.35; }
+.end-xp { border: 2px solid rgba(242, 201, 76, .5); background: rgba(242, 201, 76, .08); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.end-xp b { font: 800 26px/1 var(--f-display); color: #f2c94c; text-transform: uppercase; }
+.end-xp small { color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .combo.pop, .xp-pop.go, .toast.go { animation-duration: .01s; } }
 .opp-name {
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px;
   font-size: 12.5px; text-align: right; max-width: 52vw;
@@ -442,13 +515,18 @@ button { font: inherit; color: inherit; }
 </head>
 <body>
 <canvas id="c" aria-label="Table de tennis de table vue depuis ta position de joueur"></canvas>
+<div class="vig" id="vig" aria-hidden="true"></div>
+<div class="fx" id="fx" aria-hidden="true"></div>
 <div class="face-tag" id="faceTag" hidden></div>
 
 <div class="hud">
-  <div class="score" aria-live="polite">
-    <div class="side"><span class="n" id="sMe">0</span><span class="l"><i id="srvMe"></i>Toi</span></div>
-    <span class="vs">–</span>
-    <div class="side"><span class="n" id="sOpp">0</span><span class="l"><i id="srvOpp"></i>Lui</span></div>
+  <div class="hud-l">
+    <div class="score" aria-live="polite">
+      <div class="side"><span class="n" id="sMe">0</span><span class="l"><i id="srvMe"></i>Toi</span></div>
+      <span class="vs">–</span>
+      <div class="side"><span class="n" id="sOpp">0</span><span class="l"><i id="srvOpp"></i>Lui</span></div>
+    </div>
+    <div class="combo" id="combo" hidden></div>
   </div>
   <div class="hud-r">
     <button class="icon-btn" id="pauseBtn" aria-label="Pause">Pause</button>
@@ -466,8 +544,11 @@ button { font: inherit; color: inherit; }
   <button type="button" class="ring-lab" id="labBtn">Tester mes réponses</button>
 </div>
 
+<div class="toast" id="toast" hidden role="status"></div>
 <div class="panel" id="panel">
   <div class="panel-in">
+    <div class="xp-pop" id="xpPop" aria-hidden="true"></div>
+    <div class="timer" id="timer" hidden><i></i></div>
     <div class="prompt" id="prompt">Choisis ton adversaire</div>
     <div class="lec-line" id="lecLine" hidden></div>
     <div class="lat-row" id="latRow" hidden role="group" aria-label="Effet latéral : où la balle part sur ta raquette">
@@ -481,19 +562,22 @@ button { font: inherit; color: inherit; }
 <!-- Menu -->
 <div class="overlay center" id="menu">
   <div class="sheet">
-    <span class="eyebrow">Tennis de table · lecture du jeu</span>
     <h1 class="title">Face au <span>picot</span></h1>
+    <button type="button" class="prof" id="profBtn" aria-label="Ma progression"></button>
     <h2 class="h">Je travaille</h2>
     <div class="cards themes" id="thCards"></div>
     <h2 class="h">Contre</h2>
     <div class="chips" id="oppCards"></div>
     <p class="opp-desc" id="oppDesc"></p>
-    <h2 class="h">Vitesse</h2>
-    <div class="chips" id="lvlCards"></div>
+    <h2 class="h">Niveau de lecture</h2>
+    <div class="chips" id="rdCards"></div>
+    <p class="rd-desc" id="rdDesc"></p>
     <button class="btn primary" id="playBtn">Commencer</button>
     <button class="btn" id="memoBtn">Aide-mémoire : quoi répondre à quoi</button>
     <details class="more">
       <summary>Réglages</summary>
+      <h2 class="h">Vitesse du jeu</h2>
+      <div class="chips" id="lvlCards"></div>
       <label class="switch" for="aide">
         <input type="checkbox" id="aide" checked>
         <span><b>Aide visuelle</b><small>Balle bicolore pour voir la rotation, nom de la face au contact, trace de la balle</small></span>
@@ -505,6 +589,15 @@ button { font: inherit; color: inherit; }
       <a class="link" id="quizLink" href="quiz.html" target="_blank" rel="noopener">Quiz et fiches « Lire le picot »</a>
     </details>
     <p class="sign">par <b>François Daoud</b></p>
+  </div>
+</div>
+
+<!-- Tableau de bord : ma progression -->
+<div class="overlay center" id="dash" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dashT">
+    <div class="ana-top"><span class="eyebrow" id="dashT">Ma progression</span><button type="button" id="dashClose" aria-label="Fermer">✕</button></div>
+    <div id="dashBody" style="display:flex;flex-direction:column;gap:12px"></div>
+    <button class="btn primary" id="dashOk">Fermer</button>
   </div>
 </div>
 
@@ -1031,6 +1124,78 @@ const TH = {
 if (!TH[store.theme]) store.theme = store.latAll ? "lat" : store.place === "revers" ? "revers" : "tout";
 function applyTheme() { const t = TH[store.theme]; store.place = t.place; store.lat = t.lat; store.latAll = t.latAll; }
 applyTheme();
+/* ===== Niveau de lecture : avec l'anneau (apprendre), sans l'anneau (lire comme en vrai), chrono =====
+   Sans l'anneau, il ne reste que les indices d'un vrai match : son geste, le vol et le rebond de la balle, le bruit.
+   L'effet s'affiche après ta réponse. C'est ce niveau-là qui fait progresser en vrai. */
+const RD = {
+  n1: { l: "1 · Anneau", s: "L’anneau te montre l’effet : tu apprends quelle réponse va avec quelle balle.", mult: 1, c: "#8ab8ff" },
+  n2: { l: "2 · Sans anneau", s: "Comme en vrai : lis son geste, le vol et le rebond. L’effet s’affiche après ta réponse. Points ×1,5.", mult: 1.5, c: "#f2c94c" },
+  n3: { l: "3 · Chrono", s: "Sans l’anneau, et 3 secondes pour répondre. Points ×2.", mult: 2, chrono: 3, c: "#ff7a5a" },
+};
+if (!RD[store.rd]) store.rd = "n1";
+const ringOn = () => store.rd === "n1";
+/* ===== Progression : points, niveau, série, objectif du jour, historique des séances ===== */
+const GOAL = 30;
+if (typeof store.xp !== "number") store.xp = 0;
+if (typeof store.bestRun !== "number") store.bestRun = 0;
+if (!store.days || typeof store.days !== "object") store.days = {};
+if (!Array.isArray(store.hist)) store.hist = [];
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const lvlOf = xp => Math.floor(Math.sqrt(Math.max(0, xp) / 60)) + 1;
+const xpAt = L => 60 * (L - 1) * (L - 1);
+const RANKS = [[1, "Débutant"], [3, "Relanceur"], [5, "Lecteur"], [8, "Contreur"], [12, "Tapeur"], [16, "Maître du picot"]];
+const rankOf = L => RANKS.filter(r => L >= r[0]).pop()[1];
+/* jours de suite où tu as joué au moins 10 balles (aujourd'hui compris, ou jusqu'à hier si tu n'as pas encore joué) */
+function dayStreak() {
+  const d = new Date(); let n = 0;
+  const joue = k => (store.days[k] || [0, 0])[1] >= 10;
+  if (!joue(dayKey(d))) d.setDate(d.getDate() - 1);
+  while (joue(dayKey(d))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+function toast(txt) { const t = $("toast"); t.textContent = txt; t.hidden = false; t.classList.remove("go"); void t.offsetWidth; t.classList.add("go"); clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 2400); }
+function xpPop(txt) { const e = $("xpPop"); e.textContent = txt; e.classList.remove("go"); void e.offsetWidth; e.classList.add("go"); }
+function syncCombo() {
+  const c = $("combo"), run = st.sess ? st.sess.run : 0;
+  c.hidden = !(run >= 2 && st.phase !== "menu");
+  if (!c.hidden) { c.textContent = `Série ×${run}`; c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); }
+}
+/* Une balle jouée : points (plus la série est longue, plus ça rapporte), série, objectif du jour, séance en cours */
+function progAdd(ok) {
+  const S = st.sess; if (!S) return;
+  S.n++;
+  const k = dayKey(), v = store.days[k] || [0, 0];
+  if (ok) {
+    S.ok++; S.run++; S.best = Math.max(S.best, S.run);
+    const gain = Math.round((10 + Math.min(10, 2 * (S.run - 1))) * RD[store.rd].mult), L0 = lvlOf(store.xp);
+    store.xp += gain; S.xp += gain; xpPop(`+${gain}`);
+    tone(523 * Math.pow(2, Math.min(S.run - 1, 9) / 12), 0.13); tone(784 * Math.pow(2, Math.min(S.run - 1, 9) / 12), 0.16, 0.07, 0.09);
+    const L1 = lvlOf(store.xp);
+    if (L1 > L0) { toast(`Niveau ${L1} · ${rankOf(L1)}`); [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 0.12 * i + 0.15, 0.11)); fxParty(); }
+    else if (v[0] + 1 === GOAL) { toast("Objectif du jour atteint"); fxParty(); }
+    else if (S.run > store.bestRun && S.run >= 5) toast(`Record : série de ${S.run}`);
+    else if (S.run === 5 || S.run === 10 || S.run === 15 || S.run === 20) { toast(`Série de ${S.run}`); fxParty(); }
+    if (S.run > store.bestRun) store.bestRun = S.run;
+  } else { if (S.run >= 3) tone(196, 0.25, 0, 0.09, "sine"); S.run = 0; }
+  store.days[k] = [v[0] + (ok ? 1 : 0), v[1] + 1];
+  const ks = Object.keys(store.days).sort(); while (ks.length > 120) delete store.days[ks.shift()];
+  // la séance entre dans l'historique dès 5 balles, puis se met à jour
+  if (S.n >= 5) {
+    const r = { t: S.t0, th: store.theme, rd: store.rd, n: S.n, ok: S.ok, run: S.best };
+    if (S.rec) Object.assign(S.rec, r); else { S.rec = r; store.hist.push(r); if (store.hist.length > 150) store.hist.shift(); }
+  }
+  save(); syncCombo();
+}
+function tone(f, d, when, g, type) {
+  if (!actx || !store.sound || actx.state !== "running") return;
+  try {
+    const t = actx.currentTime + (when || 0), o = actx.createOscillator(), G = actx.createGain();
+    o.type = type || "triangle"; o.frequency.value = f;
+    G.gain.setValueAtTime(g || 0.12, t); G.gain.exponentialRampToValueAtTime(0.0008, t + d);
+    o.connect(G); G.connect(master); o.start(t); o.stop(t + d + 0.02);
+  } catch (e) {}
+}
+let fxParty = () => {};
 /* Tes résultats par famille de balles, d'une séance à l'autre : [réussies, jouées] */
 if (!store.stats || typeof store.stats !== "object") store.stats = {};
 if (!store.seen || typeof store.seen !== "object") store.seen = {};
@@ -1038,7 +1203,11 @@ function statAdd(inc, sIn, ok) {
   const keys = ["all", inc.wMe >= 6 ? "lift" : inc.wMe <= -6 ? "coupe" : "flot"];
   if (latDir(sIn)) keys.push("lat");
   if (inc.bh) keys.push("bh");
-  for (const k of keys) { const v = store.stats[k] || [0, 0]; store.stats[k] = [v[0] + (ok ? 1 : 0), v[1] + 1]; }
+  for (const k of keys) {
+    let v = store.stats[k] || [0, 0];
+    if (v[1] >= 80) v = [v[0] / 2, v[1] / 2];   // les balles récentes pèsent plus : tes progrès se voient
+    store.stats[k] = [v[0] + (ok ? 1 : 0), v[1] + 1];
+  }
   save();
 }
 if (![0.1, 0.25, 0.5, 1].includes(store.anaSp)) store.anaSp = 0.25;
@@ -1102,6 +1271,7 @@ try {
   $("menu").hidden = true; $("noGL").hidden = false; return;
 }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x26364b);
 scene.fog = new THREE.Fog(0x26364b, 10, 26);
@@ -1110,6 +1280,9 @@ const CAMP = new THREE.Vector3(0, 1.72, 3.0), CAML = new THREE.Vector3(0, 0.72, 
 camera.position.copy(CAMP); camera.lookAt(CAML);
 scene.add(new THREE.HemisphereLight(0xe8efff, 0x5a3a32, 0.9));
 const sun = new THREE.DirectionalLight(0xffffff, 0.7); sun.position.set(1.5, 6, 2.5); scene.add(sun);
+// Ombres portées : la table, les joueurs et les raquettes se posent dans la salle
+sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
+Object.assign(sun.shadow.camera, { left: -3.6, right: 3.6, top: 4.6, bottom: -4.6, near: 0.5, far: 14 });
 
 const mat = c => new THREE.MeshLambertMaterial({ color: c });
 function box(w, h, d, c, x, y, z, parent) {
@@ -1145,7 +1318,7 @@ const signM = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 1.0), new THREE.MeshBa
 signM.position.set(0, 2.55, -10.94); scene.add(signM);
 for (const z of [-5.8, -3.8, -1.8, 0.2, 2.2, 4.2]) { box(0.04, 0.7, 1.96, 0x1d3a68, -4, 0.35, z); box(0.04, 0.7, 1.96, 0x1d3a68, 4, 0.35, z); }
 // Table
-box(1.525, 0.03, 2.74, 0x1b4f8c, 0, TY - 0.015, 0);
+const tableTop = box(1.525, 0.03, 2.74, 0x1b4f8c, 0, TY - 0.015, 0);
 const WH = 0xf4f6f8;
 box(0.02, 0.002, 2.74, WH, W - 0.01, TY + 0.001, 0); box(0.02, 0.002, 2.74, WH, -W + 0.01, TY + 0.001, 0);
 box(1.525, 0.002, 0.02, WH, 0, TY + 0.001, L - 0.01); box(1.525, 0.002, 0.02, WH, 0, TY + 0.001, -L + 0.01);
@@ -1197,6 +1370,56 @@ const trailPos = new Float32Array(TRAIL * 3);
 const trailGeo = new THREE.BufferGeometry(); trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPos, 3));
 const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xffb066, transparent: true, opacity: 0.55 }));
 trail.frustumCulled = false; scene.add(trail);
+
+// Halo et traînée lumineuse de la balle, étincelles aux impacts
+const glowC = document.createElement("canvas"); glowC.width = glowC.height = 64;
+{ const x = glowC.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.35, "rgba(255,255,255,.45)"); g.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = g; x.fillRect(0, 0, 64, 64); }
+const glowTex = new THREE.CanvasTexture(glowC);
+const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5, color: 0xffe2b0 }));
+glow.scale.setScalar(0.2); scene.add(glow);
+const TR2 = 48, tr2Pos = new Float32Array(TR2 * 3), tr2Col = new Float32Array(TR2 * 3);
+const tr2Geo = new THREE.BufferGeometry(); tr2Geo.setAttribute("position", new THREE.BufferAttribute(tr2Pos, 3)); tr2Geo.setAttribute("color", new THREE.BufferAttribute(tr2Col, 3));
+const trail2 = new THREE.Points(tr2Geo, new THREE.PointsMaterial({ size: 0.075, map: glowTex, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+trail2.frustumCulled = false; scene.add(trail2);
+const _tc = new THREE.Color();
+const NP = 120, pPos = new Float32Array(NP * 3), pCol = new Float32Array(NP * 3), pVel = new Float32Array(NP * 3), pLife = new Float32Array(NP), pBase = new Float32Array(NP * 3);
+const pGeo = new THREE.BufferGeometry(); pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3)); pGeo.setAttribute("color", new THREE.BufferAttribute(pCol, 3));
+const sparks = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.06, map: glowTex, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+sparks.frustumCulled = false; scene.add(sparks);
+let pNext = 0;
+function burst(x, y, z, hex, count, speed, up) {
+  _tc.set(hex);
+  for (let i = 0; i < count; i++) {
+    const k = pNext++ % NP, a = Math.random() * Math.PI * 2, e = (Math.random() - 0.3) * 1.4, v = speed * (0.4 + Math.random() * 0.8);
+    pPos[k * 3] = x; pPos[k * 3 + 1] = y; pPos[k * 3 + 2] = z;
+    pVel[k * 3] = Math.cos(a) * Math.cos(e) * v; pVel[k * 3 + 1] = Math.abs(Math.sin(e)) * v + (up || 0); pVel[k * 3 + 2] = Math.sin(a) * Math.cos(e) * v;
+    pBase[k * 3] = _tc.r; pBase[k * 3 + 1] = _tc.g; pBase[k * 3 + 2] = _tc.b; pLife[k] = 1;
+  }
+}
+function tickSparks(dt) {
+  let vivant = false;
+  for (let k = 0; k < NP; k++) {
+    if (pLife[k] <= 0) continue;
+    vivant = true; pLife[k] = Math.max(0, pLife[k] - dt * 2.4);
+    pVel[k * 3 + 1] -= 4.5 * dt;
+    for (let j = 0; j < 3; j++) { pPos[k * 3 + j] += pVel[k * 3 + j] * dt; pCol[k * 3 + j] = pBase[k * 3 + j] * pLife[k] * pLife[k]; }
+  }
+  sparks.visible = vivant;
+  if (vivant) { pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true; }
+}
+/* Flash de verdict sur le bord de l'écran, et confettis pour les grands moments */
+function flash(ok) { const v = $("vig"); v.classList.remove("ok", "ko"); void v.offsetWidth; v.classList.add(ok ? "ok" : "ko"); }
+fxParty = () => {
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const box = $("fx"), cols = ["#f2c94c", "#52c88a", "#5b9be6", "#ff8a3d", "#f3f6fa", "#e5453d"];
+  for (let i = 0; i < 26; i++) {
+    const e = document.createElement("i");
+    e.style.left = `${Math.random() * 100}%`; e.style.background = cols[i % cols.length];
+    e.style.setProperty("--dx", `${(Math.random() - 0.5) * 160}px`); e.style.setProperty("--rot", `${(Math.random() - 0.5) * 900}deg`);
+    e.style.animationDelay = `${Math.random() * 0.35}s`;
+    box.appendChild(e); setTimeout(() => e.remove(), 2000);
+  }
+};
 
 // Raquettes : face A (z local +) et face B (z local −)
 const RED = 0xc62828, BLACK = 0x161616;
@@ -1295,6 +1518,7 @@ const st = { score: [0, 0], phase: "menu", awaiting: false, choice: null, inc: n
 const oppZ = () => -(L + P.dist);
 function launch(tr, hitSound, strength) {
   ball.tr = tr; ball.start = clock; ball.evI = 0; ball.hold = null; ball.handP = null;
+  burst(tr.P[0], tr.P[1], tr.P[2], 0xffd9a0, 6 + Math.round(10 * Math.min(1, strength || 0.5)), 0.6 + 1.2 * Math.min(1, strength || 0.5), 0.2);
   if (hitSound) sound(hitSound, strength);
 }
 const tAt = (tr, i) => i * tr.dt;
@@ -1502,8 +1726,28 @@ function startDecision(tr, inc) {
   else prompt(inc.bh ? "Revers · lis la balle…" : "Lis la balle…", "hot");
   at(st.myTc, myContact);
 }
+/* Niveau 3 : 3 secondes pour répondre, comme une décision de match */
+function chronoStop() { clearTimeout(st.chronoT); st.chronoT = 0; const t = $("timer"); t.hidden = true; t.classList.remove("go"); }
+function chronoStart() {
+  chronoStop();
+  const s = RD[store.rd].chrono; if (!s || !st.awaiting || st.choice) return;
+  const t = $("timer"); t.hidden = false; t.firstElementChild.style.animationDuration = `${s}s`; void t.offsetWidth; t.classList.add("go");
+  st.chronoT = setTimeout(trop, s * 1000);
+}
+function trop() {
+  chronoStop();
+  if (st.phase !== "play" || !st.awaiting || st.choice || !frozen) return;
+  const inc = st.inc;
+  st.awaiting = false; frozen = false; setShotsEnabled(false); syncComp();
+  st.log.push({ w: inc.wMe, ok: false, type: "tard" }); statAdd(inc, st.mySIn, false); progAdd(false);
+  if (!inc.rxWorks) rxAdvise(inc, st.mySIn);
+  prompt(`Trop tard · c’était ${spinShort(st.mySIn)}`, "bad");
+  if (inc.rxBest) { const b = $("shot-" + inc.rxBest); if (b) b.classList.add("rxbest"); }
+  at(clock + 0.9, () => pointEnd("opp", { type: "tard" }));
+}
 function choose(k) {
   if (!st.awaiting || st.choice) return;
+  chronoStop();
   st.choice = k;
   const b = $("shot-" + k); if (b) b.classList.add("chosen");
   setShotsEnabled(false); syncComp();
@@ -1521,7 +1765,12 @@ function myContact() {
   const inc = st.inc;
   if (!st.choice) {
     if (LV[store.lvl].freeze) { frozen = true; prompt(st.inc && st.inc.bh ? "Choisis ton coup · revers" : "Choisis ton coup", "hot"); if (guided()) { anim.tt = 0; showLecture(true); revealShots(); }
-      if (reflex()) { showRing(st.mySIn); prompt(store.latAll ? "Elle part de quel côté ? Puis ton coup" : st.inc && st.inc.bh ? "Revers · comment tu réponds ?" : "Comment tu réponds ?", "hot"); }
+      if (reflex()) {
+        if (ringOn()) showRing(st.mySIn);
+        const rv = st.inc && st.inc.bh ? "Revers · " : "";
+        prompt(store.latAll ? "Elle part de quel côté ? Puis ton coup" : ringOn() ? `${rv}comment tu réponds ?` : `${rv}lis son geste : ta réponse ?`, "hot");
+        chronoStart();
+      }
       return; }
     st.awaiting = false; setShotsEnabled(false);
     st.log.push({ w: inc.wMe, ok: false, type: "tard" });
@@ -1532,7 +1781,7 @@ function myContact() {
   st.awaiting = false;
   const sh = st.myShot, ok = sh.res === "in" || sh.res === "haute";
   st.log.push({ w: inc.wMe, ok: sh.res === "in", type: sh.res, choice: sh.k });
-  statAdd(inc, st.mySIn, sh.res === "in");
+  statAdd(inc, st.mySIn, sh.res === "in"); progAdd(sh.res === "in");
   launch(sh.tr, "inv", Math.hypot(sh.V[0], sh.V[1], sh.V[2]) / 6);
   histPush({ kind: "me", title: `Ta raquette · ${(reflex() ? RX_L[sh.k] : CH[sh.k].l).replace(/[◀▶] ?| ?[◀▶]/g, "")}`, before: stLite(st.mySIn), after: stLite(sh.s), n: sh.n, V: sh.V, face: inc.bh ? "#22262d" : "#e04848" });
   if (ok) {
@@ -1557,9 +1806,13 @@ function rxFeedback(sh) {
   const nm = k => RX_L[k].replace(/[◀▶] ?| ?[◀▶]/g, "");
   const mine = inc.rxTape && inc.rxTape[sh.k], top = inc.rxTape && inc.rxTape[best];
   const softer = good && best && best !== sh.k && top && (!mine || top.score - mine.score >= 8);
-  const tail = good ? (softer ? ` · plus offensif : ${nm(best)} (${top.kmh} km/h)` : st.rxRun >= 3 ? ` · série de ${st.rxRun}` : "") : best ? ` · il fallait : ${nm(best)}` : " · rien ne passait proprement";
+  // sans l'anneau : la vérité s'affiche après ta réponse
+  const vrai = ringOn() ? "" : ` · ${spinShort(st.mySIn)}`;
+  const tail = good ? vrai + (softer ? ` · plus offensif : ${nm(best)}${vrai ? "" : ` (${top.kmh} km/h)`}` : "") : best ? ` · il fallait : ${nm(best)}` : " · rien ne passait proprement";
   // Séance « Les latéraux » : ta balle passe, mais tu avais mal lu le côté : on te le dit
   const dirL = latDir(st.mySIn), malLu = store.latAll && good && sh.k !== "latg" && sh.k !== "latd" && sh.comp != null && sh.comp !== dirL;
+  flash(good);
+  if (good) burst(st.mySIn.p[0], st.mySIn.p[1], st.mySIn.p[2], softer ? 0x8ad8a8 : 0xf2c94c, softer ? 14 : 26, 1.6, 0.5);
   if (malLu) prompt(`Ça passe, mais elle partait ${dirL > 0 ? "à droite ▶" : dirL < 0 ? "◀ à gauche" : "tout droit"}`, "hot");
   else prompt(`${R}${tail}`, good ? "good" : "bad");
   if ((!good || softer) && best) { const b = $("shot-" + best); if (b) b.classList.add("rxbest"); }
@@ -3156,7 +3409,7 @@ function classicTip(inc, type) {
 }
 function pointEnd(winner, info) {
   if (st.phase !== "play") return;
-  st.phase = "sheet"; events = []; st.awaiting = false; frozen = false; syncComp();
+  st.phase = "sheet"; events = []; st.awaiting = false; frozen = false; syncComp(); chronoStop();
   if (guided()) showLecture(false);
   bigPanel(false);
   st.score[winner === "me" ? 0 : 1]++;
@@ -3268,6 +3521,57 @@ function whyGo() {
 }
 $("whyGo").addEventListener("click", whyGo);
 $("whyLab").addEventListener("click", openLab);
+/* ===== Tableau de bord : niveau, objectif du jour, courbe de réussite par séance, familles de balles ===== */
+function chartSVG(H) {
+  const W = 330, Hh = 176, l = 34, r = 14, t = 14, b = 24, n = H.length;
+  const x = i => l + (n < 2 ? (W - l - r) / 2 : i * (W - l - r) / (n - 1)), y = p => t + (100 - p) * (Hh - t - b) / 100;
+  const pc = h => Math.round(100 * h.ok / Math.max(1, h.n));
+  const dt = h => { const d = new Date(h.t); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`; };
+  const pts = H.map((h, i) => `${x(i).toFixed(1)},${y(pc(h)).toFixed(1)}`).join(" ");
+  const last = H[n - 1];
+  return `<svg class="dchart" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Réussite en pourcentage, séance après séance. Dernière séance : ${pc(last)} %.">
+    ${[0, 25, 50, 75, 100].map(v => `<line x1="${l}" x2="${W - r}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(255,255,255,${v === 0 ? .3 : .1})"/><text x="${l - 6}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="#a9b8ca">${v}</text>`).join("")}
+    <text x="${l - 6}" y="9" font-size="9" text-anchor="end" fill="#a9b8ca">%</text>
+    ${n > 1 ? `<polygon points="${x(0)},${y(0)} ${pts} ${x(n - 1)},${y(0)}" fill="rgba(91,155,230,.14)"/><polyline points="${pts}" fill="none" stroke="#5b9be6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+    ${H.map((h, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(pc(h)).toFixed(1)}" r="${i === n - 1 ? 5 : 3.6}" fill="${(RD[h.rd] || RD.n1).c}" stroke="#0f1c2e" stroke-width="1.5"><title>${dt(h)} · ${esc((TH[h.th] || TH.tout).l)} · ${pc(h)} % sur ${h.n} balles</title></circle>`).join("")}
+    <text x="${Math.min(W - r - 2, x(n - 1))}" y="${Math.max(11, y(pc(last)) - 9)}" font-size="13" font-weight="700" text-anchor="end" fill="#f3f6fa">${pc(last)} %</text>
+    <text x="${l}" y="${Hh - 6}" font-size="10" fill="#a9b8ca">${dt(H[0])}</text>
+    ${n > 1 ? `<text x="${W - r}" y="${Hh - 6}" font-size="10" text-anchor="end" fill="#a9b8ca">${dt(last)}</text>` : ""}
+  </svg>`;
+}
+function renderDash() {
+  const L = lvlOf(store.xp), a = xpAt(L), b = xpAt(L + 1), d0 = store.days[dayKey()] || [0, 0];
+  const H = store.hist.slice(-24), tot = Object.values(store.days).reduce((s, v) => s + v[1], 0);
+  const pc = h => 100 * h.ok / Math.max(1, h.n), moy = A => A.reduce((s, h) => s + pc(h), 0) / A.length;
+  let trend = "";
+  if (H.length >= 4) {
+    const k = Math.min(3, Math.floor(H.length / 2)), d = Math.round(moy(H.slice(-k)) - moy(H.slice(-2 * k, -k)));
+    trend = d >= 3 ? `<span style="color:var(--good)">▲ +${d} points sur tes ${k} dernières séances</span>` : d <= -3 ? `<span style="color:var(--bad)">▼ ${d} points sur tes ${k} dernières séances</span>` : "Stable sur tes dernières séances";
+  }
+  const FAM = [["coupe", "Balles coupées", "coupe"], ["flot", "Balles sans effet", null], ["lift", "Balles liftées", "lift"], ["lat", "Balles latérales", "lat"], ["bh", "Sur ton revers", "revers"]];
+  const rows = FAM.map(([k, l, th]) => { const v = store.stats[k] || [0, 0]; return { k, l, th, n: Math.round(v[1]), p: v[1] ? Math.round(100 * v[0] / v[1]) : null }; });
+  const jouees = rows.filter(r => r.n >= 8), faible = jouees.length >= 2 ? jouees.reduce((m, r) => (r.p < m.p ? r : m)) : null;
+  $("dashBody").innerHTML = `
+    <div class="prof" style="cursor:default"><b>Niveau ${L} · ${esc(rankOf(L))}</b><span class="go" style="color:var(--muted)">${store.xp - a} / ${b - a} points</span>
+      <span class="xpbar"><i style="width:${Math.round(100 * (store.xp - a) / (b - a))}%"></i></span>
+      <small style="grid-column:1/-1">Encore ${b - store.xp} points pour le niveau ${L + 1}${rankOf(L + 1) !== rankOf(L) ? ` : ${esc(rankOf(L + 1))}` : ""}.</small></div>
+    <div class="dtiles">
+      <div class="dtile"><b>${dayStreak()}</b><small>jours de suite</small></div>
+      <div class="dtile"><b style="color:${d0[0] >= GOAL ? "var(--good)" : "inherit"}">${d0[0]}<span style="font-size:14px;color:var(--muted)">/${GOAL}</span></b><small>aujourd’hui</small></div>
+      <div class="dtile"><b>${store.bestRun}</b><small>meilleure série</small></div>
+      <div class="dtile"><b>${tot}</b><small>balles lues</small></div>
+    </div>
+    <h2 class="h">Ta réussite, séance après séance</h2>
+    ${H.length ? chartSVG(H) + `<div class="dleg">${Object.keys(RD).map(k => `<span><i style="background:${RD[k].c}"></i>${esc(RD[k].l.replace(/^\d · /, ""))}</span>`).join("")}</div>` : `<p style="color:var(--muted)">Ta courbe apparaît dès ta première séance de 5 balles.</p>`}
+    ${trend ? `<p class="dtrend">${trend}</p>` : ""}
+    <h2 class="h">Par type de balle</h2>
+    ${rows.map(r => `<div class="fam${faible && r.k === faible.k ? " weak" : ""}"><b>${esc(r.l)}</b><span class="val">${r.p == null ? "pas encore jouées" : `${r.p} % · ${r.n} balles`}${faible && r.k === faible.k && r.th ? ` <button type="button" data-th="${r.th}">Travailler</button>` : ""}</span><div class="meter"><i style="width:${r.p || 0}%"></i></div></div>`).join("")}
+    ${faible ? `<p style="font-size:13px;color:var(--muted)">Ton point faible du moment : ${esc(faible.l.toLowerCase())}.</p>` : ""}`;
+  $("dashBody").querySelectorAll("button[data-th]").forEach(bn => bn.addEventListener("click", () => { store.theme = bn.dataset.th; applyTheme(); save(); $("dash").hidden = true; $("end").hidden = true; openMenu(); }));
+}
+function openDash() { renderDash(); $("dash").hidden = false; }
+$("profBtn").addEventListener("click", openDash);
+for (const id of ["dashClose", "dashOk"]) $(id).addEventListener("click", () => { $("dash").hidden = true; });
 function openMemo() { $("memoGold").textContent = PROF[store.prof].gold; $("memo").hidden = false; }
 for (const id of ["memoBtn", "memoBtn2"]) $(id).addEventListener("click", openMemo);
 for (const id of ["memoClose", "memoOk"]) $(id).addEventListener("click", () => { $("memo").hidden = true; });
@@ -3293,17 +3597,28 @@ function endMatch() {
   const tooOpen = dec.filter(d => d.type === "long" && d.w <= -6).length;
   const filetFlat = dec.filter(d => (d.type === "net" || d.type === "own") && d.w > -6).length;
   const late = dec.filter(d => d.type === "tard").length;
-  if (filetCut) tips.push(`${filetCut} fois au filet sur une balle coupée. Après ton top dans son picot, la balle revient coupée : ouvre et relance vers le haut.`);
-  if (openFlat) tips.push(`${openFlat} fois trop ouvert (ou en poussette) sur une balle sans effet ou liftée. Après ta poussette dans le picot, la balle remonte : attaque-la, raquette plus fermée.`);
+  if (filetCut) tips.push(`${filetCut} fois au filet sur une balle coupée${P.rub !== "inv" ? ". Après ton top dans son picot, la balle revient coupée" : ""} : ouvre et relance vers le haut.`);
+  if (openFlat) tips.push(`${openFlat} fois trop ouvert (ou en poussette) sur une balle sans effet ou liftée${P.rub !== "inv" ? ". Après ta poussette dans le picot, la balle remonte" : ""} : attaque-la, raquette plus fermée.`);
   if (tooOpen) tips.push(`${tooOpen} fois trop ouvert sur une balle moins coupée que prévu. Son geste exagère l’effet : ouvre moins.`);
   if (filetFlat) tips.push(`${filetFlat} fois au filet sur une balle sans effet ou liftée. Raquette plus verticale, ou plus fermée si elle est liftée.`);
   if (late) tips.push(`${late} balle${late > 1 ? "s" : ""} jouée${late > 1 ? "s" : ""} trop tard. Décide dès le contact, en regardant la face de sa raquette.`);
   if (!tips.length) tips.push("Lecture propre. Passe au niveau supérieur ou change d’adversaire.");
-  tips.push("Ton arme contre le picot : la balle sans effet (balle morte, service sans effet). Il ne peut rien créer, et tu frappes le retour.");
+  if (P.rub !== "inv") tips.push("Ton arme contre le picot : la balle sans effet (balle morte, service sans effet). Il ne peut rien créer, et tu frappes le retour.");
+  const S = st.sess || { xp: 0, best: 0, L0: 1, run0: 0 }, Lf = lvlOf(store.xp), a0 = xpAt(Lf), b0 = xpAt(Lf + 1), d0 = store.days[dayKey()] || [0, 0];
+  const faits = [];
+  if (Lf > S.L0) faits.push(`Niveau ${Lf} atteint : ${rankOf(Lf)}`);
+  if (S.best > S.run0 && S.best >= 5) faits.push(`Nouveau record : série de ${S.best}`);
+  if (d0[0] >= GOAL) faits.push("Objectif du jour atteint"); else faits.push(`Objectif du jour : ${d0[0]} / ${GOAL}`);
+  // prêt pour le niveau de lecture suivant : 80 % sur au moins 12 balles
+  const suiv = store.rd === "n1" ? "n2" : store.rd === "n2" ? "n3" : null, pret = suiv && n >= 12 && pct >= 80;
   $("endBody").innerHTML = `
-    <span class="eyebrow">${esc(P.name)} · ${esc(RUBL[P.rub])} · ${esc(LV[store.lvl].l)}</span>
+    <span class="eyebrow">${esc(TH[store.theme].l)} · ${esc(RD[store.rd].l)} · ${esc(P.name)}</span>
     <p class="verdict ${won ? "ok" : "ko"}">${won ? "Victoire" : "Défaite"}</p>
     <div class="big-score">${a} – ${b}</div>
+    <div class="end-xp"><b>+${S.xp} points · série max ${S.best}</b>
+      <span class="xpbar"><i style="width:${Math.round(100 * (store.xp - a0) / (b0 - a0))}%"></i></span>
+      <small>${Lf > S.L0 ? "" : `Niveau ${Lf} · ${esc(rankOf(Lf))} · `}${faits.map(esc).join(" · ")}</small></div>
+    ${pret ? `<button class="btn" id="nextRdBtn" style="border-color:#f2c94c">Tu es prêt : passe au niveau « ${esc(RD[suiv].l.replace(/^\d · /, ""))} »</button>` : ""}
     <div class="stats">
       <div class="stat"><span><b>Lecture juste</b></span><span class="val">${pct} % · ${ok} / ${n}</span><div class="meter"><i style="width:${pct}%"></i></div></div>
       ${groups.map(g => { const p = Math.round(100 * g.ok / g.n); return `<div class="stat"><span>${g.l}</span><span class="val">${g.ok} / ${g.n}</span><div class="meter"><i style="width:${p}%"></i></div></div>`; }).join("")}
@@ -3313,7 +3628,10 @@ function endMatch() {
     <div class="row">
       <button class="btn primary" id="againBtn">Rejouer</button>
       <button class="btn" id="menuBtn">Changer de séance</button>
-    </div>`;
+    </div>
+    <button class="btn" id="dashBtn2">Ma progression</button>`;
+  $("dashBtn2").addEventListener("click", openDash);
+  if (pret) $("nextRdBtn").addEventListener("click", () => { store.rd = suiv; save(); $("end").hidden = true; openCheck(); });
   $("end").hidden = false;
   $("againBtn").addEventListener("click", () => { $("end").hidden = true; openCheck(); });
   $("menuBtn").addEventListener("click", () => { $("end").hidden = true; openMenu(); });
@@ -3329,6 +3647,14 @@ function renderMenu() {
     `<button class="chip" id="opp-${k}" data-k="${k}" aria-pressed="${store.prof === k}">${esc(PROF[k].name.replace(/^(Le |L’)/, "").replace(/^./, c => c.toUpperCase()))}</button>`).join("");
   $("oppCards").querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => { store.prof = c.dataset.k; save(); renderMenu(); previewOpp(); }));
   $("oppDesc").textContent = PROF[store.prof].desc;
+  $("rdCards").innerHTML = Object.keys(RD).map(k =>
+    `<button class="chip" id="rd-${k}" data-k="${k}" aria-pressed="${store.rd === k}">${esc(RD[k].l)}</button>`).join("");
+  $("rdCards").querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => { store.rd = c.dataset.k; save(); renderMenu(); }));
+  $("rdDesc").textContent = RD[store.rd].s;
+  const L = lvlOf(store.xp), d0 = store.days[dayKey()] || [0, 0], js = dayStreak();
+  $("profBtn").innerHTML = `<b>Niveau ${L} · ${esc(rankOf(L))}</b><span class="go">Ma progression ›</span>
+    <span class="xpbar"><i style="width:${Math.round(100 * (store.xp - xpAt(L)) / (xpAt(L + 1) - xpAt(L)))}%"></i></span>
+    <small style="grid-column:1/-1">Aujourd’hui : ${Math.min(d0[0], 999)} / ${GOAL} bonnes lectures${js >= 2 ? ` · ${js} jours de suite` : ""}${store.bestRun >= 3 ? ` · record : série de ${store.bestRun}` : ""}</small>`;
   $("lvlCards").innerHTML = Object.keys(LV).map(k =>
     `<button class="chip" id="lvl-${k}" data-k="${k}" aria-pressed="${store.lvl === k}">${esc(LV[k].l)}</button>`).join("");
   $("lvlCards").querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => { store.lvl = c.dataset.k; save(); renderMenu(); }));
@@ -3344,7 +3670,7 @@ function previewOpp() {
 }
 function openMenu() {
   paused = true; st.phase = "menu"; ball.tr = null; ball.handP = null; ball.hold = "me"; oppStroke = meStroke = null; events = [];
-  renderMenu(); previewOpp(); showShots(false); prompt("Choisis ce que tu travailles"); $("why").hidden = true;
+  chronoStop(); renderMenu(); previewOpp(); showShots(false); prompt("Choisis ce que tu travailles"); $("why").hidden = true; $("combo").hidden = true;
   $("panel").classList.remove("guided", "big"); lecLine.hidden = true; $("latRow").hidden = true; hideRing(); showLecture(false); anim.strip = null; anim.minis = []; resize();
   $("menu").hidden = false;
 }
@@ -3385,6 +3711,7 @@ function startPlay() {
   $("check").hidden = true;
   timeScale = LV[store.lvl].ts;
   st.score = [0, 0]; st.log = [];
+  st.sess = { t0: Date.now(), n: 0, ok: 0, run: 0, best: 0, xp: 0, rec: null, L0: lvlOf(store.xp), run0: store.bestRun }; syncCombo();
   $("panel").classList.toggle("guided", guided());
   lecLine.hidden = !guided(); showLecture(false);
   paused = false;
@@ -3392,9 +3719,9 @@ function startPlay() {
 }
 $("pauseBtn").addEventListener("click", () => {
   if (st.phase !== "play") return;
-  paused = true; $("pause").hidden = false;
+  paused = true; $("pause").hidden = false; chronoStop();
 });
-$("resumeBtn").addEventListener("click", () => { $("pause").hidden = true; paused = false; });
+$("resumeBtn").addEventListener("click", () => { $("pause").hidden = true; paused = false; if (frozen) chronoStart(); });
 $("quitBtn").addEventListener("click", () => { $("pause").hidden = true; openMenu(); });
 window.addEventListener("keydown", e => {
   if (!$("memo").hidden) { if (e.key === "Escape" || e.key === "Enter") $("memo").hidden = true; return; }
@@ -3451,6 +3778,8 @@ function frame(now) {
       const e = tr.events[ball.evI++];
       sound(e.type, e.sp / 5);
       if (e.type === "table" && store.aide) spawnMark(e.x, e.z);
+      if (e.type === "table") burst(e.x, TY + 0.01, e.z, 0xcfe3ff, 7, 0.5, 0.25);
+      else if (e.type === "net") burst(smp.p[0], smp.p[1], 0, 0xffffff, 12, 0.7, 0.2);
     }
   } else {
     const bob = Math.abs(Math.sin(now / 380)) * 0.12;
@@ -3478,8 +3807,24 @@ function frame(now) {
     k.m.scale.setScalar(1 + age * 0.5);
   }
 
+  // Halo et traînée lumineuse : avec l'anneau, leur couleur dit l'effet (bleu coupé, orange lift, jaune latéral)
+  glow.position.copy(bp); glow.visible = st.phase !== "menu";
+  trail2.visible = !!ball.tr && !frozen;
+  if (trail2.visible) {
+    const t = clock - ball.start;
+    if (ringOn()) _tc.set(ringCol({ w: smp.w, v: [0, 0, st.awaiting ? 1 : -1] })); else _tc.set(0xffe2b0);
+    glow.material.color.copy(_tc);
+    for (let k = 0; k < TR2; k++) {
+      const s2 = sample(ball.tr, Math.max(0, t - k * 0.0032)), f = (1 - k / TR2) * (1 - k / TR2) * 0.5;
+      tr2Pos[k * 3] = s2.p[0]; tr2Pos[k * 3 + 1] = s2.p[1] + (RV - PHYS.r); tr2Pos[k * 3 + 2] = s2.p[2];
+      tr2Col[k * 3] = _tc.r * f; tr2Col[k * 3 + 1] = _tc.g * f; tr2Col[k * 3 + 2] = _tc.b * f;
+    }
+    tr2Geo.attributes.position.needsUpdate = true; tr2Geo.attributes.color.needsUpdate = true;
+    sample(ball.tr, t);
+  }
+  tickSparks(dt);
   // Trace (aide) : les 0,3 dernières secondes de la trajectoire
-  trail.visible = !!store.aide && !!ball.tr;
+  trail.visible = false;
   if (trail.visible) {
     const t = clock - ball.start;
     for (let k = 0; k < TRAIL; k++) {
@@ -3525,7 +3870,7 @@ function frame(now) {
   animRacket(meRk, meStroke, tmpV.set(bh ? -0.28 : 0.32, 0.9, Z_ME + 0.25).clone(), bh ? ME_REST_BH : ME_REST_Q, clock);
 
   // Étiquette de face au contact
-  if (store.aide && oppStroke && oppStroke.gest && Math.abs(clock - oppStroke.tc) < 0.45 && st.phase === "play") {
+  if (store.aide && ringOn() && oppStroke && oppStroke.gest && Math.abs(clock - oppStroke.tc) < 0.45 && st.phase === "play") {
     tmpV.copy(oppRk.position).add(new THREE.Vector3(0, 0.14, 0)).project(camera);
     const r = renderer.domElement.getBoundingClientRect();
     tagEl.style.left = ((tmpV.x + 1) / 2 * r.width) + "px";
@@ -3564,6 +3909,14 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// Ombres : tout ce qui est solide en projette (pas la balle, qui a son ombre ronde, ni les lignes et les effets)
+scene.traverse(o => {
+  if (!o.isMesh || o === floor || o === ballM) return;
+  const m = o.material, g = o.geometry && o.geometry.parameters;
+  if (!m || m.transparent || m.isMeshBasicMaterial || (g && g.height != null && g.height < 0.01)) return;
+  o.castShadow = true;
+});
+floor.receiveShadow = true; tableTop.receiveShadow = true;
 renderMenu(); applyAide(); previewOpp(); showShots(false); resize();
 requestAnimationFrame(frame);
 })();
