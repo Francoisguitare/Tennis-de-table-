@@ -134,7 +134,20 @@ button { font: inherit; color: inherit; }
 .prof .go { font-weight: 700; font-size: 13px; color: #f2c94c; white-space: nowrap; }
 .xpbar { grid-column: 1 / -1; height: 7px; border-radius: 99px; background: var(--tile); overflow: hidden; }
 .xpbar i { display: block; height: 100%; background: #f2c94c; border-radius: 99px; }
-#dash, #memo { z-index: 8; }
+#dash, #memo, #rev { z-index: 8; }
+/* Atelier revers */
+.rev-svg { display: block; width: 100%; height: auto; background: #17263b; border-radius: 12px; }
+.rev-cap { font-size: 14px; line-height: 1.4; min-height: 60px; }
+.rev-cap b { color: #f2c94c; }
+.rev-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.35; }
+.cue { position: relative; border-radius: 14px; background: #0b1424; border: 2px solid var(--line); min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; overflow: hidden; text-align: center; padding: 10px; }
+.cue video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: .55; }
+.cue > * { position: relative; }
+.cue .big { font: 800 54px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; text-shadow: 0 2px 10px #000; }
+.cue .sub { font-size: 16px; font-weight: 700; text-shadow: 0 1px 6px #000; }
+.cue .cnt { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-shadow: 0 1px 4px #000; }
+.cue.flash { animation: cueFlash .3s ease-out; }
+@keyframes cueFlash { 0% { transform: scale(1.04); border-color: #fff; } 100% { transform: scale(1); } }
 .dtiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .dtile { border: 1px solid var(--line); background: var(--tile); border-radius: 10px; padding: 7px 4px; text-align: center; }
 .dtile b { display: block; font: 800 26px/1 var(--f-display); font-variant-numeric: tabular-nums; }
@@ -170,6 +183,12 @@ button { font: inherit; color: inherit; }
   text-transform: uppercase; white-space: nowrap; border: 2px solid #fff; color: #fff;
 }
 .face-tag.red { background: #c62828; }
+.face-tag.decode { background: #f2c94c; color: #1b1405; font-size: 14px; max-width: 86vw; white-space: normal; text-align: center; transform: translate(-50%, -160%); }
+.re-btn { appearance: none; display: block; margin: 0 auto 6px; border: 1px solid var(--line); background: var(--tile); border-radius: 99px; padding: 3px 14px; min-height: 34px; font-weight: 700; font-size: 13px; cursor: pointer; color: var(--ink); }
+.re-btn[hidden] { display: none; }
+.why-gest { border-left: 3px solid #f2c94c; padding-left: 8px; }
+.why-gest:empty { display: none; }
+.themes .card.wide { grid-column: 1 / -1; }
 .face-tag.black { background: #121212; }
 
 /* Panneau des coups */
@@ -450,7 +469,7 @@ button { font: inherit; color: inherit; }
 .card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
 .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 /* Menu : ce que tu travailles (grandes tuiles), puis adversaire et vitesse en pastilles */
-.themes .card:first-child { grid-column: 1 / -1; }
+
 .themes .card { padding: 9px 12px; }
 .card .stat { color: var(--accent); font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -569,9 +588,10 @@ button { font: inherit; color: inherit; }
     <div class="timer" id="timer" hidden><i></i></div>
     <div class="prompt" id="prompt">Choisis ton adversaire</div>
     <div class="lec-line" id="lecLine" hidden></div>
-    <div class="lat-row" id="latRow" hidden role="group" aria-label="Effet latéral : où la balle part sur ta raquette">
-      <span>Elle part</span>
-      <button type="button" data-c="-1">◀ à gauche</button><button type="button" data-c="0">tout droit</button><button type="button" data-c="1">à droite ▶</button>
+    <button type="button" class="re-btn" id="reBtn" hidden>↺ Revoir son geste</button>
+    <div class="lat-row" id="latRow" hidden role="group" aria-label="Où tu orientes ta raquette">
+      <span>J’oriente ma raquette</span>
+      <button type="button" data-c="1">◀ à gauche</button><button type="button" data-c="0">droit</button><button type="button" data-c="-1">à droite ▶</button>
     </div>
     <div class="shots" id="shots"></div>
   </div>
@@ -585,12 +605,13 @@ button { font: inherit; color: inherit; }
     <button type="button" class="prof" id="homeProf" aria-label="Ma progression"></button>
     <div class="next" id="homeNext"></div>
     <div id="homeChart"></div>
-    <h2 class="h">Le parcours</h2>
-    <div id="pathList" style="display:flex;flex-direction:column;gap:6px"></div>
     <div class="row">
       <button class="btn" id="freeBtn">Entraînement libre</button>
+      <button class="btn" id="revBtn">Atelier revers</button>
       <button class="btn" id="memoBtn3">Aide-mémoire</button>
     </div>
+    <h2 class="h">Le parcours</h2>
+    <div id="pathList" style="display:flex;flex-direction:column;gap:6px"></div>
     <p class="sign">par <b>François Daoud</b></p>
   </div>
 </div>
@@ -637,6 +658,38 @@ button { font: inherit; color: inherit; }
   </div>
 </div>
 
+<!-- Atelier revers : comprendre le geste, puis le répéter à vide -->
+<div class="overlay center" id="rev" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="revT">
+    <div class="ana-top"><span class="eyebrow" id="revT">Atelier revers</span><button type="button" id="revClose" aria-label="Fermer">✕</button></div>
+    <div class="chips" id="revTabs"><button class="chip" data-t="voir" aria-pressed="true">1 · Comprendre le geste</button><button class="chip" data-t="vide" aria-pressed="false">2 · Séance à vide</button></div>
+    <div id="revVoir" style="display:flex;flex-direction:column;gap:10px">
+      <div class="chips" id="revModes"></div>
+      <svg class="rev-svg" id="revSvg" viewBox="0 0 340 236" role="img" aria-label="Le revers vu de dessus (à gauche) et de profil (à droite)" font-family="Atkinson Hyperlegible, sans-serif"></svg>
+      <p class="rev-cap" id="revCap"></p>
+      <button class="btn" id="revAvec">Fais-le avec moi : 10 revers lents, raquette en main</button>
+      <h2 class="h">Les 5 repères</h2>
+      <ol class="rev-list">
+        <li><b>Face à la table</b>, pieds écartés comme tes épaules, genoux souples.</li>
+        <li><b>La balle devant le ventre.</b> Si elle arrive à côté, c’est toi qui bouges : un petit pas, puis le geste.</li>
+        <li><b>Le coude décollé du corps</b>, une main devant toi. C’est lui le pivot : il reste presque à la même place.</li>
+        <li><b>L’avant-bras tourne autour du coude</b>, le poignet finit. L’épaule reste calme : ce n’est pas un coup droit à l’envers.</li>
+        <li><b>Contact devant toi</b>, au sommet du rebond. La raquette part du ventre et finit devant, à hauteur d’épaule.</li>
+      </ol>
+    </div>
+    <div id="revVide" hidden style="display:flex;flex-direction:column;gap:10px">
+      <p style="font-size:14px;line-height:1.4">Pose ton téléphone devant toi, prends ta raquette. À chaque annonce, fais le déplacement et le geste, puis reviens au centre. C’est ce travail-là, fait pour de vrai, qui change ton revers.</p>
+      <div class="cue" id="cue"><video id="cueVid" playsinline muted hidden></video><span class="big" id="cueBig">Prêt ?</span><span class="sub" id="cueSub">Raquette en main, face à la table</span><span class="cnt" id="cueCnt"></span></div>
+      <h2 class="h">Rythme</h2>
+      <div class="chips" id="revTempo"></div>
+      <label class="switch" for="revVoix"><input type="checkbox" id="revVoix" checked><span><b>Annonces à voix haute</b><small>Pour ne pas regarder l’écran pendant le geste</small></span></label>
+      <label class="switch" for="revCam"><input type="checkbox" id="revCam"><span><b>Me voir (caméra)</b><small>L’image reste sur ton appareil : rien n’est enregistré ni envoyé</small></span></label>
+      <button class="btn primary" id="revGo">Démarrer : 1 minute</button>
+      <p style="font-size:12.5px;color:var(--muted)">L’appli ne voit pas ton geste. Pour te corriger : active « Me voir », ou filme-toi de profil et compare au modèle.</p>
+    </div>
+  </div>
+</div>
+
 <!-- Aide-mémoire : quoi répondre à quoi -->
 <div class="overlay center" id="memo" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="memoT">
@@ -654,7 +707,7 @@ button { font: inherit; color: inherit; }
       <i style="background:#8ab8ff">Coupée</i><span><b>Ouvre : Top ouvert, ou Coupe</b><small>Raquette fermée = filet. Sous 15 tr/s de coupé, le Top puissant passe aussi.</small></span>
       <i style="background:#e3e9f0">Sans effet</i><span><b>Attaque : Top puissant ou Top frappé</b><small>Rien ne la dévie : c’est la balle à tuer. Top ouvert = dehors.</small></span>
       <i style="background:#ffab66">Liftée</i><span><b>Ferme : Bloc. Top puissant si le lift est moyen</b><small>Raquette ouverte = dehors. Au-delà de 40 tr/s, bloque.</small></span>
-      <i style="background:#f2c94c">Latérale</i><span><b>Frotte du côté opposé à celui où elle part</b><small>Elle part à droite → ◀ Latéral gauche. Séance « Les latéraux » : dis d’abord de quel côté elle part, tes coups visent alors de l’autre côté.</small></span>
+      <i style="background:#f2c94c">Latérale</i><span><b>Oriente ta raquette du côté opposé à celui où elle part</b><small>Elle part du côté où allait sa raquette au contact. Elle part à droite → oriente ta raquette à gauche. Dans « Les latéraux » et « Remise de service », c’est toi qui l’orientes.</small></span>
     </div>
     <h2 class="h">3 · La plage de chaque coup (toujours la même)</h2>
     <div class="memo-t" id="memoWin"></div>
@@ -700,10 +753,12 @@ button { font: inherit; color: inherit; }
 <div class="why" id="why" hidden role="dialog" aria-labelledby="whyT">
   <div class="why-t" id="whyT"></div>
   <div class="why-ball" id="whyBall"></div>
+  <p class="why-gest" id="whyGest"></p>
   <p id="whyTxt"></p>
   <div class="why-fix" id="whyFix"></div>
   <p class="why-rule" id="whyRule"></p>
-  <div class="row"><button type="button" class="btn" id="whyLab">Voir en 3D</button><button type="button" class="btn primary" id="whyGo">Continuer</button></div>
+  <div class="row"><button type="button" class="btn" id="whyRe">↺ Revoir son geste</button><button type="button" class="btn" id="whyLab">Voir en 3D</button></div>
+  <button type="button" class="btn primary" id="whyGo">Continuer</button>
 </div>
 
 <!-- Labo : toutes tes réponses sur cette balle -->
@@ -1154,8 +1209,9 @@ if (typeof store.latAll !== "boolean") store.latAll = false;
 /* Ce que tu travailles : un seul choix au menu, qui règle où il joue, les latéraux et la famille d'effets qu'il t'envoie */
 const TH = {
   base:   { l: "Coupé, lift, sans effet", s: "Sans latéral", place: "tout", lat: false, latAll: false, fam: null, stat: "all", hid: true },
-  tout:   { l: "Tout mélangé", s: "Tous les effets, coup droit et revers", place: "tout", lat: true, latAll: false, fam: null, stat: "all" },
-  lat:    { l: "Les latéraux", s: "Chaque balle tourne sur le côté", place: "tout", lat: true, latAll: true, fam: null, stat: "lat" },
+  tout:   { l: "Tout mélangé", s: "Tous les effets, coup droit et revers", place: "tout", lat: true, latAll: false, fam: null, stat: "all", wide: true },
+  serv:   { l: "Remise de service", s: "Ses services, avec boucles et feintes : lis le contact", place: "tout", lat: true, latAll: false, fam: null, stat: "serv", aim: true, serveOnly: true, wide: true },
+  lat:    { l: "Les latéraux", s: "Chaque balle tourne sur le côté : oriente ta raquette", place: "tout", lat: true, latAll: true, fam: null, stat: "lat", aim: true },
   revers: { l: "Mon revers", s: "Tout arrive sur ton revers", place: "revers", lat: false, latAll: false, fam: null, stat: "bh" },
   lift:   { l: "Contre le lift", s: "Il tope : bloc ou top puissant", place: "tout", lat: false, latAll: false, fam: "lift", stat: "lift" },
   coupe:  { l: "Contre le coupé", s: "Il coupe : ouvre en top", place: "tout", lat: false, latAll: false, fam: "coupe", stat: "coupe" },
@@ -1177,6 +1233,13 @@ const PATH = [
     { id: "s2", t: "Ton revers, sans l’anneau", d: "La même lecture, côté revers.", th: "revers", rd: "n2", opp: "inv", n: 12, need: 8 },
     { id: "s3", t: "Les latéraux, sans l’anneau", d: "Regarde de quel côté sa raquette frotte la balle, et comment elle tourne en vol.", th: "lat", rd: "n2", opp: "inv", n: 12, need: 8 },
     { id: "s4", t: "Tout mélangé, sans l’anneau", d: "Tous les effets, coup droit et revers.", th: "tout", rd: "n2", opp: "inv", n: 15, need: 11 },
+  ] },
+  { ch: "Les services adverses", steps: [
+    { id: "v1", t: "Services francs, avec l’anneau", d: "Ne regarde que l’instant du contact : sous la balle = coupé, en montant = lift, sur le côté = latéral. Oriente ta raquette, puis remets.", th: "serv", rd: "n1", opp: "inv", sv: 0, n: 10, need: 7 },
+    { id: "v2", t: "Services francs, sans l’anneau", d: "La même lecture, sans l’anneau. Tu peux revoir son geste avant de répondre.", th: "serv", rd: "n2", opp: "inv", sv: 0, n: 12, need: 8 },
+    { id: "v3", t: "Avec une feinte après le contact", d: "Juste après le contact, sa raquette repart dans un autre sens. Ce geste-là ment.", th: "serv", rd: "n2", opp: "inv", sv: 1, n: 12, need: 8 },
+    { id: "v4", t: "Avec des boucles avant", d: "Il fait tourner sa raquette avant de servir. Rien ne compte avant le contact.", th: "serv", rd: "n2", opp: "inv", sv: 2, n: 15, need: 10 },
+    { id: "v5", t: "Services discrets, au chrono", d: "Geste court et rapide, boucles et feintes, 3 secondes pour répondre.", th: "serv", rd: "n3", opp: "inv", sv: 3, n: 15, need: 10 },
   ] },
   { ch: "Face au picot", steps: [
     { id: "p1", t: "Le mur, avec l’anneau", d: "Picot long : ton top revient coupé, ta poussette revient liftée. Vérifie-le sur l’anneau.", th: "base", rd: "n1", opp: "pl", n: 12, need: 9 },
@@ -1205,6 +1268,8 @@ function stepStars(x, ok, n, won) {
   if (x.match) { const p = n ? ok / n : 0; return !won ? 0 : p >= 0.85 ? 3 : p >= 0.65 ? 2 : 1; }
   return ok >= x.n ? 3 : ok >= Math.ceil((x.need + x.n) / 2) ? 2 : ok >= x.need ? 1 : 0;
 }
+/* Séances où tu choisis toi-même l'orientation de ta raquette (latéraux, remise de service) */
+const aimOn = () => !!TH[store.theme].aim;
 function applyTheme() { const t = TH[store.theme]; store.place = t.place; store.lat = t.lat; store.latAll = t.latAll; }
 applyTheme();
 /* ===== Niveau de lecture : avec l'anneau (apprendre), sans l'anneau (lire comme en vrai), chrono =====
@@ -1286,6 +1351,7 @@ function statAdd(inc, sIn, ok) {
   const keys = ["all", inc.wMe >= 6 ? "lift" : inc.wMe <= -6 ? "coupe" : "flot"];
   if (latDir(sIn)) keys.push("lat");
   if (inc.bh) keys.push("bh");
+  if (inc.serve) keys.push("serv");
   for (const k of keys) {
     let v = store.stats[k] || [0, 0];
     if (v[1] >= 80) v = [v[0] / 2, v[1] / 2];   // les balles récentes pèsent plus : tes progrès se voient
@@ -1680,7 +1746,7 @@ function worksList(sIn) {
 /* Ta lecture du latéral : où la balle va partir sur ta raquette */
 function syncComp() {
   // Séance « Les latéraux » : tu dis d'abord de quel côté elle part, c'est la lecture qu'on entraîne
-  const row = $("latRow"), on = store.lat && st.phase === "play" && (!reflex() || store.latAll);
+  const row = $("latRow"), on = store.lat && st.phase === "play" && (!reflex() || aimOn());
   row.hidden = !on;
   row.querySelectorAll("button").forEach(b => {
     b.setAttribute("aria-pressed", String(+b.dataset.c === (st.comp || 0)));
@@ -1740,12 +1806,12 @@ function updateHUD() {
 
 /* ================= Déroulement d'un point ================= */
 function newPoint() {
-  events = []; ball.tr = null; ball.handP = null; oppStroke = meStroke = null; frozen = false;
+  events = []; ball.tr = null; ball.handP = null; ball.toss = null; oppStroke = meStroke = null; frozen = false; st.rp = false; $("reBtn").hidden = true;
   st.awaiting = false; st.choice = null; st.rally = 0; st.lastMine = null; st.inc = null; st.myShot = null; st.phase = "play"; st.comp = 0; syncComp(); hideRing();
   st.hist = [];
   const tot = st.score[0] + st.score[1];
   st.server = (st.score[0] >= 10 && st.score[1] >= 10) ? (tot % 2 === 0 ? "me" : "opp") : (Math.floor(tot / 2) % 2 === 0 ? "me" : "opp");
-  if (TH[store.theme].fam) st.server = "opp";                    // séance « contre le lift / le coupé » : c'est lui qui sert, avec cet effet
+  if (TH[store.theme].fam || TH[store.theme].serveOnly) st.server = "opp";                    // séance « contre le lift / le coupé » : c'est lui qui sert, avec cet effet
   ball.hold = st.server;
   hold = 0; rkHist.length = 0;
   updateHUD();
@@ -1776,27 +1842,77 @@ function myServe(k) {
     planOpp(tr, null);
   });
 }
+/* ===== Les services adverses =====
+   L'effet d'un service se lit à l'instant du contact, pas avant ni après. Ici le contact est vrai : la face et la vitesse de sa
+   raquette sont calculées à partir de l'effet de la balle (un contact fin : la raquette traîne la balle dans son sens et la fait
+   tourner). Autour, on ajoute ce que font les serveurs pour brouiller la lecture : boucles avant, feinte juste après, geste court. */
+const SERVES = {
+  // « top » = rotation au départ. Les deux rebonds enlèvent environ 28 tr/s de coupé : c'est l'arrivée (entre parenthèses) qui compte pour toi.
+  coupe:    { l: "coupé", top: [-80, -62], lat: [0, 0], long: 0.15 },                 // arrive coupé 33 à 48
+  coupeLat: { l: "coupé latéral", top: [-68, -50], lat: [22, 34], long: 0.2 },        // arrive coupé 21 à 37, latéral 19 à 30
+  lat:      { l: "latéral", top: [-31, -21], lat: [26, 36], long: 0.3 },              // arrive sans effet, latéral 23 à 31
+  liftLat:  { l: "lifté latéral", top: [5, 25], lat: [22, 32], long: 1 },             // arrive lift 27 à 38, latéral 19 à 28
+  lift:     { l: "lifté long", top: [10, 35], lat: [0, 0], long: 1 },                 // arrive lift 32 à 42
+  mou:      { l: "faux coupé", top: [-27, -17], lat: [0, 0], long: 0.2, faux: true }, // geste de coupé mais frotte peu : arrive sans effet
+};
+function serveKind() {
+  const T = TH[store.theme];
+  if (T.fam === "lift") return "lift";
+  if (T.fam === "coupe") return "coupe";
+  if (store.latAll) return pickW({ coupeLat: .4, lat: .25, liftLat: .35 });
+  if (T.serveOnly) return pickW({ coupe: .2, coupeLat: .22, lat: .13, liftLat: .15, lift: .12, mou: .18 });
+  return store.lat ? pickW({ coupe: .3, coupeLat: .15, lat: .08, liftLat: .1, lift: .15, mou: .22 }) : pickW({ coupe: .45, lift: .25, mou: .3 });
+}
+/* La raquette qui donne ce départ de balle : D = a·n + b·(n × ω̂), avec b = ⅔·r·ω la vitesse que le frottement donne à la balle.
+   n : la face (vers la balle) ; elle avance le long de la balle à 2,5·b (sans glisser) et la pousse un peu (a). */
+function serveRacket(s) {
+  const D = [s.v[0], s.v[1] + 1.6, s.v[2]], Dm = Math.hypot(D[0], D[1], D[2]) || 1, wm = Math.hypot(s.w[0], s.w[1], s.w[2]);
+  if (wm < 5 * PHYS.TAU) { const n = D.map(x => x / Dm); return { n, V: n.map(x => x * Dm / 1.7) }; }
+  const wh = s.w.map(x => x / wm), Dp = v3a(D, wh, -v3d(D, wh)), Dpm = Math.hypot(Dp[0], Dp[1], Dp[2]) || 1;
+  const b = Math.min((2 / 3) * PHYS.r * wm, 0.93 * Dpm), a = Math.sqrt(Dpm * Dpm - b * b);
+  const X = v3x(Dp, wh), n = v3n([0, 1, 2].map(i => a * Dp[i] - b * X[i])), t = v3x(n, wh);
+  return { n, V: [0, 1, 2].map(i => 2.5 * b * t[i] + (a / 1.7) * n[i]) };
+}
+/* Le décor du geste : 0 = franc ; 1 = feinte juste après le contact ; 2 = boucles avant, en plus ; 3 = geste court et rapide, en plus */
+function serveDecor(S, style, kind) {
+  S.pre = 0.35;
+  if (style >= 1) {
+    const t = S.t, F = SERVES[kind].faux ? new THREE.Vector3(0, -0.6, 0.8)                 // sans effet : il finit comme un coupé
+      : Math.abs(t.y) > 0.3 ? new THREE.Vector3(t.x, -t.y * 1.3, t.z * 0.5) : new THREE.Vector3(-t.x, 0.7, t.z * 0.4);
+    S.fake = { t1: 0.022, F: F.normalize(), len: 0.26 + 0.12 * Math.random(), rot: (Math.random() < 0.5 ? -1 : 1) * 0.9 };
+  }
+  if (style >= 2) {
+    const n = Math.random() < 0.5 ? 1 : 2;
+    S.loop = { n, amp: 0.09 + 0.08 * Math.random(), ph: Math.random() < 0.5 ? 1 : -1, e1: new THREE.Vector3(1, 0, 0), e2: new THREE.Vector3(0, 1, 0) };
+    S.pre = 0.2 + 0.42 * n;
+  }
+  S.fwd = S.Ta + S.pre - 0.35;
+}
 function oppServe() {
-  const fam = TH[store.theme].fam;
-  const picot = !fam && Math.random() < 0.25;
-  const rps = fam === "lift" ? pickW({ "25": .5, "35": .5 }) : fam === "coupe" ? pickW({ "-55": .6, "-45": .4 })
-    : picot ? pickW({ "0": .6, "-15": .4 }) : pickW({ "-55": .45, "-30": .15, "0": .25, "25": .15 });
-  const r = +rps, long = r > 0 || Math.random() < 0.2;
+  const T = TH[store.theme], fam = T.fam;
+  const picot = P.rub !== "inv" && !fam && !T.serveOnly && Math.random() < 0.25;
+  const kind = picot ? "mou" : serveKind(), K = SERVES[kind];
+  const r = picot ? rnd(-15, 0) : rnd(K.top[0], K.top[1]);
+  const lat = K.lat[1] ? (Math.random() < 0.5 ? -1 : 1) * rnd(K.lat[0], K.lat[1]) : 0;
+  const long = Math.random() < K.long;
   const p0 = [store.place === "revers" ? rnd(-0.45, -0.2) : store.place === "cd" ? rnd(0.2, 0.45) : rnd(-0.25, 0.25), long ? 0.95 : 0.97, -(L + 0.13)];
-  const lat = !picot && store.lat && Math.random() < (store.latAll ? 1 : 0.6) ? (Math.random() < 0.5 ? -1 : 1) * rnd(25, 45) : 0;
   const s = PHYS.serve(p0, 1, r, long ? 0.8 : 1.0, long ? 1.15 : rnd(0.45, 0.6), lat);
-  const sp = Math.hypot(s.v[0], s.v[1], s.v[2]);
-  const n = [s.v[0] / sp, s.v[1] / sp, s.v[2] / sp];
-  const tc = clock + 0.9;
-  ball.hold = "opp"; ball.handP = p0;
-  const Vs = [s.v[0] * 0.6, s.v[1] * 0.6 + (r < 0 ? -1 : 1), s.v[2] * 0.6];
-  oppStroke = makeStroke(tc, p0, n, Vs, picot);
-  oppStroke.gest = "serve"; oppStroke.lat = lat !== 0;
+  const R = serveRacket(s);
+  // le niveau de feinte : fixé par l'étape du parcours, sinon par le niveau de lecture
+  const X = st.exo, max = X && X.sv != null ? X.sv : T.serveOnly ? (store.rd === "n1" ? 1 : store.rd === "n2" ? 2 : 3) : store.rd === "n1" ? 0 : 1;
+  const style = picot ? 0 : X && X.sv != null && Math.random() < 0.7 ? max : Math.floor(Math.random() * (max + 1));
+  const S = makeStroke(0, p0, R.n, R.V, picot, style >= 3 ? 0.5 : 0.9);
+  serveDecor(S, style, kind);
+  const tc = clock + 0.45 + S.pre + 0.06 + S.Ta;
+  S.tc = tc; S.gest = "serve"; S.lat = lat !== 0; S.kind = kind; S.style = style;
+  oppStroke = S;
+  ball.hold = "opp"; ball.handP = p0; ball.toss = { tc, T: 0.5, H: 0.2 };
   const tr = PHYS.fly(s, 3);
   at(tc, () => {
+    ball.toss = null;
     launch(tr, picot ? P.rub : "inv", 0.5);
-    histPush({ kind: "his", title: `Son service · ${picot ? RUBN[P.rub] : "backside"}`, before: null, after: stLite(s), n, V: Vs, face: picot === picotRed ? "#e04848" : "#22262d" });
-    startDecision(tr, { serve: true, lat: lat !== 0, face: picot ? "picot" : "bs", gest: "serve", wOut: PHYS.topRps(s), n, V: Vs, snd: picot ? P.rub : "inv" });
+    histPush({ kind: "his", title: `Son service · ${picot ? RUBN[P.rub] : "backside"}`, before: null, after: stLite(s), n: R.n, V: R.V, face: picot === picotRed ? "#e04848" : "#22262d" });
+    startDecision(tr, { serve: true, kind, style, lat: lat !== 0, face: picot ? "picot" : "bs", gest: "serve", wOut: PHYS.topRps(s), n: R.n, V: R.V, snd: picot ? P.rub : "inv" });
     if (guided()) at(clock + 0.12, () => { hold = 1.1; });
   });
 }
@@ -1849,9 +1965,9 @@ function choose(k) {
   chronoStop();
   st.choice = k;
   const b = $("shot-" + k); if (b) b.classList.add("chosen");
-  setShotsEnabled(false); syncComp();
+  setShotsEnabled(false); syncComp(); $("reBtn").hidden = true;
   // Séance « Les latéraux » : tes coups classiques visent selon TA lecture du côté ; ailleurs ils visent juste tout seuls
-  const lu = k === "latg" || k === "latd" || !store.latAll ? rxComp(k, st.mySIn) : (st.comp || 0);
+  const lu = k === "latg" || k === "latd" || !aimOn() ? rxComp(k, st.mySIn) : (st.comp || 0);
   st.myShot = computeMyShot(k, st.mySIn, true, reflex() ? lu : store.lat ? st.comp : null);
   hideRing();
   meStroke = makeStroke(st.myTc, st.mySIn.p, st.myShot.n, st.myShot.V, !st.inc.bh, 0.45);
@@ -1867,7 +1983,8 @@ function myContact() {
       if (reflex()) {
         if (ringOn()) showRing(st.mySIn);
         const rv = st.inc && st.inc.bh ? "Revers · " : "";
-        prompt(store.latAll ? "Elle part de quel côté ? Puis ton coup" : ringOn() ? `${rv}comment tu réponds ?` : `${rv}lis son geste : ta réponse ?`, "hot");
+        $("reBtn").hidden = !!RD[store.rd].chrono;
+        prompt(aimOn() ? "Oriente ta raquette, puis ton coup" : ringOn() ? `${rv}comment tu réponds ?` : `${rv}lis son geste : ta réponse ?`, "hot");
         chronoStart();
       }
       return; }
@@ -1889,7 +2006,7 @@ function myContact() {
     else prompt(`${sh.res === "haute" ? "Balle haute…" : "Bien lu"} · ${EFF[inc.eff]} · ${Math.round(Math.abs(inc.wMe))} tr/s`, sh.res === "haute" ? "bad" : "good");
     st.lastMine = { k: sh.k, label: CH[sh.k].my, attack: (sh.k === "plat" && inc.wMe > -6 && inc.kmh < 26) || sh.k === "kill", tape: tapeOf(sh.tr) };
     // exercice du parcours : c'était la dernière balle, on s'arrête là
-    if (st.exo && !st.exo.match && st.sess.n >= st.exo.n) at(clock + 1.2, () => pointEnd("me", { type: "exo" }));
+    if ((st.exo && !st.exo.match && st.sess.n >= st.exo.n) || TH[store.theme].serveOnly) at(clock + 1.2, () => pointEnd("me", { type: "exo" }));
     else planOpp(sh.tr, sh);
   } else {
     if (reflex()) rxFeedback(sh);
@@ -1911,14 +2028,14 @@ function rxFeedback(sh) {
   const vrai = ringOn() ? "" : ` · ${spinShort(st.mySIn)}`;
   const tail = good ? vrai + (softer ? ` · plus offensif : ${nm(best)}${vrai ? "" : ` (${top.kmh} km/h)`}` : "") : best ? ` · il fallait : ${nm(best)}` : " · rien ne passait proprement";
   // Séance « Les latéraux » : ta balle passe, mais tu avais mal lu le côté : on te le dit
-  const dirL = latDir(st.mySIn), malLu = store.latAll && good && sh.k !== "latg" && sh.k !== "latd" && sh.comp != null && sh.comp !== dirL;
+  const dirL = latDir(st.mySIn), malLu = aimOn() && good && sh.k !== "latg" && sh.k !== "latd" && sh.comp != null && sh.comp !== dirL;
   flash(good);
   if (good) burst(st.mySIn.p[0], st.mySIn.p[1], st.mySIn.p[2], softer ? 0x8ad8a8 : 0xf2c94c, softer ? 14 : 26, 1.6, 0.5);
   // bon coup mais côté mal lu : c'est la lecture qu'on corrige, pas le coup
-  const coteL = dirL > 0 ? "à droite ▶" : dirL < 0 ? "◀ à gauche" : "tout droit";
-  const malLuKo = store.latAll && !good && sh.k !== "latg" && sh.k !== "latd" && sh.comp != null && sh.comp !== dirL && (inc.rxWorks || []).includes(sh.k);
-  if (malLuKo) prompt(`${R} · mal lu : elle partait ${coteL}`, "bad");
-  else if (malLu) prompt(`Ça passe, mais elle partait ${coteL}`, "hot");
+  const coteL = dirL > 0 ? "◀ à gauche" : dirL < 0 ? "à droite ▶" : "droit";
+  const malLuKo = aimOn() && !good && sh.k !== "latg" && sh.k !== "latd" && sh.comp != null && sh.comp !== dirL && (inc.rxWorks || []).includes(sh.k);
+  if (malLuKo) prompt(`${R} · il fallait orienter ta raquette ${coteL}`, "bad");
+  else if (malLu) prompt(`Ça passe, mais il fallait l’orienter ${coteL}`, "hot");
   else prompt(`${R}${tail}`, good ? "good" : "bad");
   if ((!good || softer) && best) { const b = $("shot-" + best); if (b) b.classList.add("rxbest"); }
 }
@@ -2394,6 +2511,7 @@ function renderLecturePlaceholder() {
 /* Revoir son coup : on rejoue sa frappe au ralenti, tout le reste du point est décalé d'autant */
 function replayOpp() {
   if (!st.awaiting || st.choice || !ball.tr || !oppStroke) return;
+  hideRing(); chronoStop();
   const delta = clock + 0.8 - ball.start;
   ball.start += delta; ball.evI = 0;
   oppStroke.tc += delta; st.myTc += delta;
@@ -2966,7 +3084,8 @@ function ringShow(i) {
   ring.idx = Math.max(0, Math.min(ms.length - 1, i)); ring.tt = 0;
   const M = ms[ring.idx];
   $("ringLab").textContent = `${ring.idx + 1}/${ms.length} · ${M.title}`;
-  $("ringTxt").textContent = M.live ? spinDesc(M.live) : M.before ? `Avant : ${spinDesc(M.before)} → après : ${spinDesc(M.after)}` : `Départ : ${spinDesc(M.after)}`;
+  const dL = M.live ? latDir(M.live) : 0;
+  $("ringTxt").textContent = M.live ? spinDesc(M.live) + (dL ? ` · elle part à ${dL > 0 ? "droite ▶" : "gauche ◀"}` : "") : M.before ? `Avant : ${spinDesc(M.before)} → après : ${spinDesc(M.after)}` : `Départ : ${spinDesc(M.after)}`;
   $("ringHint").textContent = M.hint || "";
   $("ringGest").textContent = M.live ? "" : strokeDesc(M);
   $("ringView").textContent = `Vue : ${viewLabel(ring, M)}`;
@@ -3040,7 +3159,7 @@ function latWord(a, b) {
   return B > A + 5 ? "tu en rajoutes" : B < A - 5 ? "tu le diminues" : "tu le gardes";
 }
 const latTxt = l => Math.abs(l) < 6 ? "0" : `${Math.round(Math.abs(l))} ${l > 0 ? "▶" : "◀"}`;
-const spinShort = s => { const t = PHYS.topRps(s), l = latOf(s); return `${fmtW(t)}${Math.abs(l) >= 6 ? ` · lat ${latTxt(l)}` : ""}`; };
+const spinShort = s => { const t = PHYS.topRps(s), d = latDir(s); return `${fmtW(t)}${d ? ` · latéral ${Math.round(Math.abs(latRps(s)))}, part à ${d > 0 ? "droite" : "gauche"}` : ""}`; };
 
 /* ----- La scène 3D du Labo : une deuxième vue de la salle, avec sa propre caméra ----- */
 const L3 = { ok: false };
@@ -3117,9 +3236,32 @@ function swingS(w, t) {
 }
 const _sp1 = new THREE.Vector3(), _sq1 = new THREE.Quaternion();
 function swingAt(w, tau, rk) {
-  const t = tau - w.tc, prep = 0.35, pause = 0.06, tA = -w.Ta - pause, tR = tA - prep, back = w.Td + 0.5;
-  if (t < tR || t > back) { rk.position.copy(w.restP); rk.quaternion.copy(w.restQ); return; }
-  if (t < tA) { swingPose(w, -w.sb, _sp1, _sq1); const u = sm((t - tR) / prep); rk.position.copy(w.restP).lerp(_sp1, u); rk.quaternion.copy(w.restQ).slerp(_sq1, u); return; }
+  const t = tau - w.tc, prep = w.pre || 0.35, pause = 0.06, tA = -w.Ta - pause, tR = tA - prep, back = w.Td + 0.5;
+  if (t < tR) { rk.position.copy(w.restP); rk.quaternion.copy(w.restQ); return; }
+  if (t < tA) {
+    swingPose(w, -w.sb, _sp1, _sq1);
+    const u0 = (t - tR) / prep, u = sm(u0);
+    rk.position.copy(w.restP).lerp(_sp1, u); rk.quaternion.copy(w.restQ).slerp(_sq1, u);
+    // boucles avant le geste : la raquette tourne en rond, sans rapport avec le contact
+    if (w.loop) {
+      const a = 2 * Math.PI * w.loop.n * u0;
+      rk.position.addScaledVector(w.loop.e1, w.loop.amp * Math.sin(a) * w.loop.ph).addScaledVector(w.loop.e2, w.loop.amp * (1 - Math.cos(a)));
+      _sq.setFromAxisAngle(w.m, 0.6 * Math.sin(a)); rk.quaternion.premultiply(_sq);
+    }
+    return;
+  }
+  // feinte : juste après le contact, la raquette repart dans un autre sens et tourne sa face
+  if (w.fake && t > w.fake.t1) {
+    const f = w.fake, T2 = 0.22, tient = 0.15, retour = 0.45, e = 1 - Math.pow(1 - Math.min(1, (t - f.t1) / T2), 2);
+    swingPose(w, swingS(w, f.t1), _sp1, _sq1);
+    _sp1.addScaledVector(f.F, f.len * e); _sq.setFromAxisAngle(w.m, f.rot * e); _sq1.premultiply(_sq);
+    const u = sm((t - f.t1 - T2 - tient) / retour);
+    if (u <= 0) { rk.position.copy(_sp1); rk.quaternion.copy(_sq1); }
+    else if (u >= 1) { rk.position.copy(w.restP); rk.quaternion.copy(w.restQ); }
+    else { rk.position.copy(_sp1).lerp(w.restP, u); rk.quaternion.copy(_sq1).slerp(w.restQ, u); }
+    return;
+  }
+  if (t > back) { rk.position.copy(w.restP); rk.quaternion.copy(w.restQ); return; }
   if (t > w.Td) { swingPose(w, w.sf, _sp1, _sq1); const u = sm((t - w.Td) / 0.5); rk.position.copy(_sp1).lerp(w.restP, u); rk.quaternion.copy(_sq1).slerp(w.restQ, u); return; }
   swingPose(w, swingS(w, t), rk.position, rk.quaternion);
 }
@@ -3251,7 +3393,8 @@ function l3Load() {
   L3.my = swingMake(bp0, v3n(c.sh.n), c.sh.V, !inc.bh, L3.meSh, L3.meRest, L3.meRestQ, L3.tMe, 1);
   // son geste aussi, quand on connaît sa raquette au contact
   const hisSh = new THREE.Vector3(L3.hisPos.x - 0.2, 1.48, L3.hisPos.z + 0.02);
-  L3.hisW = L3.his && inc.n && inc.V ? swingMake(tr.P.subarray(0, 3), v3n(inc.n), inc.V, L3.his.faceA, hisSh, L3.hisRest, OPP_REST_Q, 0, 1) : null;
+  L3.hisW = L3.his && L3.his.O ? Object.assign(L3.his, { restP: L3.hisRest, restQ: OPP_REST_Q }) : null;
+  if (L3.hisW) L3.t0 = -Math.max(0.5, (L3.hisW.pre || 0.35) + L3.hisW.Ta + 0.2);
   l3SwingVis();
   l3Faces(L3.hisRk, picotRed ? RED : BLACK, picotRed ? BLACK : RED);
   L3.cp = L3.my.C.clone();
@@ -3642,7 +3785,7 @@ const RULES = {
   flot: "À retenir · sans effet → attaque : Top puissant ou Top frappé.",
   llift: "À retenir · peu liftée → attaque : Top puissant ou Top frappé. Le Bloc passe dès 10 tr/s de lift.",
   lift: "À retenir · liftée → Bloc dès 10 tr/s ; Top puissant jusqu’à 40 tr/s, Top frappé jusqu’à 30.",
-  lat: "À retenir · latérale → frotte du côté opposé à celui où elle part.",
+  lat: "À retenir · la balle part du côté où allait sa raquette au contact. Oriente la tienne de l’autre côté.",
 };
 function whyMiss(inc, sh, sIn) {
   const c = CH[sh.k], nom = RX_L[sh.k].replace(/[◀▶] ?| ?[◀▶]/g, ""), d = Math.round(inc.wMe - sh.assumed), dir = latDir(sIn);
@@ -3650,10 +3793,10 @@ function whyMiss(inc, sh, sIn) {
   // mal lu = tu as indiqué le mauvais côté ET c'est bien ça qui fait sortir la balle (le même coup passait, bien visé)
   const malLu = !isLat && sh.comp != null && sh.comp !== dir && (sh.res === "wide" || (inc.rxWorks || []).includes(sh.k));
   if ((dir || malLu) && (sh.res === "wide" || badSide || malLu)) {
-    const cote = c => c > 0 ? "à droite" : c < 0 ? "à gauche" : "tout droit";
-    if (!dir) return `Cette balle n’avait pas de latéral : elle repart tout droit. Tu as visé comme si elle partait ${cote(sh.comp)}.`;
-    return `Son latéral (${Math.round(Math.abs(latRps(sIn)))} tr/s) fait partir la balle vers ta ${dir > 0 ? "droite" : "gauche"} sur ta raquette.`
-      + (badSide ? " En frottant du même côté, tu ajoutes l’écart au lieu de le corriger." : malLu ? ` Tu as répondu « ${cote(sh.comp)} » : ta balle sort sur le côté.` : " Ta balle sort sur le côté.");
+    const ori = c => (c > 0 ? "orientée vers la gauche" : c < 0 ? "orientée vers la droite" : "gardée droite");
+    if (!dir) return `Cette balle n’avait pas de latéral : elle repart tout droit. Il fallait garder ta raquette droite ; tu l’as ${ori(sh.comp)}.`;
+    return `Son latéral (${Math.round(Math.abs(latRps(sIn)))} tr/s) fait partir la balle vers ta ${dir > 0 ? "droite" : "gauche"} sur ta raquette : il fallait l’orienter vers la ${dir > 0 ? "gauche" : "droite"}.`
+      + (badSide ? " En frottant du même côté, tu ajoutes l’écart au lieu de le corriger." : malLu ? ` Tu l’as ${ori(sh.comp)} : ta balle sort sur le côté.` : " Ta balle sort sur le côté.");
   }
   // en chiffres : ce que ton coup couvre sur une balle comme celle-ci, et de combien la balle en sort
   const C = inc.couv[sh.k], ht = horsTop(C.top, C.top0), hl = horsLat(C.lat, C.lat0), suite = sh.res === "net" || sh.res === "own" ? "filet" : sh.res === "haute" ? "ta balle part trop haut" : "dehors";
@@ -3663,6 +3806,51 @@ function whyMiss(inc, sh, sIn) {
   if (sh.res === "haute") return `${nom} couvre ${plageTopTxt(C.top)} : cette balle (${rotMot(C.top0)}) passe, mais elle monte trop et il la smashe.`;
   return `${nom} couvre ${plageTopTxt(C.top)} : cette balle (${rotMot(C.top0)}) est dans sa plage, mais elle était trop difficile pour lui (trop basse ou trop rapide), ${suite}.`;
 }
+/* ===== Décoder son geste : ce que faisait sa raquette à l'instant du contact, et ce que ça donne =====
+   On regarde où elle touche la balle (dessous, dessus, côté) et dans quel sens elle va ; l'effet vient de là (ω ∝ frottement × face).
+   Tout ce qui se passe avant (boucles) ou après (feinte) ne change rien à la balle. */
+function gestDecode(inc) {
+  if (!inc || !inc.n || !inc.V || inc.wOut == null || inc.wMe == null) return null;
+  const n = v3n(inc.n), p = strokeParts(n, inc.V), S = inc.strokeHis || {};
+  const vt = p.vtm > 0.01 ? p.vt.map(x => x / p.vtm) : [0, 0, 0], frotte = p.vtm >= 1.8;
+  // où sa raquette touche la balle (vu de chez toi) et dans quel sens elle va
+  const ou = (n[1] > 0.45 ? "par-dessous" : n[1] < -0.3 ? "par-dessus" : "par l’arrière") + (Math.abs(n[0]) > 0.3 ? ` et sur son côté ${n[0] > 0 ? "gauche" : "droit"}` : "");
+  const sens = [];
+  if (vt[1] > 0.35) sens.push("en montant"); else if (vt[1] < -0.35) sens.push("en descendant");
+  if (vt[0] > 0.3) sens.push("vers ta droite"); else if (vt[0] < -0.3) sens.push("vers ta gauche");
+  if (!sens.length) sens.push("vers l’avant");
+  const force = p.vtm >= 9 ? "en frottant fort" : p.vtm >= 5 ? "en frottant" : "en frottant peu";
+  const geste = frotte ? `sa raquette touche la balle ${ou}, ${sens.join(" et ")}, ${force} (${Math.round(p.vtm)} m/s)` : "sa raquette pousse la balle sans la frotter";
+  // les faits : la rotation au départ, puis celle que tu reçois après le ou les rebonds
+  const dL = inc.sIn ? latDir(inc.sIn) : 0, lat = dL ? `, et elle part à ${dL > 0 ? "droite" : "gauche"} sur ta raquette (latéral ${Math.round(Math.abs(latRps(inc.sIn)))} tr/s)` : "";
+  const change = Math.abs(inc.wMe - inc.wOut) >= 6;
+  const effet = `${rotMot(inc.wOut)} au départ` + (change ? `. Avec ${inc.serve ? "les rebonds" : "le rebond"}, elle t’arrive à ${rotMot(inc.wMe)}` : ", et autant chez toi") + lat;
+  const leurre = (S.loop ? " Les boucles d’avant ne comptent pas." : "") + (S.fake ? " Le geste d’après est une feinte." : "");
+  return { court: `${frotte ? `${ou}, ${sens.join(" et ")}, ${force}` : "pousse sans frotter"} → ${rotMot(inc.wMe)} chez toi${dL ? `, part à ${dL > 0 ? "droite" : "gauche"}` : ""}`,
+    long: `Au contact, ${geste} : ${effet}.${leurre}`, vt, frotte, n };
+}
+/* Le ralenti du geste : il rejoue son coup, s'arrête sur le contact avec la flèche du frottement, puis la balle repart vers toi */
+const decArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.3, 0xf2c94c, 0.08, 0.05);
+decArrow.line.material.depthTest = false; decArrow.cone.material.depthTest = false; decArrow.renderOrder = 20; decArrow.visible = false; scene.add(decArrow);
+function gestReplay() {
+  const inc = st.inc, S = inc && inc.strokeHis, G = gestDecode(inc);
+  if (!S || !G || !inc.tr || st.phase !== "sheet" || st.rp) return;
+  $("why").hidden = true; st.rp = true; st.rpTxt = G.court; st.rpPrompt = [$("prompt").textContent, $("prompt").className];
+  events = []; meStroke = null; rkHist.length = 0; frozen = false; hold = 0;
+  S.tc = clock + (S.pre || 0.35) + 0.06 + S.Ta + 0.45; oppStroke = S;
+  ball.tr = null; ball.hold = "opp"; ball.handP = [inc.tr.P[0], inc.tr.P[1], inc.tr.P[2]]; ball.toss = inc.serve ? { tc: S.tc, T: 0.5, H: 0.2 } : null;
+  const d = new THREE.Vector3(...(G.frotte ? G.vt : G.n));
+  decArrow.position.copy(S.C).addScaledVector(d, -0.15); decArrow.setDirection(d); decArrow.setLength(0.32, 0.09, 0.055);
+  prompt("Regarde le contact…", "hot");
+  at(S.tc, () => { ball.toss = null; launch(inc.tr, inc.snd || "inv", 0.5); hold = 2.6; prompt("Seul le contact dit l’effet", "hot"); });
+  at(S.tc + inc.im * inc.tr.dt + 0.05, () => {
+    st.rp = false; ball.tr = null; ball.handP = null; ball.hold = "me";
+    $("prompt").textContent = st.rpPrompt[0]; $("prompt").className = st.rpPrompt[1];
+    $("why").hidden = false;
+  });
+}
+$("whyRe").addEventListener("click", gestReplay);
+$("reBtn").addEventListener("click", () => { $("reBtn").hidden = true; replayOpp(); });
 function showWhy() {
   const inc = st.inc, sh = st.myShot, sIn = st.mySIn;
   if (!inc || !sh || !sIn) return false;
@@ -3677,12 +3865,14 @@ function showWhy() {
   for (const k of [sh.k, best].concat(autres.slice(0, 2))) if (k && !inc.couv[k]) inc.couv[k] = couvre(k, sIn);
   const aLat = Math.abs(latRps(sIn)) >= LAT_MIN;
   $("whyTxt").textContent = whyMiss(inc, sh, sIn);
-  const lire = store.latAll && sh.comp != null && sh.comp !== dir && sh.k !== "latg" && sh.k !== "latd" ? `Il fallait lire : <b>${dir > 0 ? "à droite ▶" : dir < 0 ? "◀ à gauche" : "tout droit"}</b><br>` : "";
+  const G = gestDecode(inc);
+  $("whyGest").textContent = G ? G.long : ""; $("whyRe").hidden = !(G && inc.strokeHis);
+  const lire = aimOn() && sh.comp != null && sh.comp !== dir && sh.k !== "latg" && sh.k !== "latd" ? `Il fallait orienter ta raquette : <b>${dir > 0 ? "◀ à gauche" : dir < 0 ? "à droite ▶" : "droit"}</b><br>` : "";
   const bonCoup = lire && (inc.rxWorks || []).includes(sh.k);
   $("whyFix").innerHTML = bonCoup ? `${lire}Ton ${esc(nm(sh.k))} passait, avec la bonne lecture.`
     : best ? `${lire}${lire ? "Et jouer" : "Il fallait"} : <b>${esc(nm(best))}</b>, qui couvre ${esc(couvreTxt(inc.couv[best], aLat))}`
       + `${autres.length ? `<br>Passait aussi : ${autres.map((k, i) => esc(nm(k)) + (inc.couv[k] ? ` (${esc(plageTopTxt(inc.couv[k].top))})` : "")).join(", ")}` : ""}` : "Rien ne passait proprement sur cette balle.";
-  $("whyRule").textContent = lire && (sh.res === "wide" || bonCoup) ? "À retenir · anneau jaune : devant la balle, les flèches vont vers la gauche → elle part à droite (et l’inverse)." : latDir(sIn) && (sh.res === "wide" || sh.k === "latg" || sh.k === "latd") ? RULES.lat : RULES[inc.eff];
+  $("whyRule").textContent = lire && (sh.res === "wide" || bonCoup) ? RULES.lat : latDir(sIn) && (sh.res === "wide" || sh.k === "latg" || sh.k === "latd") ? RULES.lat : RULES[inc.eff];
   $("why").hidden = false;
   return true;
 }
@@ -3838,7 +4028,7 @@ function renderMenu() {
   const pct = k => { const v = store.stats[k]; return v && v[1] >= 5 ? `<span class="stat">${Math.round(100 * v[0] / v[1])} % réussi · ${v[1]} balles</span>` : ""; };
   if (TH[store.theme].hid) { store.theme = "tout"; applyTheme(); }
   $("thCards").innerHTML = Object.keys(TH).filter(k => !TH[k].hid).map(k =>
-    `<button class="card" id="th-${k}" data-k="${k}" aria-pressed="${store.theme === k}"><b>${esc(TH[k].l)}</b><small>${esc(TH[k].s)}</small>${pct(TH[k].stat)}</button>`).join("");
+    `<button class="card${TH[k].wide ? " wide" : ""}" id="th-${k}" data-k="${k}" aria-pressed="${store.theme === k}"><b>${esc(TH[k].l)}</b><small>${esc(TH[k].s)}</small>${pct(TH[k].stat)}</button>`).join("");
   $("thCards").querySelectorAll(".card").forEach(c => c.addEventListener("click", () => { store.theme = c.dataset.k; applyTheme(); save(); renderMenu(); }));
   $("oppCards").innerHTML = Object.keys(PROF).map(k =>
     `<button class="chip" id="opp-${k}" data-k="${k}" aria-pressed="${store.prof === k}">${esc(PROF[k].name.replace(/^(Le |L’)/, "").replace(/^./, c => c.toUpperCase()))}</button>`).join("");
@@ -3868,7 +4058,7 @@ function previewOpp() {
 /* Retour au calme : plus de balle en jeu ; les réglages de l'entraînement libre reviennent après une étape du parcours */
 function auRepos() {
   if (st.back) { Object.assign(store, st.back); st.back = null; applyTheme(); save(); }
-  st.exo = null;
+  st.exo = null; st.rp = false; ball.toss = null; $("reBtn").hidden = true;
   paused = true; st.phase = "menu"; ball.tr = null; ball.handP = null; ball.hold = "me"; oppStroke = meStroke = null; events = [];
   chronoStop(); renderMenu(); previewOpp(); showShots(false); prompt(""); $("why").hidden = true; $("combo").hidden = true;
   $("panel").classList.remove("guided", "big"); lecLine.hidden = true; $("latRow").hidden = true; hideRing(); showLecture(false); anim.strip = null; anim.minis = []; resize();
@@ -3914,6 +4104,146 @@ $("homeProf").addEventListener("click", openDash);
 $("freeBtn").addEventListener("click", openMenu);
 $("homeBtn").addEventListener("click", openHome);
 $("memoBtn3").addEventListener("click", openMemo);
+
+/* ===== Atelier revers =====
+   1) Comprendre : un modèle articulé (épaule, coude, avant-bras, raquette), vu de dessus et de profil, et trois erreurs classiques.
+   2) Séance à vide : des annonces au hasard, à faire pour de vrai, raquette en main. L'appli ne voit pas le joueur : elle donne
+      le modèle, le rythme et le hasard ; la caméra (facultative) sert seulement de miroir. */
+const REV = {
+  bon:    { l: "Bon geste", E0: [0.16, 0.24, 1.14], E1: [0.17, 0.26, 1.16], th: [205, 60], el: [-25, 50], bx: -0.02, zone: true,
+            cap: "<b>Le coude est le pivot.</b> Il reste devant toi, presque immobile ; l’avant-bras tourne autour, le poignet finit. La balle est prise devant le ventre, à une cinquantaine de centimètres du corps." },
+  colle:  { l: "Coude collé", E0: [0.21, 0.06, 1.1], E1: [0.21, 0.07, 1.1], th: [190, 100], el: [-15, 25], bx: -0.02, bad: true,
+            cap: "<b>Coude collé au corps.</b> L’avant-bras n’a pas la place de tourner : la balle est prise trop près, sans vitesse, et finit dans le filet. Décolle le coude : une main entre lui et ton ventre." },
+  cote:   { l: "Balle sur le côté", E0: [-0.02, 0.2, 1.15], E1: [0.0, 0.24, 1.2], th: [185, 150], el: [0, 10], bx: -0.4, bad: true, pas: true,
+            cap: "<b>Tu n’as pas bougé.</b> La balle arrive à côté de toi et tu tends le bras : plus de pivot, plus de contrôle. D’abord un petit pas à gauche, pour la reprendre devant le ventre." },
+  epaule: { l: "Avec l’épaule", E0: [-0.02, 0.14, 1.12], E1: [0.4, 0.26, 1.3], th: [170, 80], el: [-10, 30], bx: -0.02, bad: true,
+            cap: "<b>Un coup droit à l’envers.</b> Toute l’épaule part : le geste est long et souvent en retard. Garde l’épaule calme : c’est l’avant-bras qui tourne autour du coude." },
+};
+const rev = { mode: "bon", t: 0, last: 0, open: false, avec: 0, tempo: 2.2, run: null, n: 0, voix: true, stream: null };
+function revPose(M, g) {
+  const L3d = (a, b) => a.map((x, i) => x + (b[i] - x) * g), E = L3d(M.E0, M.E1);
+  const th = (M.th[0] + (M.th[1] - M.th[0]) * g) * DEG, el = (M.el[0] + (M.el[1] - M.el[0]) * g) * DEG;
+  const d = [Math.cos(th) * Math.cos(el), Math.sin(th) * Math.cos(el), Math.sin(el)];
+  return { E, H: E.map((x, i) => x + 0.26 * d[i]), R: E.map((x, i) => x + 0.37 * d[i]), d };
+}
+function revDraw(u) {
+  const M = REV[rev.mode];
+  // le film : prêt, geste (contact au milieu), fin tenue, retour
+  const g = u < 0.38 ? 0 : u < 0.6 ? sm((u - 0.38) / 0.22) : u < 0.82 ? 1 : 1 - sm((u - 0.82) / 0.18), P = revPose(M, g), C = revPose(M, 0.5);
+  const col = M.bad ? "#f2925f" : "#52c88a", skin = "#d9a77f";
+  // vue de dessus : x à droite, la table en haut
+  const tx = x => 85 + x * 190, ty = y => 190 - y * 190;
+  // vue de profil : l'avant à droite
+  const sx = y => 205 + y * 150, sy = z => 228 - z * 118;
+  const bt = u < 0.5 ? u / 0.5 : (u - 0.5) / 0.5, bIn = u < 0.5;
+  const ballT = bIn ? [M.bx + (C.R[0] - M.bx) * bt * 0.0 + (1 - bt) * 0 + (C.R[0] - M.bx) * 0, 1.0 - (1.0 - C.R[1]) * bt] : [C.R[0] + 0.12 * bt, C.R[1] + 0.5 * bt];
+  ballT[0] = bIn ? M.bx + (C.R[0] - M.bx) * bt : ballT[0];
+  const ballS = bIn ? [1.0 - (1.0 - C.R[1]) * bt, 1.02 + 0.1 * Math.sin(bt * Math.PI) - (1.02 - C.R[2]) * bt] : [C.R[1] + 0.5 * bt, C.R[2] + 0.22 * bt];
+  const ang = Math.atan2(-(P.d[1]), P.d[0]) / DEG, angS = Math.atan2(-P.d[2], P.d[1]) / DEG;
+  const sh = [0.19, 0.03, 1.42];
+  $("revSvg").innerHTML = `
+    <text x="85" y="14" font-size="11" font-weight="700" fill="#a9b8ca" text-anchor="middle">VU DE DESSUS</text>
+    <text x="255" y="14" font-size="11" font-weight="700" fill="#a9b8ca" text-anchor="middle">VU DE PROFIL</text>
+    <line x1="170" y1="6" x2="170" y2="230" stroke="rgba(255,255,255,.12)"/>
+    <rect x="${tx(-0.42)}" y="20" width="${0.84 * 190}" height="${ty(0.62) - 20}" fill="#1b4f8c" stroke="#f4f6f8" stroke-width="1.5"/>
+    ${M.zone ? `<ellipse cx="${tx(-0.02)}" cy="${ty(0.52)}" rx="26" ry="20" fill="rgba(82,200,138,.22)" stroke="#52c88a" stroke-dasharray="4 3"/><text x="${tx(-0.02)}" y="${ty(0.52) - 25}" font-size="10" fill="#52c88a" text-anchor="middle" font-weight="700">contact ici</text>` : ""}
+    ${M.pas ? `<ellipse cx="${tx(-0.35)}" cy="${ty(0)}" rx="40" ry="21" fill="none" stroke="#f2c94c" stroke-dasharray="4 3"/><path d="M${tx(-0.08)} ${ty(-0.14)} L${tx(-0.3)} ${ty(-0.14)}" stroke="#f2c94c" stroke-width="3"/><polygon points="${tx(-0.3) - 9},${ty(-0.14)} ${tx(-0.3)},${ty(-0.14) - 6} ${tx(-0.3)},${ty(-0.14) + 6}" fill="#f2c94c"/><text x="${tx(-0.2)}" y="${ty(-0.14) + 16}" font-size="10" fill="#f2c94c" text-anchor="middle" font-weight="700">un pas</text>` : ""}
+    <ellipse cx="${tx(0)}" cy="${ty(0)}" rx="40" ry="21" fill="#2f5f9e"/><circle cx="${tx(0)}" cy="${ty(0.02)}" r="15" fill="${skin}"/>
+    <line x1="${tx(sh[0])}" y1="${ty(sh[1])}" x2="${tx(P.E[0])}" y2="${ty(P.E[1])}" stroke="#2f5f9e" stroke-width="9" stroke-linecap="round"/>
+    <line x1="${tx(P.E[0])}" y1="${ty(P.E[1])}" x2="${tx(P.H[0])}" y2="${ty(P.H[1])}" stroke="${skin}" stroke-width="7" stroke-linecap="round"/>
+    <ellipse cx="${tx(P.R[0])}" cy="${ty(P.R[1])}" rx="15" ry="4" fill="#161616" stroke="#c9a26b" stroke-width="1.5" transform="rotate(${ang} ${tx(P.R[0])} ${ty(P.R[1])})"/>
+    <circle cx="${tx(P.E[0])}" cy="${ty(P.E[1])}" r="6" fill="none" stroke="${col}" stroke-width="2.5"/>
+    <circle cx="${tx(ballT[0])}" cy="${ty(ballT[1])}" r="5" fill="#ff7a1a" stroke="#fbfaf5"/>
+    <rect x="${sx(0.5)}" y="${sy(0.76)}" width="${340 - sx(0.5)}" height="5" fill="#1b4f8c" stroke="#f4f6f8"/><line x1="${sx(0.62)}" y1="${sy(0.76)}" x2="${sx(0.62)}" y2="230" stroke="#1f262f" stroke-width="5"/>
+    <line x1="176" y1="229" x2="340" y2="229" stroke="rgba(255,255,255,.25)"/>
+    <line x1="${sx(-0.02)}" y1="${sy(0)}" x2="${sx(0.04)}" y2="${sy(0.5)}" stroke="#1b2230" stroke-width="12" stroke-linecap="round"/><line x1="${sx(0.04)}" y1="${sy(0.5)}" x2="${sx(-0.02)}" y2="${sy(0.95)}" stroke="#1b2230" stroke-width="13" stroke-linecap="round"/>
+    <line x1="${sx(-0.02)}" y1="${sy(0.95)}" x2="${sx(0.06)}" y2="${sy(1.42)}" stroke="#2f5f9e" stroke-width="22" stroke-linecap="round"/><circle cx="${sx(0.1)}" cy="${sy(1.6)}" r="13" fill="${skin}"/>
+    <line x1="${sx(sh[1] + 0.03)}" y1="${sy(sh[2])}" x2="${sx(P.E[1])}" y2="${sy(P.E[2])}" stroke="#2f5f9e" stroke-width="9" stroke-linecap="round"/>
+    <line x1="${sx(P.E[1])}" y1="${sy(P.E[2])}" x2="${sx(P.H[1])}" y2="${sy(P.H[2])}" stroke="${skin}" stroke-width="7" stroke-linecap="round"/>
+    <ellipse cx="${sx(P.R[1])}" cy="${sy(P.R[2])}" rx="13" ry="${3 + 9 * Math.abs(P.d[0])}" fill="#161616" stroke="#c9a26b" stroke-width="1.5" transform="rotate(${angS} ${sx(P.R[1])} ${sy(P.R[2])})"/>
+    <circle cx="${sx(P.E[1])}" cy="${sy(P.E[2])}" r="6" fill="none" stroke="${col}" stroke-width="2.5"/>
+    <text x="${sx(P.E[1]) + 2}" y="${sy(P.E[2]) + 20}" font-size="10" fill="${col}" text-anchor="middle" font-weight="700">${M.bad ? "coude" : "coude = pivot"}</text>
+    <circle cx="${sx(ballS[0])}" cy="${sy(ballS[1])}" r="5" fill="#ff7a1a" stroke="#fbfaf5"/>
+    ${rev.avec ? `<text x="170" y="228" font-size="22" font-weight="700" fill="#f2c94c" text-anchor="middle">${Math.min(10, 11 - rev.avec)} / 10</text>` : ""}`;
+}
+function tickRev(now) {
+  if (!rev.open || $("revVoir").hidden || now - rev.last < 40) return;
+  const dt = rev.last ? Math.min(0.1, (now - rev.last) / 1000) : 0; rev.last = now;
+  const T = rev.avec ? 3.4 : 2.6, u0 = (rev.t % T) / T;
+  rev.t += dt;
+  const u1 = (rev.t % T) / T;
+  if (u0 < 0.49 && u1 >= 0.49) tone(rev.avec ? 880 : 660, 0.09, 0, rev.avec ? 0.14 : 0.05);          // le contact
+  if (rev.avec && u1 < u0) { rev.avec--; if (!rev.avec) { toast("10 revers faits"); store.vide = (store.vide || 0) + 10; store.xp += 10; save(); $("revAvec").textContent = "Encore : 10 revers lents, raquette en main"; } }
+  revDraw(u1);
+}
+function revMode(k) {
+  rev.mode = k; rev.t = 0; rev.avec = 0;
+  $("revModes").querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === k)));
+  $("revCap").innerHTML = REV[k].cap;
+}
+$("revModes").innerHTML = Object.keys(REV).map(k => `<button class="chip" data-k="${k}" aria-pressed="false">${esc(REV[k].l)}</button>`).join("");
+$("revModes").querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => revMode(b.dataset.k)));
+$("revAvec").addEventListener("click", () => { audioOn(); revMode("bon"); rev.avec = 10; rev.t = 0; });
+/* --- séance à vide : annonces au hasard --- */
+const CUES = [
+  { w: 0.45, big: "Revers", sub: "Balle devant le ventre, coude devant", say: "revers", c: "#5b9be6" },
+  { w: 0.2, big: "◀ Revers large", sub: "Un petit pas à gauche, puis revers", say: "revers large", c: "#52c88a" },
+  { w: 0.2, big: "Au corps ▶", sub: "Elle vient sur toi : un pas à droite pour dégager le coude, puis revers", say: "au corps", c: "#f2c94c" },
+  { w: 0.15, big: "Coup droit ▶", sub: "Pas à droite, coup droit", say: "coup droit", c: "#ff8a3d" },
+];
+function dire(t) { try { if (!rev.voix || !window.speechSynthesis) return; const u = new SpeechSynthesisUtterance(t); u.lang = "fr-FR"; u.rate = 1.15; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {} }
+function videStop(fin) {
+  if (rev.run) { clearTimeout(rev.run.t); clearInterval(rev.run.i); }
+  const fait = rev.run ? rev.n : 0; rev.run = null;
+  $("revGo").textContent = "Démarrer : 1 minute";
+  if (fin && fait) {
+    $("cueBig").textContent = `${fait} gestes`; $("cueBig").style.color = "#52c88a"; $("cueSub").textContent = "Séance finie. Reprends ton souffle."; $("cueCnt").textContent = "";
+    store.vide = (store.vide || 0) + fait; store.xp += fait; save(); dire("terminé");
+  } else { $("cueBig").textContent = "Prêt ?"; $("cueBig").style.color = ""; $("cueSub").textContent = "Raquette en main, face à la table"; $("cueCnt").textContent = ""; }
+}
+function videGo() {
+  if (rev.run) { videStop(false); return; }
+  audioOn(); rev.n = 0;
+  const fin = Date.now() + 60000;
+  rev.run = { t: 0, i: setInterval(() => { const r = Math.max(0, Math.ceil((fin - Date.now()) / 1000)); $("cueCnt").textContent = `${rev.n} gestes · encore ${r} s`; }, 250) };
+  $("revGo").textContent = "Arrêter";
+  const suite = () => {
+    if (!rev.run) return;
+    if (Date.now() >= fin) { videStop(true); return; }
+    let x = Math.random(), q = CUES[0]; for (const c of CUES) { if (x < c.w) { q = c; break; } x -= c.w; }
+    rev.n++;
+    $("cueBig").textContent = q.big; $("cueBig").style.color = q.c; $("cueSub").textContent = q.sub;
+    const box = $("cue"); box.classList.remove("flash"); void box.offsetWidth; box.classList.add("flash");
+    tone(740, 0.1, 0, 0.12); dire(q.say);
+    rev.run.t = setTimeout(suite, rev.tempo * 1000 * (0.85 + Math.random() * 0.3));
+  };
+  $("cueBig").textContent = "3… 2… 1…"; $("cueBig").style.color = ""; $("cueSub").textContent = "En place, au centre";
+  rev.run.t = setTimeout(suite, 2200);
+}
+const TEMPOS = [[3, "Lent"], [2.2, "Moyen"], [1.6, "Rapide"]];
+function revTempo() { $("revTempo").innerHTML = TEMPOS.map(([v, l]) => `<button class="chip" data-v="${v}" aria-pressed="${rev.tempo === v}">${l} · ${String(v).replace(".", ",")} s</button>`).join(""); $("revTempo").querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => { rev.tempo = +b.dataset.v; revTempo(); })); }
+async function revCam(on) {
+  const v = $("cueVid");
+  if (rev.stream) { rev.stream.getTracks().forEach(t => t.stop()); rev.stream = null; }
+  v.hidden = true; v.srcObject = null;
+  if (!on) return;
+  try { rev.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false }); v.srcObject = rev.stream; v.hidden = false; await v.play(); }
+  catch (e) { $("revCam").checked = false; toast("Caméra indisponible ou refusée"); }
+}
+function revTab(t) {
+  $("revTabs").querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.t === t)));
+  $("revVoir").hidden = t !== "voir"; $("revVide").hidden = t !== "vide";
+  $("revVoir").style.display = t === "voir" ? "flex" : "none"; $("revVide").style.display = t === "vide" ? "flex" : "none";
+  if (t !== "vide") { videStop(false); revCam(false); $("revCam").checked = false; }
+}
+$("revTabs").querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => revTab(b.dataset.t)));
+$("revGo").addEventListener("click", videGo);
+$("revVoix").addEventListener("change", e => { rev.voix = e.target.checked; });
+$("revCam").addEventListener("change", e => revCam(e.target.checked));
+function openRev() { rev.open = true; rev.last = 0; revTempo(); revTab("voir"); revMode("bon"); $("rev").hidden = false; }
+function closeRev() { rev.open = false; videStop(false); revCam(false); $("revCam").checked = false; $("rev").hidden = true; }
+$("revBtn").addEventListener("click", openRev);
+$("revClose").addEventListener("click", closeRev);
 function racketSVG(color, label, sub) {
   const fill = color === "rouge" ? "#c62828" : "#141414";
   return `<figure><svg width="92" height="132" viewBox="0 0 92 132" aria-hidden="true">
@@ -3972,7 +4302,7 @@ window.addEventListener("keydown", e => {
     return;
   }
   if (!$("why").hidden) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); whyGo(); } return; }
-  if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowDown") { setComp(e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0); return; }
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowDown") { setComp(e.key === "ArrowLeft" ? 1 : e.key === "ArrowRight" ? -1 : 0); return; }
   const n = parseInt(e.key, 10);
   if (!(n >= 1)) return;
   audioOn();
@@ -3996,7 +4326,7 @@ function frame(now) {
   if (hold > 0 && !paused) hold -= dt;
   let ts = timeScale;
   // Découverte et Réflexe : ralenti supplémentaire pendant son geste
-  if ((guided() || reflex()) && oppStroke && oppStroke.gest && clock > oppStroke.tc - oppStroke.fwd - 0.4 && clock < oppStroke.tc + 0.12) ts *= 0.5;
+  if ((guided() || reflex()) && oppStroke && oppStroke.gest && clock > oppStroke.tc - oppStroke.fwd - 0.4 && clock < oppStroke.tc + 0.12) ts *= st.rp ? 0.22 : 0.5;
   const sdt = paused || frozen || hold > 0 ? 0 : dt * ts;
   clock += sdt;
   for (;;) { const i = events.findIndex(e => e.t <= clock); if (i < 0) break; events.splice(i, 1)[0].fn(); }
@@ -4023,7 +4353,12 @@ function frame(now) {
     }
   } else {
     const bob = Math.abs(Math.sin(now / 380)) * 0.12;
-    if (ball.handP) bp.set(ball.handP[0], ball.handP[1] + (RV - PHYS.r) + bob * 0.25, ball.handP[2]);
+    if (ball.handP) {
+      // service : il lance la balle, elle retombe à la hauteur du contact
+      let ty = bob * 0.25;
+      if (ball.toss) { const u = (clock - (ball.toss.tc - ball.toss.T)) / ball.toss.T; ty = u > 0 && u < 1 ? 4 * ball.toss.H * u * (1 - u) : 0; }
+      bp.set(ball.handP[0], ball.handP[1] + (RV - PHYS.r) + ty, ball.handP[2]);
+    }
     else if (ball.hold === "opp") bp.set(opp.position.x + 0.3, 0.95 + bob, opp.position.z + 0.3);
     else bp.set(0.15, 0.95 + bob, L + 0.15);
   }
@@ -4107,10 +4442,17 @@ function frame(now) {
 
   // Toi
   const bh = !!(st.inc && st.inc.bh && st.phase === "play");   // balle sur ta gauche : raquette en revers, face noire
-  animRacket(meRk, meStroke, tmpV.set(bh ? -0.28 : 0.32, 0.9, Z_ME + 0.25).clone(), bh ? ME_REST_BH : ME_REST_Q, clock);
+  const ori = st.awaiting && !st.choice && aimOn() && st.comp ? faceQuat([-0.45 * st.comp, 0, -1], !bh) : null;   // l'orientation que tu choisis se voit
+  animRacket(meRk, meStroke, tmpV.set(bh ? -0.28 : 0.32, 0.9, Z_ME + 0.25).clone(), ori || (bh ? ME_REST_BH : ME_REST_Q), clock);
 
   // Étiquette de face au contact
-  if (store.aide && ringOn() && oppStroke && oppStroke.gest && Math.abs(clock - oppStroke.tc) < 0.45 && st.phase === "play") {
+  decArrow.visible = !!st.rp && hold > 0;
+  if (decArrow.visible) {
+    tmpV.copy(oppRk.position).add(new THREE.Vector3(0, 0.2, 0)).project(camera);
+    const r = renderer.domElement.getBoundingClientRect();
+    tagEl.style.left = (Math.max(0.3, Math.min(0.7, (tmpV.x + 1) / 2)) * r.width) + "px"; tagEl.style.top = ((1 - tmpV.y) / 2 * r.height) + "px";
+    tagEl.textContent = st.rpTxt; tagEl.className = "face-tag decode"; tagEl.hidden = false;
+  } else if (store.aide && ringOn() && oppStroke && oppStroke.gest && Math.abs(clock - oppStroke.tc) < 0.45 && st.phase === "play") {
     tmpV.copy(oppRk.position).add(new THREE.Vector3(0, 0.14, 0)).project(camera);
     const r = renderer.domElement.getBoundingClientRect();
     tagEl.style.left = ((tmpV.x + 1) / 2 * r.width) + "px";
@@ -4127,12 +4469,13 @@ function frame(now) {
   tickRing(now);
   tickLab(now);
   tickAtl(now);
+  tickRev(now);
 
   // Caméra : léger suivi de la balle
   // quand la balle t'attend (Découverte), la caméra la recentre pour qu'elle reste visible
   camera.position.x += ((bp.x * (frozen ? 0.75 : 0.25)) - camera.position.x) * Math.min(1, dt * 2);
   // Découverte et Réflexe : la caméra se rapproche de son geste, puis revient sur la balle
-  const fT = (guided() || reflex()) && st.phase === "play" && oppStroke && oppStroke.gest &&
+  const fT = (guided() || reflex()) && (st.phase === "play" || st.rp) && oppStroke && oppStroke.gest &&
     clock > oppStroke.tc - oppStroke.fwd - 0.5 && clock < oppStroke.tc + 0.18 ? 1 : 0;
   focus += (fT - focus) * Math.min(1, dt * 3);
   if (focus < 0.002) focus = 0;
