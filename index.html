@@ -651,12 +651,14 @@ button { font: inherit; color: inherit; }
     <p style="font-size:13px;color:var(--muted)">Le chiffre = tours par seconde. Plus il est gros, plus tu dois corriger.</p>
     <h2 class="h">2 · Ta réponse</h2>
     <div class="memo-t">
-      <i style="background:#8ab8ff">Coupée</i><span><b>Ouvre : Top ouvert, ou Coupe</b><small>Raquette fermée = filet. Top puissant seulement si elle est peu coupée.</small></span>
-      <i style="background:#e3e9f0">Sans effet</i><span><b>Attaque : Top puissant ou Top frappé</b><small>Rien ne la dévie : c’est la balle à tuer. Top ouvert ou Coupe = dehors.</small></span>
-      <i style="background:#ffab66">Liftée</i><span><b>Ferme : Bloc. Top puissant si le lift est moyen</b><small>Raquette ouverte = dehors. Au-delà de 40 tr/s environ, bloque.</small></span>
+      <i style="background:#8ab8ff">Coupée</i><span><b>Ouvre : Top ouvert, ou Coupe</b><small>Raquette fermée = filet. Sous 15 tr/s de coupé, le Top puissant passe aussi.</small></span>
+      <i style="background:#e3e9f0">Sans effet</i><span><b>Attaque : Top puissant ou Top frappé</b><small>Rien ne la dévie : c’est la balle à tuer. Top ouvert = dehors.</small></span>
+      <i style="background:#ffab66">Liftée</i><span><b>Ferme : Bloc. Top puissant si le lift est moyen</b><small>Raquette ouverte = dehors. Au-delà de 40 tr/s, bloque.</small></span>
       <i style="background:#f2c94c">Latérale</i><span><b>Frotte du côté opposé à celui où elle part</b><small>Elle part à droite → ◀ Latéral gauche. Séance « Les latéraux » : dis d’abord de quel côté elle part, tes coups visent alors de l’autre côté.</small></span>
     </div>
-    <h2 class="h">3 · Contre cet adversaire</h2>
+    <h2 class="h">3 · La plage de chaque coup (toujours la même)</h2>
+    <div class="memo-t" id="memoWin"></div>
+    <h2 class="h">4 · Contre cet adversaire</h2>
     <p class="gold" id="memoGold"></p>
     <button class="btn primary" id="memoOk">Compris</button>
   </div>
@@ -1081,16 +1083,16 @@ function spinTxt(w) {
 
 /* Tes coups : win = rotation (tours/s, + lift / − coupé) pour laquelle tu règles ta raquette */
 const CH = {
-  tresouvert: { l: "Top très ouvert", s: "Raquette très ouverte, gros frottement", read: "très coupée", win: [-80, -26], a: 2.5, b: 9, depth: [1.0, 1.15], maxNet: 0.7, my: "ton top très ouvert" },
+  tresouvert: { l: "Top très ouvert", s: "Raquette très ouverte, gros frottement", read: "très coupée", win: [-80, -15], a: 2.5, b: 9, depth: [1.0, 1.15], maxNet: 0.7, my: "ton top très ouvert" },
   ouvert:     { l: "Top d’ouverture", s: "Raquette ouverte, frottement", read: "coupée ou légèrement coupée", win: [-30, -4], a: 3.5, b: 8.5, depth: [1.0, 1.15], maxNet: 0.7, my: "ton top d’ouverture" },
-  plat:       { l: "Top tendu / frappe", s: "Raquette verticale, vers l’avant", read: "sans effet ou liftée et lente", win: [-5, 30], a: 5, b: 2.5, depth: [0.95, 1.15], maxNet: 0.45, my: "ton top tendu" },
-  pous:       { l: "Poussette", s: "Raquette ouverte, sous la balle", read: "coupée", win: [-80, -5], a: 2.0, b: -3.5, depth: [0.55, 0.85], maxNet: 0.35, my: "ta poussette" },
+  plat:       { l: "Top tendu / frappe", s: "Raquette verticale, vers l’avant", read: "sans effet ou liftée et lente", win: [-8, 30], a: 5, b: 2.5, depth: [0.95, 1.15], maxNet: 0.45, my: "ton top tendu" },
+  pous:       { l: "Poussette", s: "Raquette ouverte, sous la balle", read: "coupée", win: [-80, 3], a: 2.0, b: -3.5, depth: [0.55, 0.85], maxNet: 0.35, my: "ta poussette" },
   morte:      { l: "Balle morte", s: "Poussette sans frotter", read: "légèrement coupée ou sans effet", win: [-20, 5], a: 2.2, b: 0, depth: [0.75, 1.0], maxNet: 0.4, my: "ta balle morte" },
-  bloc:       { l: "Bloc fermé", s: "Raquette fermée, court", read: "liftée", win: [15, 90], a: 1.0, b: 1.2, depth: [0.8, 0.95], maxNet: 0.45, my: "ton bloc" },
+  bloc:       { l: "Bloc fermé", s: "Raquette fermée, court", read: "liftée", win: [10, 90], a: 1.0, b: 1.2, depth: [0.8, 0.95], maxNet: 0.45, my: "ton bloc" },
   /* Top avec frottement sur le côté (c > 0 : vers ta droite) */
   latg:       { l: "Latéral gauche", s: "Top, frotte vers ta gauche", read: "peu tournée", win: [-15, 25], a: 3.2, b: 5, c: -3.2, depth: [0.9, 1.1], maxNet: 0.5, my: "ton latéral à gauche" },
   /* Le coup du tapeur : frappe à fond, beaucoup de vitesse vers l'avant ET beaucoup de frottement pour que ça retombe */
-  kill:       { l: "Top puissant", s: "À fond : raquette fermée, vite vers l’avant et vers le haut", read: "sans effet ou liftée", win: [-12, 40], a: 7.5, b: 7, depth: [0.95, 1.2], maxNet: 0.35, my: "ton top puissant" },
+  kill:       { l: "Top puissant", s: "À fond : raquette fermée, vite vers l’avant et vers le haut", read: "sans effet ou liftée", win: [-15, 40], a: 7.5, b: 7, depth: [0.95, 1.2], maxNet: 0.35, my: "ton top puissant" },
   latd:       { l: "Latéral droite", s: "Top, frotte vers ta droite", read: "peu tournée", win: [-15, 25], a: 3.2, b: 5, c: 3.2, depth: [0.9, 1.1], maxNet: 0.5, my: "ton latéral à droite" },
 };
 const CH_ORDER = ["tresouvert", "ouvert", "plat", "pous", "morte", "bloc"];
@@ -1637,11 +1639,24 @@ const latDir = s => { const l = latRps(s); return l < -LAT_MIN ? 1 : l > LAT_MIN
 /* comp : le côté que tu as lu (−1, 0, +1). Lu juste : tu compenses exactement. Lu faux : tu règles ta raquette pour un latéral typique de ce côté-là.
    Non précisé : lecture juste (« Ce qui passait », conseil). */
 function computeMyShot(k, sIn, noise, comp) {
+  /* Chaque coup a UNE plage de rotation, toujours la même (c.win, rappelée dans les corrections et l'aide-mémoire).
+     Dans la plage : la raquette est réglée pour la vraie rotation, le coup passe. Hors plage : la raquette reste réglée
+     pour le bord de sa plage ; si l'écart est trop petit pour faire sortir la balle, on l'accentue jusqu'à la faute,
+     pour que la règle soit la même à chaque balle. */
   const c = CH[k], cur = PHYS.topRps(sIn);
-  const assumed = Math.max(c.win[0], Math.min(c.win[1], cur));
+  const bord = Math.max(c.win[0], Math.min(c.win[1], cur)), dehors = cur < c.win[0] - 0.5 ? 1 : cur > c.win[1] + 0.5 ? -1 : 0;
+  let assumed = bord;
   const hyp = PHYS.clone(sIn);
   if (comp != null && comp !== latDir(sIn)) hyp.w[1] = comp === 0 ? 0 : -comp * 25 * PHYS.TAU;
   PHYS.setTop(hyp, assumed);
+  if (dehors) {
+    for (const e of [0, 8, 16, 26, 40]) {
+      assumed = bord + dehors * e; PHYS.setTop(hyp, assumed);
+      const sol = PHYS.solveAuto(hyp, -1, c, RUBP.inv, { x: 0, z: -(c.depth[0] + c.depth[1]) / 2 }, 0.5);
+      const hit = PHYS.hitWith(sIn, sol.d, sol.th, sol.st, RUBP.inv);
+      if (classify(PHYS.fly(hit.s, 3), -1).res !== "in") break;
+    }
+  }
   const shoot = (tgt, jitter, tol) => {
     const sol = PHYS.solveAuto(hyp, -1, c, RUBP.inv, tgt, tol);
     const hit = PHYS.hitWith(sIn, sol.d, sol.th + jitter, sol.st, RUBP.inv);
@@ -1651,7 +1666,7 @@ function computeMyShot(k, sIn, noise, comp) {
   const center = { x: 0, z: -(c.depth[0] + c.depth[1]) / 2 };
   // Vérification rapide (sans viser une profondeur précise) : sert pour « Ce qui passait » et le conseil
   // Latéral mal lu : le coup part comme prévu sur la carte (même calcul), le hasard de la visée ne le rattrape pas
-  if (!noise || (comp != null && comp !== latDir(sIn))) return shoot(center, 0, 0.5);
+  if (!noise || dehors || (comp != null && comp !== latDir(sIn))) return shoot(center, 0, 0.5);
   const r = shoot({ x: rnd(-0.45, 0.45), z: -rnd(c.depth[0], c.depth[1]) }, gauss() * 0.25 * DEG);
   // On n'entraîne pas l'exécution : si ce coup passe sur cette balle, il passe (même calcul que « Ce qui passait »)
   if (r.res !== "in") { const r2 = shoot(center, 0, 0.5); if (r2.res === "in") return r2; }
@@ -3584,22 +3599,15 @@ function plage(test, cur, lo, hi) {
 /* latéral signé par le côté où la balle part sur ta raquette : + = à droite */
 const latSigne = s => -latRps(s);
 function couvre(k, sIn) {
-  const passe = s => computeMyShot(k, s, false, rxComp(k, s)).res === "in";
-  const top0 = PHYS.topRps(sIn), lat0 = latSigne(sIn);
-  const top = plage(w => { const s = PHYS.clone(sIn); PHYS.setTop(s, w); return passe(s); }, top0, -80, 80);
-  // le latéral se mesure à une rotation que le coup accepte (celle de la balle si elle est dans la plage, sinon le bord le plus proche)
-  const topRef = !top ? top0 : top0 >= top.lo + 5 && top0 <= top.hi - 5 ? top0 : Math.max(top.lo, Math.min(top.hi, (Math.max(top.lo, -60) + Math.min(top.hi, 60)) / 2));
-  const lat = top ? plage(l => { const s = PHYS.clone(sIn); PHYS.setTop(s, topRef); s.w[1] = -l * PHYS.TAU; return passe(s); }, lat0, -50, 50) : null;
-  return { top, lat, top0, lat0 };
+  return { top: { lo: CH[k].win[0], hi: CH[k].win[1] }, lat: null, top0: PHYS.topRps(sIn), lat0: latSigne(sIn) };
 }
 const rotMot = w => (Math.abs(w) < 3 ? "sans effet" : `${w > 0 ? "lift" : "coupé"} ${Math.abs(Math.round(w))} tr/s`);
 const latMot = l => (Math.abs(l) < 3 ? "sans latéral" : `${Math.abs(Math.round(l))} à ${l > 0 ? "droite" : "gauche"}`);
 /* « de coupé 12 à lift 31 tr/s » ; aux bornes du balayage : « jusqu'à », « à partir de » */
 function plageTopTxt(p) {
-  if (!p) return "aucune rotation sur cette balle-là";
-  if (p.ouvertBas && p.ouvertHaut) return "toutes les rotations";
-  if (p.ouvertBas) return `tout le coupé, jusqu’à ${rotMot(p.hi)}`;
-  if (p.ouvertHaut) return `à partir de ${rotMot(p.lo)}, et tout le lift au-delà`;
+  if (p.lo <= -80 && p.hi >= 80) return "toutes les rotations";
+  if (p.lo <= -80) return p.hi < -3 ? `le coupé de ${Math.abs(p.hi)} tr/s ou plus` : p.hi <= 3 ? "tout le coupé, jusqu’à la balle sans effet" : `tout le coupé, et le lift jusqu’à ${p.hi} tr/s`;
+  if (p.hi >= 80) return p.lo > 3 ? `le lift de ${p.lo} tr/s ou plus` : `à partir de ${rotMot(p.lo)}, et tout le lift`;
   return `de ${rotMot(p.lo)} à ${rotMot(p.hi)}`;
 }
 function plageLatTxt(p) {
@@ -3623,17 +3631,17 @@ function horsLat(p, v) {
 }
 /* « Top frappé couvre de coupé 9 tr/s à lift 35 tr/s, avec un latéral jusqu'à … » */
 function couvreTxt(C, avecLat) {
-  return plageTopTxt(C.top) + (avecLat && C.top ? ` ; côté latéral : ${plageLatTxt(C.lat)}` : "");
+  return plageTopTxt(C.top);
 }
 
 /* ===== Comprendre l'erreur : la balle, pourquoi ton coup ne passait pas, la bonne réponse, la règle ===== */
 const RULES = {
-  tcoupe: "À retenir · très coupée → ouvre la raquette : Top ouvert, ou Coupe.",
-  coupe: "À retenir · coupée → ouvre la raquette : Top ouvert, ou Coupe.",
-  lcoupe: "À retenir · peu coupée (moins de 15 tr/s) → tu peux encore attaquer : Top puissant. Sinon Coupe.",
+  tcoupe: "À retenir · coupée de 15 tr/s ou plus → ouvre la raquette : Top ouvert, ou Coupe.",
+  coupe: "À retenir · coupée de 15 tr/s ou plus → ouvre la raquette : Top ouvert, ou Coupe.",
+  lcoupe: "À retenir · peu coupée (moins de 15 tr/s) → attaque : Top puissant, ou Top frappé sous 8 tr/s. Sinon Coupe.",
   flot: "À retenir · sans effet → attaque : Top puissant ou Top frappé.",
-  llift: "À retenir · peu liftée → attaque : Top puissant ou Top frappé.",
-  lift: "À retenir · liftée → ferme la raquette : Bloc, ou Top puissant jusqu’à 40 tr/s environ.",
+  llift: "À retenir · peu liftée → attaque : Top puissant ou Top frappé. Le Bloc passe dès 10 tr/s de lift.",
+  lift: "À retenir · liftée → Bloc dès 10 tr/s ; Top puissant jusqu’à 40 tr/s, Top frappé jusqu’à 30.",
   lat: "À retenir · latérale → frotte du côté opposé à celui où elle part.",
 };
 function whyMiss(inc, sh, sIn) {
@@ -3653,7 +3661,7 @@ function whyMiss(inc, sh, sIn) {
   if (ht) return `${nom} couvre ${plageTopTxt(C.top)}. Cette balle (${rotMot(C.top0)}) ${ht} : ${C.top0 < C.top.lo ? "elle plonge sur ta raquette" : "elle remonte sur ta raquette"}, ${suite}.`;
   if (hl) return `${nom} couvre bien ${rotMot(C.top0)}, mais côté latéral il couvre ${plageLatTxt(C.lat)}. Cette balle : ${latMot(C.lat0)}, soit ${hl}.`;
   if (sh.res === "haute") return `${nom} couvre ${plageTopTxt(C.top)} : cette balle (${rotMot(C.top0)}) passe, mais elle monte trop et il la smashe.`;
-  return `${nom} couvre ${plageTopTxt(C.top)} : cette balle (${rotMot(C.top0)}) est à la limite, ${suite}.`;
+  return `${nom} couvre ${plageTopTxt(C.top)} : cette balle (${rotMot(C.top0)}) est dans sa plage, mais elle était trop difficile pour lui (trop basse ou trop rapide), ${suite}.`;
 }
 function showWhy() {
   const inc = st.inc, sh = st.myShot, sIn = st.mySIn;
@@ -3737,7 +3745,9 @@ function renderDash() {
 function openDash() { renderDash(); $("dash").hidden = false; }
 $("profBtn").addEventListener("click", openDash);
 for (const id of ["dashClose", "dashOk"]) $(id).addEventListener("click", () => { $("dash").hidden = true; });
-function openMemo() { $("memoGold").textContent = PROF[store.prof].gold; $("memo").hidden = false; }
+function openMemo() {
+  $("memoWin").innerHTML = RX_ORDER.map(k => `<i style="background:#e3e9f0">${esc(RX_L[k].replace(/[◀▶] ?| ?[◀▶]/g, ""))}</i><span>${esc(plageTopTxt(couvre(k, { v: [0, 0, 1], w: [0, 0, 0] }).top))}</span>`).join("");
+  $("memoGold").textContent = PROF[store.prof].gold; $("memo").hidden = false; }
 for (const id of ["memoBtn", "memoBtn2"]) $(id).addEventListener("click", openMemo);
 for (const id of ["memoClose", "memoOk"]) $(id).addEventListener("click", () => { $("memo").hidden = true; });
 
