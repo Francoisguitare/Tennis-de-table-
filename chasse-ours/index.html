@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<!--PAGE-HEAD-->
+<title>Chassé d'Ours</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<!--/PAGE-HEAD-->
+</head>
+<body>
+<!--PAGE-BODY-->
+<div id="game" data-mood="calm">
+  <canvas id="c3d"></canvas>
+  <div id="tint"></div>
+  <canvas id="fx"></canvas>
+  <div id="hurt"></div>
+  <div class="cine cine-top"></div>
+  <div class="cine cine-bot"></div>
+
+  <div id="hud" hidden>
+    <div class="hud-tl">
+      <div class="lvl">
+        <div class="lvl-badge" aria-hidden="true"><span id="lvl-num">1</span></div>
+        <div class="lvl-info">
+          <div class="lvl-title" id="lvl-title">Promeneur</div>
+          <div class="bar xp"><i id="xp-fill"></i></div>
+          <div class="lvl-xp" id="xp-text">0 / 90 XP</div>
+        </div>
+      </div>
+      <div class="hearts" id="hearts" aria-label="Vie"></div>
+      <div class="gauge"><span class="lab">Souffle</span><div class="bar stamina"><i id="stamina-fill"></i></div></div>
+      <div class="gauge" id="fury-gauge"><span class="lab">Furie</span><div class="bar fury"><i id="fury-fill"></i></div></div>
+    </div>
+
+    <div class="hud-tr">
+      <div class="btns">
+        <button id="btn-sound" type="button" aria-label="Couper ou remettre le son">SON</button>
+        <button id="btn-pause" type="button" aria-label="Pause">II</button>
+      </div>
+      <div class="mission">
+        <span class="eyebrow">Mission</span>
+        <div id="mission-text"></div>
+        <div class="bar mini"><i id="mission-fill"></i></div>
+      </div>
+      <div class="stats">
+        <span>Ours envoyés <b id="st-kicked">0</b></span>
+        <span>Record <b id="st-best">0 m</b></span>
+      </div>
+    </div>
+
+    <div id="stealth" class="chip">À découvert</div>
+    <div id="banner"></div>
+    <div id="combo" hidden></div>
+    <div id="callouts"></div>
+    <div id="charge" hidden>
+      <span id="charge-label">Armé</span>
+      <div class="charge-track"><i id="charge-fill"></i></div>
+    </div>
+    <div id="hint" hidden></div>
+  </div>
+
+  <div id="touch" hidden>
+    <div id="stick-zone"><div id="stick-base" hidden><div id="stick-knob"></div></div></div>
+    <button id="t-crouch" type="button">Accroupi</button>
+    <button id="t-kick" type="button">Chassé</button>
+  </div>
+
+  <div id="title-screen" class="overlay">
+    <div class="title-card">
+      <p class="eyebrow">Promenade bucolique, tatanes monumentales</p>
+      <h1>Chassé<br><span>d'Ours</span></h1>
+      <ul class="rules">
+        <li><b>Balade-toi</b> dans la plaine et repère un ours avant qu'il te repère.</li>
+        <li><b>Planque-toi</b> accroupi dans les hautes herbes : il ne te voit plus.</li>
+        <li><b>Arme, relâche.</b> Un ours pris par surprise encaisse le double.</li>
+      </ul>
+      <div class="keys keys-desk">
+        <span><kbd>ZQSD</kbd> ou <kbd>flèches</kbd> marcher</span>
+        <span><kbd>Maj</kbd> sprinter</span>
+        <span><kbd>C</kbd> s'accroupir</span>
+        <span><kbd>Espace</kbd> maintenir pour armer, relâcher pour frapper</span>
+      </div>
+      <div class="keys keys-touch">
+        <span>Pouce gauche : marcher (à fond pour sprinter)</span>
+        <span>Bouton Chassé : maintenir pour armer, relâcher pour frapper</span>
+      </div>
+      <button id="btn-play" type="button" class="cta">Entrer dans la plaine</button>
+      <p class="save-line" id="save-line" hidden></p>
+    </div>
+  </div>
+
+  <div id="levelup" class="overlay" hidden>
+    <div class="lu-card">
+      <p class="eyebrow">Niveau supérieur</p>
+      <h2 id="lu-title">Niveau 2</h2>
+      <p id="lu-sub"></p>
+      <div id="lu-perks" class="perks"></div>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay" hidden>
+    <div class="lu-card">
+      <h2 id="pause-title">Pause</h2>
+      <p id="pause-sub">Les ours attendent.</p>
+      <div class="pause-btns">
+        <button id="btn-resume" type="button" class="cta">Reprendre</button>
+        <button id="btn-reset" type="button" class="ghost">Recommencer à zéro</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="nogl" class="overlay" hidden>
+    <div class="lu-card"><h2>Pas de 3D ici</h2><p>Ce navigateur n'a pas pu démarrer WebGL. Essaie avec un autre navigateur ou active l'accélération graphique.</p></div>
+  </div>
+</div>
+<!--/PAGE-BODY-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/world.js"></script>
+<script src="js/actors.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
