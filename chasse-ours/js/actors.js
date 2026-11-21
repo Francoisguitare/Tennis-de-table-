@@ -7,12 +7,13 @@ const Actors = (() => {
   function mesh(geo, mat, parent) { const m = new THREE.Mesh(geo, mat); m.castShadow = true; parent.add(m); return m; }
 
   /* ---------- le promeneur ---------- */
-  function makePlayer() {
+  function makePlayer(o) {
+    o = o || {};
     const root = new THREE.Group(), pose = new THREE.Group(); root.add(pose);
     const M = new THREE.MeshLambertMaterial({ vertexColors: true });
     const body = new THREE.Group(); body.position.y = 0.98; pose.add(body);
     mesh(U.merge([
-      box(0.72, 0.82, 0.44, 0xc9412b, 0, 0.45, 0),           // chemise de bûcheron
+      box(0.72, 0.82, 0.44, o.shirt || 0xc9412b, 0, 0.45, 0),           // chemise de bûcheron
       box(0.74, 0.14, 0.46, 0x3a2a1c, 0, 0.06, 0),           // ceinture
       box(0.5, 0.62, 0.28, 0xd9a441, 0, 0.5, -0.35),         // sac à dos
       box(0.52, 0.12, 0.3, 0x8a5a2a, 0, 0.84, -0.35),
@@ -21,7 +22,7 @@ const Actors = (() => {
       U.part(new THREE.CylinderGeometry(0.4, 0.44, 0.07, 8), 0x2f5d3a, U.mat(0, 1.32, 0.02)),   // bob
       U.part(new THREE.CylinderGeometry(0.24, 0.3, 0.2, 8), 0x356b42, U.mat(0, 1.44, 0.02)),
     ]), M, body);
-    const armGeo = U.merge([box(0.2, 0.5, 0.22, 0xb5381f, 0, -0.22, 0), box(0.17, 0.24, 0.18, 0xf0c39a, 0, -0.58, 0)]);
+    const armGeo = U.merge([box(0.2, 0.5, 0.22, o.sleeve || 0xb5381f, 0, -0.22, 0), box(0.17, 0.24, 0.18, 0xf0c39a, 0, -0.58, 0)]);
     const armA = new THREE.Group(), armB = new THREE.Group();
     armA.position.set(0.47, 0.8, 0); armB.position.set(-0.47, 0.8, 0); body.add(armA); body.add(armB);
     mesh(armGeo, M, armA); mesh(armGeo, M, armB);
@@ -33,15 +34,17 @@ const Actors = (() => {
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffa040, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
     glow.position.set(0, -0.85, 0.1); glow.scale.setScalar(0.01); legA.add(glow);
     // silhouette : quand un mur, un arbre ou les herbes cachent le promeneur, on le devine quand même
+    if (!o.remote) {   // pas de silhouette pour un adversaire : derrière un mur, il doit vraiment disparaître
     const sil = new THREE.MeshBasicMaterial({ color: 0xfff3d4, transparent: true, opacity: 0.36, depthFunc: THREE.GreaterDepth, depthWrite: false, fog: false });
-    M.transparent = true; const solid = []; root.traverse(o => { if (o.isMesh) solid.push(o); });
-    solid.forEach(o => { o.renderOrder = 2; const s = new THREE.Mesh(o.geometry, sil); s.renderOrder = 1; o.add(s); });
+    M.transparent = true; const solid = []; root.traverse(q => { if (q.isMesh) solid.push(q); });
+    solid.forEach(q => { q.renderOrder = 2; const s = new THREE.Mesh(q.geometry, sil); s.renderOrder = 1; q.add(s); });
+    }
     return { root, pose, body, armA, armB, legA, legB, glow, phase: 0 };
   }
 
   // s : { speed, crouch 0..1, charge 0..1, kick 0..1, mega }
   function animPlayer(m, s, dt, t) {
-    m.phase += s.speed * dt * 1.9;
+    m.phase += Math.min(s.speed, 10.5) * dt * 1.9;
     const mv = Math.min(1, s.speed / 5), sw = Math.sin(m.phase) * mv * (s.crouch > 0.5 ? 0.5 : 0.78);
     const c = s.crouch, ch = s.charge, k = s.kick, side = Math.max(ch, k), front = 1 - side;
     m.pose.rotation.y = -Math.PI / 2 * side;   // profil : le chassé part de côté, talon en avant
@@ -57,6 +60,8 @@ const Actors = (() => {
     m.legA.scale.y = lerp(lerp(ls, 0.7, ch), 1.2, k);
     const as = 0.9 + 0.7 * (s.sprint || 0); m.armA.rotation.x = lerp(-sw * as, -1.3, side); m.armB.rotation.x = lerp(sw * as, -1.7, side);
     m.armA.rotation.z = 0.5 * side; m.armB.rotation.z = -0.4 * side;
+    if (s.climb) { const q = Math.sin(t * 16); m.body.rotation.x = -0.35; m.armA.rotation.x = -2.7 + q * 0.4; m.armB.rotation.x = -2.7 - q * 0.4; m.legA.rotation.x = q * 0.7; m.legB.rotation.x = -q * 0.7; }
+    else if (s.air && side < 0.3) { m.legA.rotation.x = 0.75; m.legB.rotation.x = -0.6; m.armA.rotation.x = m.armB.rotation.x = -2.2; m.armA.rotation.z = 0.7; m.armB.rotation.z = -0.7; }
     const g = Math.max(ch * ch, k) * (s.mega ? 2.6 : 1.7) * (1 + 0.15 * Math.sin(t * 40));
     m.glow.scale.setScalar(Math.max(0.01, g));
     m.glow.material.color.setHex(s.mega ? 0x7fe9ff : (ch >= 0.99 || k > 0.5 ? 0xfff0c0 : 0xff9a3a));

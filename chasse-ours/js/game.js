@@ -18,7 +18,7 @@
   FX.init(scene, camera, $('fx'), renderer);
 
   /* ---------- données ---------- */
-  const CFG = { walk: 6.4, sprint: 11.2, crouch: 3.3, chargeMove: 2.3, chargeTime: 1.0, perfectWin: 0.24, lungeDur: 0.17, lungeDist: 3.6, R: World.R };
+  const CFG = { walk: 6.4, sprint: 23, crouch: 3.3, chargeMove: 2.3, chargeTime: 1.0, perfectWin: 0.24, lungeDur: 0.17, lungeDist: 3.6, R: World.R };
   const BEARS = {
     noir: { id: 'noir', name: 'Ours noir', color: 0x2e2824, snout: 0x9a7650, size: 0.85, weight: 70, xp: 30, speed: 2.6, chase: 8.6, vision: 19 },
     brun: { id: 'brun', name: 'Ours brun', color: 0x80502a, snout: 0xcda06a, size: 1.0, weight: 120, xp: 50, speed: 2.4, chase: 8.9, vision: 21 },
@@ -51,27 +51,30 @@
     { ev: 'launch', n: 5, xp: 120, txt: n => `envoie ${n} ours dans le décor` },
     { ev: 'back', n: 3, xp: 110, txt: n => `envoie ${n} ours frappés dans le dos` },
   ];
+  // le coup de pied évolue : à chaque palier, l'impact et le vol de l'ours changent de catégorie
+  const tierOf = L => L >= 12 ? 4 : L >= 8 ? 3 : L >= 5 ? 2 : L >= 3 ? 1 : 0;
+  const POWERS = { 3: ' Nouveau pouvoir, Onde lourde : tes impacts frappent plus large.', 5: ' Nouveau pouvoir, Mur du son : un chassé bien armé fait passer l\'ours en supersonique.', 8: ' Nouveau pouvoir, Météore : l\'ours s\'embrase en plein vol.', 12: ' Nouveau pouvoir, Mise en orbite : il ne redescend plus.' };
   const need = L => Math.round(9 * Math.pow(L, 1.45)) * 10;
   const titleOf = L => { let t = TITLES[0][1]; for (const [l, n] of TITLES) if (L >= l) t = n; return t; };
 
   const S = {
     running: false, paused: false, modal: false, t: 0, rt: 0, hitstop: 0, slowT: 1, slowDur: 0, slowMin: 1, slowLaunch: false, ts: 1,
-    level: 1, xp: 0, perks: {}, kicked: 0, best: 0, missionIdx: 0, missionProg: 0, legend: false,
+    level: 1, xp: 0, perks: {}, kicked: 0, best: 0, missionIdx: 0, missionProg: 0, legend: false, duel: false,
     hearts: 4, maxHearts: 4, stamina: 100, maxStamina: 100, winded: false, fury: 0, combo: 0, comboT: 0,
     power: 100, detectMul: 1, chargeRate: 1, furyMul: 1, reachMul: 1, mood: 'calm', pendingLevel: 0, timers: [], calmQ: [], counter: null, spawnT: 0, hintStep: 0, hintT: 0, moteAcc: 0, objT: 0, nearBear: false, fireAcc: 0,
   };
-  const P = { x: 0, z: 6, vx: 0, vz: 0, face: Math.PI, crouch: false, crouchK: 0, charging: false, chargeT: 0, chargePose: 0, kickPose: 0, kick: null, recover: 0, hurtT: 0, invuln: 0, inGrass: false, hidden: false, sprinting: false, sprintK: 0, sprintT: 0, speed: 0, stepAcc: 0, regenDelay: 0, fullPing: false, auraAcc: 0 };
+  const P = { x: 0, y: 0, z: 6, vy: 0, ground: true, climb: false, fly: null, vx: 0, vz: 0, face: Math.PI, crouch: false, crouchK: 0, charging: false, chargeT: 0, chargePose: 0, kickPose: 0, kick: null, recover: 0, hurtT: 0, invuln: 0, inGrass: false, hidden: false, sprinting: false, sprintK: 0, sprintT: 0, speed: 0, stepAcc: 0, regenDelay: 0, fullPing: false, auraAcc: 0 };
   const I = { sx: 0, sz: 0, kick: false, stick: false };
   const keys = {};
   const bears = [];
   // caméra libre : yaw tourne autour du promeneur, pitch monte ou descend, uz rapproche
-  const cam = { x: 0, y: 2, z: 0, lx: 0, lz: 0, zoom: 1, punch: 0, track: null, trackT: 0, init: false, baseFov: 50, fov: 50, yaw: 0, pitch: 0.36, uz: coarse ? 0.9 : 1 };
+  const cam = { x: 0, y: 2, z: 0, lx: 0, lz: 0, zoom: 1, punch: 0, track: null, trackT: 0, init: false, baseFov: 50, fov: 50, py: 0, yaw: 0, pitch: 0.36, uz: coarse ? 0.9 : 1 };
   const shk = { x: 0, y: 0, r: 0 }, v3 = new THREE.Vector3();
   let VW = 1, VH = 1, pauseMode = 'pause';
 
   /* ---------- sauvegarde ---------- */
   const KEY = 'chasse-ours-v1';
-  function save() { try { localStorage.setItem(KEY, JSON.stringify({ level: S.level, xp: S.xp, perks: S.perks, kicked: S.kicked, best: S.best, missionIdx: S.missionIdx, missionProg: S.missionProg, legend: S.legend, muted: Snd.muted, story: Story.serialize() })); } catch (e) { /* stockage indisponible : on joue sans */ } }
+  function save() { if (S.duel) return; try { localStorage.setItem(KEY, JSON.stringify({ level: S.level, xp: S.xp, perks: S.perks, kicked: S.kicked, best: S.best, missionIdx: S.missionIdx, missionProg: S.missionProg, legend: S.legend, muted: Snd.muted, story: Story.serialize() })); } catch (e) { /* stockage indisponible : on joue sans */ } }
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!d) return null;
@@ -165,10 +168,14 @@
   const after = (sec, fn) => S.timers.push({ t: S.t + sec, fn });
   const whenCalm = fn => S.calmQ.push(fn);
   function project(x, y, z) { v3.set(x, y, z).project(camera); return { x: (v3.x * 0.5 + 0.5) * VW, y: (-v3.y * 0.5 + 0.5) * VH, on: v3.z < 1 && Math.abs(v3.x) < 1 && Math.abs(v3.y) < 1 }; }
-  function collide(o, r) {
-    for (const c of World.colliders) { const dx = o.x - c.x, dz = o.z - c.z, m = r + c.r; if (Math.abs(dx) > m || Math.abs(dz) > m) continue; const d = Math.hypot(dx, dz); if (d < m && d > 0.0001) { o.x = c.x + dx / d * m; o.z = c.z + dz / d * m; } }
-    World.collideWalls(o, r);
+  // y : hauteur des pieds. Ce qui est plus bas se franchit ; renvoie le sommet du plus haut obstacle touché (pour l'escalade)
+  function collide(o, r, y) {
+    let top = -1; const feet = (y || 0) + 0.6;
+    for (const c of World.colliders) { if (c.h && c.h <= feet) continue; const dx = o.x - c.x, dz = o.z - c.z, m = r + c.r; if (Math.abs(dx) > m || Math.abs(dz) > m) continue; const d = Math.hypot(dx, dz); if (d < m && d > 0.0001) { o.x = c.x + dx / d * m; o.z = c.z + dz / d * m; if (c.h && c.h > top) top = c.h; } }
+    const wt = World.collideWalls(o, r, y); if (wt > top) top = wt;
     const d = Math.hypot(o.x, o.z); if (d > CFG.R) { o.x *= CFG.R / d; o.z *= CFG.R / d; }
+    if (S.duel) Duel.clamp(o);
+    return top;
   }
   const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   // position au bord de l'écran pour un écart monde (tient compte de l'orientation de la caméra)
@@ -200,7 +207,7 @@
     const fr = Math.round(S.fury); if (H.furyRing !== fr) { H.furyRing = fr; tk.style.setProperty('--fury', fr); tk.classList.toggle('mega', fr >= 100); }
     setTxt('st-kicked', String(S.kicked)); setTxt('st-best', S.best + ' m');
     // objectif de l'histoire : en affichage épuré, il n'apparaît que quelques secondes quand il change
-    const o = Story.hud(); setTxt('mission-eyebrow', o.eyebrow); setTxt('mission-text', o.text); setW('mission-fill', o.k); setTxt('defi-text', defiText());
+    const o = S.duel ? Duel.hud() : Story.hud(); setTxt('mission-eyebrow', o.eyebrow); setTxt('mission-text', o.text); setW('mission-fill', o.k); setTxt('defi-text', S.duel ? '' : defiText());
     if (H.objKey !== o.text) { H.objKey = o.text; S.objT = 7; }
     S.objT = Math.max(0, S.objT - rdt); setCls('mission', 'show', S.objT > 0);
     // furtivité
@@ -243,11 +250,12 @@
     const rw = $('card-reward'); rw.hidden = !o.reward; rw.textContent = o.reward || '';
     $('card-btn').textContent = o.button || 'Continuer'; $('card').hidden = false; $('card').scrollTop = 0; cardCb = cb;
   }
+  function dismissCard() { $('card').hidden = true; S.modal = false; cardCb = null; }
   $('card-btn').addEventListener('click', () => { $('card').hidden = true; S.modal = false; Snd.ui(); const cb = cardCb; cardCb = null; if (cb) cb(); });
 
   /* ---------- progression ---------- */
   function addXP(n, sx, sy) {
-    n = Math.round(n); if (n <= 0) return;
+    n = Math.round(n); if (n <= 0 || S.duel) return;
     S.xp += n; if (sx !== undefined) floatText('+' + n + ' XP', sx, sy);
     while (S.xp >= need(S.level)) { S.xp -= need(S.level); S.level++; S.pendingLevel++; }
     save();
@@ -261,7 +269,7 @@
     S.modal = true; S.pendingLevel--; recalc(); S.hearts = S.maxHearts; Snd.levelUp(); stopCharge();
     const lvl = S.level - S.pendingLevel;
     $('lu-title').textContent = 'Niveau ' + lvl;
-    const newBear = lvl === 3 ? ' Les grizzlys descendent dans la plaine.' : lvl === 5 ? ' Un ours polaire s\'est perdu par ici.' : lvl === 2 ? ' On murmure qu\'un ours doré rôde.' : '';
+    const newBear = (POWERS[lvl] || '') + (lvl === 3 ? ' Les grizzlys descendent dans la plaine.' : lvl === 5 ? ' Un ours polaire s\'est perdu par ici.' : lvl === 2 ? ' On murmure qu\'un ours doré rôde.' : '');
     $('lu-sub').textContent = `${titleOf(lvl)}. Puissance +7 %, vie restaurée.${newBear} Choisis un atout :`;
     const pool = PERKS.slice().sort(() => Math.random() - 0.5).slice(0, 3), box = $('lu-perks'); box.innerHTML = '';
     pool.forEach((p, i) => {
@@ -319,7 +327,8 @@
     const T = b.T;
     if (b.state === 'launched') {
       b.lt += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.vy -= 15 * dt;
-      if (dt > 0) { FX.trail(b.x, b.y + 1.3, b.z, b.reward && b.reward.mega); if (b.lt > 0.25) FX.trail(b.x - b.vx * 0.03, b.y + 1.3, b.z - b.vz * 0.03); }
+      if (b.boom && !b.boomed && b.lt > 0.2) sonicBoom(b);
+      if (dt > 0) { const heat = b.boomed ? b.boom : 0, n = heat ? 4 : 2; for (let i = 0; i < n; i++) { const k = i / n * dt; FX.trail(b.x - b.vx * k, b.y + 1.3 - b.vy * k, b.z - b.vz * k, b.reward && b.reward.mega, heat); } }
       if (b.lt > 1.25) b.model.root.scale.setScalar(Math.max(0.01, b.size * (1 - (b.lt - 1.25) / 0.2)));
       if (b.lt > 1.45) finishLaunch(b);
       return;
@@ -328,10 +337,10 @@
     const vis = T.vision * S.detectMul * (P.hidden ? 0.1 : P.crouch ? 0.5 : P.sprinting ? 1.2 : 1);
     b.vis = vis;
     // un mur assez haut coupe la vue ; accroupi, un muret suffit
-    const blk = d < 52 && World.blocked(b.x, b.z, P.x, P.z, P.crouch);
-    const close = d < b.rad + (P.hidden ? 0.5 : P.crouch ? 1.3 : 2.6);
+    const blk = d < 52 && World.blocked(b.x, b.z, P.x, P.z, P.crouch, P.y);
+    const close = P.y < 2.5 && d < b.rad + (P.hidden ? 0.5 : P.crouch ? 1.3 : 2.6);
     const seen = !blk && ((off < 0.95 && d < vis) || close);
-    const noise = P.sprinting ? 12 : (P.crouch || P.speed < 1) ? 0 : 5;
+    const noise = P.sprinting ? 17 : (P.crouch || P.speed < 1) ? 0 : 5;
     const heard = d < noise * S.detectMul;
     switch (b.state) {
       case 'sleep':
@@ -360,7 +369,7 @@
         break;
       case 'chase': {
         // se planquer dans les herbes ou casser la ligne de vue derrière un mur fait perdre la trace
-        const lost = !T.boss && ((P.hidden && d > 4.5) || d > 48 || (blk && d > 5));
+        const lost = !T.boss && ((P.hidden && d > 4.5) || d > 48 || (blk && d > 5) || P.y > 2.6);   // perché, il ne peut pas suivre
         if (lost) b.lost += dt; else { b.lost = 0; b.lastX = P.x; b.lastZ = P.z; }
         if (b.lost > 3.2) { b.state = 'idle'; b.st = rnd(2, 4); b.aware = 0.4; if (!b.patrol) { b.homeX = b.x; b.homeZ = b.z; } banner('Il a perdu ta trace<small>Reste planqué</small>', '', 1800); break; }
         moveBear(b, b.lastX, b.lastZ, lost && Math.hypot(b.lastX - b.x, b.lastZ - b.z) < 3 ? 0 : T.chase, 4.2, dt);
@@ -373,8 +382,8 @@
         if (b.at < b.windup) b.face += clamp(angDiff(b.face, ang), -2.6 * dt, 2.6 * dt);
         else if (!b.struck) {
           b.struck = true; Snd.swipe(); b.x += Math.sin(b.face) * 0.8; b.z += Math.cos(b.face) * 0.8;
-          const dodge = P.kick && P.kick.t < CFG.lungeDur;
-          if (d < b.reach + 1.1 && off < 1.15 && P.invuln <= 0 && !dodge && !blk) hurtPlayer(b, 1);
+          const dodge = P.kick && P.kick.t < P.kick.dur;
+          if (d < b.reach + 1.1 && off < 1.15 && P.invuln <= 0 && !dodge && !blk && P.y < 2.4) hurtPlayer(b, 1);
         }
         if (b.at > b.windup + 0.8) b.state = 'chase';
         break;
@@ -391,8 +400,8 @@
           banner('Le Baron est sonné<small>Arme ton chassé, vite</small>', '', 2600); break;
         }
         if (dt > 0) FX.puff(b.x, 0.4, b.z, 2, 1.6);
-        const dodge = P.kick && P.kick.t < CFG.lungeDur;
-        if (d < b.rad + 1.1 && P.invuln <= 0 && !dodge) hurtPlayer(b, 2);
+        const dodge = P.kick && P.kick.t < P.kick.dur;
+        if (d < b.rad + 1.1 && P.invuln <= 0 && !dodge && P.y < 2.4) hurtPlayer(b, 2);
         if (b.at > 1.2) { b.state = 'tired'; b.st = 1.3; b.vuln = true; }
         break;
       }
@@ -432,35 +441,40 @@
   function startKick() {
     const c = Math.min(1, P.chargeT / CFG.chargeTime), perfect = P.chargeT >= CFG.chargeTime && P.chargeT <= CFG.chargeTime + CFG.perfectWin;
     P.charging = false; P.fullPing = false; Snd.chargeStop();
-    const reach = kickReach(c), tg = pickTarget(reach);
-    if (tg) P.face = Math.atan2(tg.x - P.x, tg.z - P.z);
+    // depuis un perchoir, le chassé devient plongeant : plus d'allonge, et on tombe sur la cible
+    const dive = P.y > 1.2, dur = CFG.lungeDur + (dive ? Math.min(0.3, P.y / 28) : 0), tg = pickTarget(kickReach(c) * (dive ? 1.5 : 1));
+    let reach = kickReach(c) * (dive ? 1.5 : 1);
+    if (tg) { P.face = Math.atan2(tg.x - P.x, tg.z - P.z); if (dive) reach = clamp(Math.hypot(tg.x - P.x, tg.z - P.z) - 1.2, 1, reach); }   // en plongeant, on atterrit sur la cible
     const ambush = P.inGrass && P.crouch;
     P.crouch = false; $('t-crouch').classList.remove('on');
-    P.kick = { t: 0, c, perfect, dx: Math.sin(P.face), dz: Math.cos(P.face), reach, hit: false, ambush, mega: S.fury >= 100 };
+    P.kick = { t: 0, dur, c, perfect, dx: Math.sin(P.face), dz: Math.cos(P.face), reach, hit: false, ambush, mega: S.fury >= 100, dive, y0: P.y };
+    P.climb = false;
     Snd.whoosh(0.5 + 0.5 * c);
   }
   function updateKick(dt) {
     const k = P.kick; k.t += dt;
-    if (k.t < CFG.lungeDur && !k.hit) {
-      const v = k.reach / CFG.lungeDur; P.vx = k.dx * v; P.vz = k.dz * v;
+    if (k.t < k.dur && !k.hit) {
+      const v = k.reach / k.dur; P.vx = k.dx * v; P.vz = k.dz * v;
       const fx = P.x + k.dx * 1.25, fz = P.z + k.dz * 1.25;
-      for (const b of bears) { if (b.state === 'launched') continue; if (Math.hypot(b.x - fx, b.z - fz) < b.rad + 0.8) { k.hit = true; onKickHit(b, k); break; } }
-      if (!k.hit) for (const o of World.kickables) { if (Math.hypot(o.x - fx, o.z - fz) < o.r) { k.hit = true; kickObject(o, k); break; } }
-      if (dt > 0) FX.puff(P.x, 0.3, P.z, 1, 0.8);
+      if (P.y < 5) for (const b of bears) { if (b.state === 'launched') continue; if (Math.hypot(b.x - fx, b.z - fz) < b.rad + 0.8) { k.hit = true; onKickHit(b, k); break; } }
+      if (!k.hit && P.y < 2.5) for (const o of World.kickables) { if (Math.hypot(o.x - fx, o.z - fz) < o.r) { k.hit = true; kickObject(o, k); break; } }
+      if (!k.hit && S.duel && Duel.kickTest(fx, fz, k)) { k.hit = true; P.vx = P.vz = 0; }
+      if (dt > 0) FX.puff(P.x, P.y + 0.3, P.z, 1, 0.8);
     } else { const dr = Math.exp(-16 * dt); P.vx *= dr; P.vz *= dr; }
-    if (k.t > CFG.lungeDur + (k.hit ? 0.24 : 0.12)) { P.kick = null; P.recover = k.hit ? 0.16 : 0.42; if (!k.hit) Snd.miss(); }
+    if (k.t > k.dur + (k.hit ? 0.24 : 0.12)) { P.kick = null; P.recover = k.hit ? 0.16 : 0.42; if (!k.hit) Snd.miss(); }
   }
   // tout ce qui donne le poids du coup : arrêt sur image, ralenti, onde, lumière, arbres secoués
   function impactFX(b, k, heavy, mega, launch) {
     S.hitstop = 0.07 + 0.075 * heavy; S.slowLaunch = launch;
     S.slowDur = launch ? 0.95 + 0.75 * heavy : 0.3 + 0.3 * heavy; S.slowT = 0; S.slowMin = launch ? 0.05 : 0.22;
     const ix = b.x - k.dx * b.rad * 0.6, iy = 1.3 * b.size, iz = b.z - k.dz * b.rad * 0.6, sp = project(ix, iy, iz);
-    FX.impact({ x: ix, y: iy, z: iz, dx: k.dx, dz: k.dz, heavy, mega, sx: sp.x, sy: sp.y });
+    const tier = tierOf(S.level);
+    FX.impact({ x: ix, y: iy, z: iz, dx: k.dx, dz: k.dz, heavy, mega, tier, sx: sp.x, sy: sp.y });
     Snd.impact(heavy, mega); Snd.slowmo(S.slowDur + S.hitstop); Snd.yelp(b.size);
     cam.punch = Math.min(1.4, 0.5 + 0.6 * heavy);
     if (mega) World.darken(1);
     b.flash = 1.2; b.squash = 1;
-    for (const { tree, d } of World.shock(ix, iz, heavy * (mega ? 1.8 : 1), S.t)) {
+    for (const { tree, d } of World.shock(ix, iz, heavy * (mega ? 1.8 : 1) * (1 + 0.25 * tier), S.t)) {
       after(d / 34, () => { FX.leaves(tree.x, tree.top * 0.8, tree.z, Math.round(7 * heavy / (1 + d * 0.08)) + 1, tree.kind === 'fall'); if (d < 26 && Math.random() < 0.45) FX.birds(tree.x, tree.top, tree.z, 2 + Math.floor(rnd(4))); });
     }
     wakeAround(ix, iz, 20, b);
@@ -489,6 +503,7 @@
     if (back) { mult *= 1.25; tags.push('Dans le dos ×1,25'); }
     if (counter) { mult *= 1.8; tags.push('Contre ×1,8'); }
     if (k.perfect) { mult *= 1.3; tags.push('Armé parfait ×1,3'); }
+    if (k.dive) { mult *= 1.5; tags.push('Plongeant ×1,5'); }
     if (k.mega) { mult *= 2.5; tags.push('Furie ×2,5'); S.fury = 0; }
     const impulse = S.power * (0.3 + 0.7 * k.c) * mult, r = impulse / b.res, launch = r >= 1;
     const heavy = clamp(0.3 + 0.5 * k.c + (launch ? 0.25 : 0) + (k.mega ? 0.5 : 0) + tags.length * 0.04, 0.3, 1.6);
@@ -526,11 +541,12 @@
   function launchBear(b, dx, dz, r, tags, f) {
     const rr = Math.min(r, 6);
     b.state = 'launched'; b.lt = 0; b.vx = dx * (22 + 7 * rr); b.vz = dz * (22 + 7 * rr); b.vy = 15 + 3.5 * rr; b.spinX = rnd(9, 15); b.spinZ = rnd(-5, 5); b.model.cone.visible = false;
-    const dist = Math.round(18 + 30 * Math.pow(r, 1.15));
+    const tier = tierOf(S.level); b.boom = !f.wave && tier >= 2 && r >= 1.3 ? tier : 0; b.boomed = false;
+    const dist = Math.round((18 + 30 * Math.pow(r, 1.15)) * (b.boom ? [1, 1, 1.6, 2.3, 3.2][tier] : 1));
     S.combo++; S.comboT = 14;
     const cm = Math.min(3, 1 + 0.25 * (S.combo - 1));
     const xp = Math.round(b.T.xp * (1 + 0.3 * tags.length) * cm * (1 + dist / 400) * (S.legend ? 1.5 : 1));
-    b.reward = { dist, xp, mega: f.mega };
+    b.reward = { dist, xp, mega: f.mega, tier: b.boom };
     S.kicked++; const record = dist > S.best; if (record) S.best = dist;
     if (!f.mega) S.fury = Math.min(100, S.fury + (20 + 7 * tags.length) * S.furyMul);
     missionEvent('launch'); Story.on('launch', { bear: b, flags: f });
@@ -538,16 +554,25 @@
     if (f.wave) return; // soufflé par l'onde d'un méga chassé : pas de second titre à l'écran
     if (S.combo >= 2) tags = tags.concat('Série ×' + S.combo);
     const title = f.boss ? 'Adieu, Baron' : f.mega ? 'Méga chassé' : f.counter ? 'Contre-chassé' : f.unaware ? 'Chassé furtif' : 'Chassé';
-    const h = showHit(title, f.mega ? 'mega' : '', tags);
+    const h = showHit(title, f.mega ? 'mega' : '', tags); b.hitUI = h;
     S.counter = { h, to: dist, t: 0, dur: 1.2, xp, record, name: b.name };
     cam.track = b; cam.trackT = 1.9; Snd.fly(S.hitstop + 0.45);
     if (f.unaware) missionEvent('stealth'); if (f.ambush) missionEvent('ambush'); if (f.back) missionEvent('back'); if (f.counter) missionEvent('counter'); if (f.mega) missionEvent('mega');
     missionEvent('dist', dist); missionEvent('combo', S.combo);
     if (S.fury >= 100 && !f.mega) after(0.6, () => banner('Furie pleine<small>Ton prochain chassé sera un méga chassé</small>', '', 2600));
   }
+  // le mur du son : l'ours accélère d'un coup, cône de vapeur, double détonation
+  function sonicBoom(b) {
+    b.boomed = true; b.vx *= 2.4; b.vz *= 2.4; b.vy *= 1.5;
+    const p = project(b.x, b.y + 1.3, b.z);
+    FX.sonic({ x: b.x, y: b.y + 1.3, z: b.z, tier: b.boom, sx: p.x, sy: p.y }); Snd.boom(b.boom);
+    S.hitstop = Math.max(S.hitstop, 0.06); cam.punch = 1.3; if (b.boom >= 3) World.darken(0.55);
+    if (b.hitUI && b.hitUI.el.isConnected) { const sp = document.createElement('span'); sp.className = 'boom'; sp.textContent = ['', '', 'Mur du son', 'Météore', 'Mise en orbite'][b.boom]; b.hitUI.el.querySelector('.hit-tags').appendChild(sp); }
+  }
   function finishLaunch(b) {
-    const p = project(b.x, b.y, b.z), sx = clamp(p.x, VW * 0.24, VW * 0.76), sy = clamp(p.y, VH * 0.15, VH * 0.45);
-    FX.star(sx, sy, b.reward.mega ? 1.5 : 1); Snd.twinkle();
+    const p = project(b.x, b.y, b.z), sx = clamp(p.x, VW * 0.24, VW * 0.76), sy = clamp(p.y, VH * 0.15, VH * 0.45), tr = b.reward.tier || 0;
+    FX.star(sx, sy, (b.reward.mega ? 1.5 : 1) + 0.45 * tr); Snd.twinkle();
+    if (tr >= 3) { FX.flash(0.3, '255,225,180'); FX.skyRing(sx, sy, tr); Snd.impact(0.35, false); }
     addXP(b.reward.xp, sx, sy + 34);
     removeBear(b);
   }
@@ -582,12 +607,17 @@
   function respawn() {
     const cp = Story.checkpoint();
     P.x = cp[0]; P.z = cp[1]; P.vx = P.vz = 0; P.face = Math.PI; P.crouch = false; P.charging = false; P.kick = null; P.hurtT = 0; P.invuln = 2; P.recover = 0;
+    P.y = 0; P.vy = 0; P.ground = true; P.climb = false;
     S.hearts = S.maxHearts; S.stamina = S.maxStamina; S.fury = 0; S.combo = 0; S.winded = false; S.timers.length = 0; S.calmQ.length = 0; S.counter = null; S.hitstop = 0; S.slowT = 1; S.slowDur = 0; cam.init = false; cam.track = null;
     $('t-crouch').classList.remove('on'); resetBears(); Story.setupStep();
   }
 
   /* ---------- le promeneur ---------- */
   function updatePlayer(dt) {
+    if (P.fly) {   // duel : je viens d'en prendre un, je vole
+      Duel.flyStep(dt); P.invuln = Math.max(P.invuln, 0.1); pm.root.position.set(P.x, P.y, P.z); pm.root.visible = true; if (P.fly) pm.pose.rotation.x += 12 * dt;
+      P.speed = 0; P.sprinting = false; P.sprintK = 0; Snd.setRush(0); FX.rush = 0; chargeRing.visible = aimRing.visible = false; return;
+    }
     P.invuln = Math.max(0, P.invuln - dt); P.recover = Math.max(0, P.recover - dt); P.hurtT = Math.max(0, P.hurtT - dt);
     // les directions suivent la caméra : « haut » = là où elle regarde
     const ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + I.sx, iz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + I.sz;
@@ -599,7 +629,7 @@
       P.chargeT += dt * S.chargeRate;
       const c = Math.min(1, P.chargeT / CFG.chargeTime); Snd.chargeSet(c);
       if (c >= 1 && !P.fullPing) { P.fullPing = true; Snd.perfect(); FX.ring(P.x, P.z, 0xffffff, 4.5, 0.3, 0.2, 0.8); }
-      P.auraAcc += dt * (20 + 50 * c); while (P.auraAcc > 1) { P.auraAcc--; FX.aura(P.x + Math.sin(P.face) * 0.5, 0.7, P.z + Math.cos(P.face) * 0.5, c, S.fury >= 100); }
+      P.auraAcc += dt * (20 + 50 * c); while (P.auraAcc > 1) { P.auraAcc--; FX.aura(P.x + Math.sin(P.face) * 0.5, P.y + 0.7, P.z + Math.cos(P.face) * 0.5, c, S.fury >= 100); }
       if (!I.kick) startKick();
     }
     const was = P.sprinting; P.sprinting = false;
@@ -611,37 +641,55 @@
       if (wantSprint && !P.crouch && !P.charging && ml > 0.2 && !S.winded) {
         P.sprinting = true;
         if (!was) { P.sprintT = 0; FX.dust(P.x, P.z, 8, 5); Snd.whoosh(0.35); cam.punch = Math.max(cam.punch, 0.35); }   // le coup de rein du départ
-        P.sprintT += dt; max = CFG.sprint * (1 + 0.28 * Math.max(0, 1 - P.sprintT / 0.45));
+        P.sprintT += dt; max = CFG.sprint * (1 + 0.15 * Math.max(0, 1 - P.sprintT / 0.45));
       }
       if (P.charging) max = CFG.chargeMove; if (P.recover > 0) max *= 0.35;
-      const acc = P.sprinting ? 16 : 12;
+      const acc = P.ground || P.climb ? (P.sprinting ? 16 : 12) : 3.5;   // en l'air, on garde son élan
       P.vx = damp(P.vx, mx * max, acc, dt); P.vz = damp(P.vz, mz * max, acc, dt);
       if (ml > 0.1) P.face += angDiff(P.face, Math.atan2(mx, mz)) * Math.min(1, dt * (P.charging ? 7 : 14));
     }
     P.sprintK = damp(P.sprintK, P.sprinting ? 1 : 0, P.sprinting ? 9 : 5, dt);
-    if (P.sprinting) { S.stamina -= 24 * dt; P.regenDelay = 0.7; if (S.stamina <= 0) { S.stamina = 0; S.winded = true; } }
-    else { P.regenDelay -= dt; if (P.regenDelay <= 0) S.stamina = Math.min(S.maxStamina, S.stamina + 21 * dt); if (S.winded && S.stamina > S.maxStamina * 0.3) S.winded = false; }
-    P.x += P.vx * dt; P.z += P.vz * dt;
-    for (const b of bears) { if (b.state === 'launched') continue; const dx = P.x - b.x, dz = P.z - b.z, m = b.rad * 0.8 + 0.4, d = Math.hypot(dx, dz); if (d < m && d > 0.001) { P.x = b.x + dx / d * m; P.z = b.z + dz / d * m; } }
-    collide(P, 0.45);
+    if (P.sprinting) { S.stamina -= 10 * dt; P.regenDelay = 0.7; if (S.stamina <= 0) { S.stamina = 0; S.winded = true; } }
+    else { P.regenDelay -= dt; if (P.regenDelay <= 0) S.stamina = Math.min(S.maxStamina, S.stamina + 32 * dt); if (S.winded && S.stamina > S.maxStamina * 0.3) S.winded = false; }
+    // déplacement par petits pas : à pleine vitesse, on ne traverse pas un mur
+    const stepN = Math.max(1, Math.ceil(Math.hypot(P.vx, P.vz) * dt / 0.4)); let top = -1;
+    for (let i = 0; i < stepN; i++) { P.x += P.vx * dt / stepN; P.z += P.vz * dt / stepN; const tp = collide(P, 0.45, P.y); if (tp > top) top = tp; }
+    if (P.y < 2) for (const b of bears) { if (b.state === 'launched') continue; const dx = P.x - b.x, dz = P.z - b.z, m = b.rad * 0.8 + 0.4, d = Math.hypot(dx, dz); if (d < m && d > 0.001) { P.x = b.x + dx / d * m; P.z = b.z + dz / d * m; } }
+    // parkour : on pousse contre un obstacle, on le grimpe ; un vide sous les pieds en pleine course, on saute
+    const floor = World.groundAt(P.x, P.z, P.y);
+    if (P.kick) {   // plongeant : on quitte le perchoir à l'horizontale, puis on pique
+      const k = P.kick; if (k.dive) { const e = clamp((k.t / k.dur - 0.45) / 0.55, 0, 1); P.y = Math.max(floor, 0.2 + (k.y0 - 0.2) * (1 - e * e * (3 - 2 * e))); } else if (P.y < floor) P.y = floor;
+      P.vy = 0; P.climb = false;
+    }
+    else if (top > P.y + 0.6 && ml > 0.3 && P.hurtT <= 0 && !P.charging) {
+      if (!P.climb) { P.climb = true; FX.puff(P.x, P.y + 0.3, P.z, 2, 0.8); }
+      P.vy = (P.crouch ? 6 : 11) + 9 * P.sprintK; P.y += P.vy * dt; P.ground = false;
+    } else {
+      if (P.climb) { P.climb = false; P.vy = 4.5; }   // rétablissement en haut du mur
+      if (P.y > floor + 0.03 || P.vy > 0) {
+        if (P.ground && P.vy <= 0 && P.speed > 8.5 && P.y - floor > 0.9) { P.vy = 8; Snd.whoosh(0.3); }   // au bout du toit : élan
+        P.ground = false; P.vy -= 30 * dt; P.y += P.vy * dt;
+        if (P.y <= floor) { if (P.vy < -9) { FX.dust(P.x, P.z, 8, 5, floor + 0.3); Snd.step(false, 1); FX.shake(Math.min(0.3, -P.vy * 0.011)); } P.y = floor; P.vy = 0; P.ground = true; }
+      } else { P.y = floor; P.vy = 0; P.ground = true; }
+    }
     P.speed = Math.hypot(P.vx, P.vz);
-    P.inGrass = World.inGrass(P.x, P.z); P.hidden = P.inGrass && P.crouch && !P.kick;
+    P.inGrass = World.inGrass(P.x, P.z); P.hidden = P.inGrass && P.crouch && !P.kick && P.y < 0.5;
     P.stepAcc += P.speed * dt;
-    if (P.stepAcc > (P.sprinting ? 2.6 : P.crouch ? 1.6 : 2.1) && !P.kick) { P.stepAcc = 0; Snd.step(P.inGrass, P.crouch ? 0.35 : P.sprinting ? 1 : 0.65); if (P.sprinting) FX.puff(P.x, 0.2, P.z, 4, 1.2); }
+    if (P.stepAcc > (P.sprinting ? 4.4 : P.crouch ? 1.6 : 2.1) && !P.kick && P.ground) { P.stepAcc = 0; Snd.step(P.inGrass, P.crouch ? 0.35 : P.sprinting ? 1 : 0.65); if (P.sprinting) FX.puff(P.x, P.y + 0.2, P.z, 4, 1.2); }
     P.crouchK = damp(P.crouchK, P.crouch ? 1 : 0, 12, dt);
     P.chargePose = damp(P.chargePose, P.charging ? 0.35 + 0.65 * Math.min(1, P.chargeT / CFG.chargeTime) : 0, 14, dt);
     P.kickPose = damp(P.kickPose, P.kick ? 1 : 0, P.kick ? 45 : 9, dt);
-    pm.root.position.set(P.x, 0, P.z); pm.root.rotation.y = P.face;
+    pm.root.position.set(P.x, P.y, P.z); pm.root.rotation.y = P.face;
     pm.root.visible = !(P.invuln > 0 && P.hurtT <= 0 && Math.floor(S.rt * 18) % 2 === 0 && S.hearts > 0);
-    Actors.animPlayer(pm, { speed: P.speed, crouch: P.crouchK, charge: P.chargePose, kick: P.kickPose, sprint: P.sprintK, mega: S.fury >= 100 }, dt, S.rt);
+    Actors.animPlayer(pm, { speed: P.speed, crouch: P.crouchK, charge: P.chargePose, kick: P.kickPose, sprint: P.sprintK, climb: P.climb, air: !P.ground && !P.climb, mega: S.fury >= 100 }, dt, S.rt);
     Snd.setRush(P.sprintK); FX.rush = P.sprintK;
     // repères au sol : cercle d'armé, cible visée
     const c = P.charging ? Math.min(1, P.chargeT / CFG.chargeTime) : 0;
     chargeRing.visible = P.charging; aimRing.visible = false;
     if (P.charging) {
       const perfect = P.chargeT >= CFG.chargeTime && P.chargeT <= CFG.chargeTime + CFG.perfectWin;
-      chargeRing.position.set(P.x, 0.12, P.z); chargeRing.scale.setScalar(1.1 + 1.9 * c); chargeRing.material.opacity = 0.25 + 0.6 * c; chargeRing.material.color.setHex(perfect ? 0xffffff : S.fury >= 100 ? 0x7fe9ff : 0xffb53a);
-      const tg = pickTarget(kickReach(c));
+      chargeRing.position.set(P.x, P.y + 0.12, P.z); chargeRing.scale.setScalar(1.1 + 1.9 * c); chargeRing.material.opacity = 0.25 + 0.6 * c; chargeRing.material.color.setHex(perfect ? 0xffffff : S.fury >= 100 ? 0x7fe9ff : 0xffb53a);
+      const tg = pickTarget(kickReach(c) * (P.y > 1.2 ? 1.5 : 1));
       if (tg) { aimRing.visible = true; aimRing.position.set(tg.x, 0.16, tg.z); aimRing.scale.setScalar(tg.rad * 1.5 + Math.sin(S.rt * 12) * 0.12); aimRing.material.opacity = 0.85; }
     }
   }
@@ -658,7 +706,7 @@
     for (const b of bears) {
       if (b.state === 'launched') continue;
       const d = Math.hypot(b.x - P.x, b.z - P.z); if (d < 45) near = true;
-      if (d < 42 && project(b.x, 1.5 * b.size, b.z).on && !World.blocked(b.x, b.z, P.x, P.z, false)) { any = true; if (!b.spotted) { b.spotted = true; onSpot(b); } } else if (d > 75) b.spotted = false;
+      if (d < 42 && project(b.x, 1.5 * b.size, b.z).on && !World.blocked(b.x, b.z, P.x, P.z, false, P.y)) { any = true; if (!b.spotted) { b.spotted = true; onSpot(b); } } else if (d > 75) b.spotted = false;
       if (isHot(b) && d < 55) hot = true;
     }
     S.nearBear = near;
@@ -668,6 +716,7 @@
   }
   const HINTS = [
     () => coarse ? 'Pouce gauche pour marcher (à fond pour sprinter). Glisse le pouce droit pour tourner la caméra.' : 'Marche avec <kbd>ZQSD</kbd> ou les flèches, <kbd>Maj</kbd> pour sprinter. Clic droit maintenu ou <kbd>A</kbd> <kbd>E</kbd> pour tourner la caméra.',
+    () => 'Fonce sur un mur pour le grimper. En sprint, tu sautes d\'un toit à l\'autre. Perché, les ours ne peuvent pas t\'atteindre.',
     () => coarse ? 'Maintiens <b>Chassé</b> pour armer, relâche pour frapper.' : 'Maintiens <kbd>Espace</kbd> pour armer ton chassé, relâche pour frapper.',
     () => coarse ? 'Bouton <b>Accroupi</b> dans les hautes herbes : les ours ne te voient plus.' : 'Accroupis-toi avec <kbd>C</kbd> dans les hautes herbes : les ours ne te voient plus.',
     () => 'Le cône au sol montre ce que l\'ours voit. Arrive par derrière : un ours surpris encaisse le double.',
@@ -684,7 +733,7 @@
     for (let i = S.timers.length - 1; i >= 0; i--) { if (S.timers[i].t <= S.t) { const f = S.timers[i].fn; S.timers.splice(i, 1); f(); } }
     updatePlayer(dt);
     for (let i = bears.length - 1; i >= 0; i--) { const b = bears[i]; updateBear(b, dt, rdt); b.flash = Math.max(0, b.flash - rdt * 4); if (bears[i] === b) Actors.animBear(b, dt, S.t); }
-    updateMood(rdt); updateHints(rdt); Story.update(dt, S.t);
+    if (!S.duel) { updateMood(rdt); updateHints(rdt); Story.update(dt, S.t); }
     for (const b of World.berries) {
       if (!b.ready || Math.hypot(b.x - P.x, b.z - P.z) > 1.8) continue;
       b.ready = false; b.fruit.visible = false; b.t = S.t + 45; Snd.pickup(); const p = project(b.x, 1.6, b.z);
@@ -693,7 +742,7 @@
     S.moteAcc += rdt * 5; while (S.moteAcc > 1) { S.moteAcc--; FX.mote(P.x, P.z); }
     S.fireAcc += dt * 7; while (S.fireAcc > 1) { S.fireAcc--; FX.sparkle(World.camp.x, 0.9, World.camp.z, 0.3); }
     if (S.combo > 0) { S.comboT -= dt; if (S.comboT <= 0) S.combo = 0; }
-    S.spawnT -= dt; if (S.spawnT <= 0) { S.spawnT = 2.5; if (wildCount() < bearTarget()) spawnFar(); }
+    S.spawnT -= dt; if (S.spawnT <= 0) { S.spawnT = 2.5; if (!S.duel && wildCount() < bearTarget()) spawnFar(); }
     if (S.counter) {
       const c = S.counter; c.t += rdt; const k = Math.min(1, c.t / c.dur);
       if (c.t > 0.25) { c.h.dist.hidden = false; c.h.num.textContent = String(Math.round(c.to * (1 - Math.pow(1 - k, 3)))); }
@@ -712,25 +761,26 @@
     if (!S.running) { const a = S.rt * 0.07 + 0.6; camera.position.set(P.x + Math.sin(a) * 21, 6.5, P.z + Math.cos(a) * 21); camera.lookAt(P.x, 2.6, P.z); cam.init = false; cam.lx = camera.position.x; cam.lz = camera.position.z; return; }
     if (rdt > 0) { const rot = (keys.KeyE ? 1 : 0) - (keys.KeyQ ? 1 : 0); if (rot) cam.yaw -= rot * 2.1 * rdt; }
     const slow = S.hitstop > 0 || S.slowT < S.slowDur;
-    let zt = (1 - 0.17 * P.chargePose + 0.1 * P.sprintK - (P.crouch ? 0.06 : 0)) * cam.uz;
+    let zt = (1 - 0.17 * P.chargePose + 0.18 * P.sprintK - (P.crouch ? 0.06 : 0)) * cam.uz;
     if (slow) zt = (S.slowLaunch ? 0.68 : 0.84) * Math.min(1, cam.uz);
     cam.zoom = damp(cam.zoom, zt, zt < cam.zoom ? 9 : 2.2, rdt);
-    let tx = P.x + P.vx * 0.12, ty = 2.0, tz = P.z + P.vz * 0.12;
+    let tx = P.x + P.vx * 0.12, ty = 2.0 + P.y, tz = P.z + P.vz * 0.12;
     if (cam.track) {
       cam.trackT -= rdt; const b = cam.track; let ox = b.x - P.x, oz = b.z - P.z; const ol = Math.hypot(ox, oz), mx = 22;
       if (ol > mx) { ox *= mx / ol; oz *= mx / ol; }
-      tx = P.x + ox * 0.6; tz = P.z + oz * 0.6; ty = Math.min(16, 2 + b.y * 0.72);
+      tx = P.x + ox * 0.6; tz = P.z + oz * 0.6; ty = Math.max(ty, Math.min(16, 2 + b.y * 0.72));
       if (cam.trackT <= 0) cam.track = null;
     }
     if (!cam.init) { cam.x = tx; cam.y = ty; cam.z = tz; cam.init = true; }
     cam.x = damp(cam.x, tx, 6, rdt); cam.y = damp(cam.y, ty, 5, rdt); cam.z = damp(cam.z, tz, 6, rdt);
     cam.punch = Math.max(0, cam.punch - rdt * 2.2);
-    cam.fov = damp(cam.fov, cam.baseFov + 9 * P.sprintK, 6, rdt);   // le champ s'ouvre quand on sprinte
+    cam.py = damp(cam.py, P.y, 7, rdt);
+    cam.fov = damp(cam.fov, cam.baseFov + 15 * P.sprintK, 6, rdt);   // le champ s'ouvre quand on sprinte
     const fov = cam.fov + cam.punch * 12; if (Math.abs(fov - camera.fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     FX.shakeOffset(shk, S.rt);
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), D = 19.3 * cam.zoom, cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
     cam.lx = cam.x + fx * 2.6; cam.lz = cam.z + fz * 2.6;   // on vise un peu devant le promeneur
-    camera.position.set(cam.lx - fx * D * cp + shk.x, Math.max(1, 2 + D * sp + shk.y), cam.lz - fz * D * cp);
+    camera.position.set(cam.lx - fx * D * cp + shk.x, Math.max(1, 2 + cam.py + D * sp + shk.y), cam.lz - fz * D * cp);
     camera.lookAt(cam.lx + shk.x * 0.5, cam.y, cam.lz); camera.rotation.z += shk.r;
   }
 
@@ -766,7 +816,8 @@
       }
     }
     // l'objectif en cours : losange doré et distance
-    const mk = Story.marker();
+    if (S.duel) Duel.draw(g, w, h);
+    const mk = S.duel ? null : Story.marker();
     if (mk) {
       const dx = mk.x - P.x, dz = mk.z - P.z, d = Math.hypot(dx, dz);
       if (d > 4) {
@@ -805,6 +856,7 @@
       else if (S.slowT < S.slowDur) { S.slowT += rdt; const k = clamp(S.slowT / S.slowDur, 0, 1); ts = lerp(S.slowMin, 1, k * k * k); }
       S.ts = ts; dt = rdt * ts; S.t += dt; update(dt, rdt);
     } else if (!S.running) { dt = rdt; S.t += dt; Actors.animPlayer(pm, { speed: 0, crouch: 0, charge: 0, kick: 0, sprint: 0, mega: false }, dt, S.rt); }
+    if (S.duel) Duel.update(dt, rdt);   // le réseau tourne même en pause : l'autre continue de jouer
     const vis = live || !S.running ? rdt : 0;
     updateCamera(vis);
     World.update(dt, S.t, P.x, P.z, camera, cam.lx, cam.lz);
@@ -821,10 +873,10 @@
     S.paused = v; stopCharge();
     if (v) {
       pauseMode = 'pause'; $('pause-title').textContent = 'Pause';
-      $('pause-sub').textContent = `Niveau ${S.level} (${titleOf(S.level)}) · ${S.kicked} ours envoyés · record ${S.best} m`;
-      const o = Story.hud(), po = $('pause-obj'); po.hidden = false; po.innerHTML = `<b>${esc(o.eyebrow)}</b><span>${esc(o.text)}</span><i>${esc(defiText())}</i>`;
+      $('pause-sub').textContent = S.duel ? 'Le duel continue pendant la pause : ton adversaire peut te trouver.' : `Niveau ${S.level} (${titleOf(S.level)}) · ${S.kicked} ours envoyés · record ${S.best} m`;
+      const o = S.duel ? Duel.hud() : Story.hud(), po = $('pause-obj'); po.hidden = false; po.innerHTML = `<b>${esc(o.eyebrow)}</b><span>${esc(o.text)}</span><i>${esc(S.duel ? '' : defiText())}</i>`;
       $('btn-resume').textContent = 'Reprendre'; $('pause-sound').hidden = false; $('pause-fs').hidden = false;
-      const r = $('btn-reset'); r.hidden = false; r.classList.remove('sure'); r.textContent = 'Recommencer à zéro';
+      const r = $('btn-reset'); r.hidden = false; r.classList.remove('sure'); r.textContent = S.duel ? 'Quitter le duel' : 'Recommencer à zéro';
     }
     $('pause').hidden = !v; Snd.suspend(v);
   }
@@ -837,20 +889,28 @@
   });
   $('btn-reset').addEventListener('click', e => {
     const b = e.currentTarget;
+    if (S.duel) { try { location.hash = ''; } catch (_) { /* rien */ } location.reload(); return; }
     if (!b.classList.contains('sure')) { b.classList.add('sure'); b.textContent = 'Sûr ? Histoire, niveau et atouts effacés'; return; }
     try { localStorage.removeItem(KEY); } catch (_) { /* rien */ }
     S.level = 1; S.xp = 0; S.perks = {}; S.kicked = 0; S.best = 0; S.missionIdx = 0; S.missionProg = 0; S.pendingLevel = 0; S.hintStep = 0; S.hintT = 1; S.legend = false;
     Story.reset(); recalc(); setPause(false); respawn(); Story.begin();
   });
-  $('btn-play').addEventListener('click', () => {
+  const joinCode = (/^#duel-([a-z0-9]{4,8})$/.exec(location.hash) || [])[1] || null;
+  function enter(mode) {
     Snd.init(); Snd.setMood('calm'); Snd.ui();
     $('title-screen').hidden = true; $('hud').hidden = false; $('touch').hidden = !coarse;
-    S.running = true; S.timers.length = 0; S.hintT = 1.2; if (S.kicked >= 3) S.hintStep = HINTS.length;
-    const cp = Story.checkpoint(); P.x = cp[0]; P.z = cp[1];
-    last = performance.now(); Story.begin();
+    S.running = true; S.timers.length = 0; last = performance.now();
+    if (mode === 'solo') {
+      S.hintT = 1.2; if (S.kicked >= 3) S.hintStep = HINTS.length;
+      const cp = Story.checkpoint(); P.x = cp[0]; P.z = cp[1]; Story.begin();
+    } else {   // duel : pas d'ours, pas d'histoire, juste les ruines et l'autre
+      S.duel = true; wrap.classList.add('duel'); while (bears.length) removeBear(bears[0]);
+      S.hintStep = HINTS.length; S.fury = 0; S.stamina = S.maxStamina; World.setDusk(0); Duel.start(mode, joinCode);
+    }
     // sur téléphone, on tente le plein écran d'office : s'il est refusé, le jeu continue tel quel
     if (coarse && !fsEl()) { const req = wrap.requestFullscreen || wrap.webkitRequestFullscreen; if (req) { try { Promise.resolve(req.call(wrap)).catch(() => { }); } catch (_) { /* rien */ } } }
-  });
+  }
+  $('btn-play').addEventListener('click', () => enter(joinCode && Net.available() ? 'join' : 'solo'));
   document.addEventListener('visibilitychange', () => { if (document.hidden && playing()) setPause(true); });
 
   /* ---------- démarrage ---------- */
@@ -862,6 +922,13 @@
     el.textContent = `Partie retrouvée : ${Story.hud().eyebrow}, niveau ${S.level}, ${S.kicked} ours envoyés.`; $('btn-play').textContent = 'Reprendre la balade';
   }
   resize(); resetBears();
-  window.__chasse = { S, P, bears, I, cam, spawnBear, alertBear, CFG, Story };
+  Duel.init({ S, P, cam, pm, scene, wrap, banner, floatText, showHit, impactFX, project, after, whenCalm, card, dismissCard, stopCharge, edgePos });
+  const bd = $('btn-duel');
+  if (Net.available()) {
+    bd.hidden = false;
+    if (joinCode) { $('btn-play').textContent = 'Rejoindre le duel'; $('save-line').hidden = true; bd.textContent = 'Jouer en solo'; bd.addEventListener('click', () => enter('solo')); }
+    else bd.addEventListener('click', () => enter('host'));
+  } else { const n = $('duel-note'); n.hidden = false; n.textContent = joinCode ? 'Ce lien de duel ne s\'ouvre que dans un navigateur, hors de l\'appli.' : 'Le duel à deux se joue sur la version navigateur du jeu.'; }
+  window.__chasse = { S, P, bears, I, cam, spawnBear, alertBear, CFG, Story, Duel, Net };
   requestAnimationFrame(frame);
 })();

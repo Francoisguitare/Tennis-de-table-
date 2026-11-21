@@ -58,6 +58,16 @@
     </div>
 
     <div id="stealth" class="chip">À découvert</div>
+    <div id="duel-score" hidden></div>
+    <div id="invite" hidden>
+      <p><b>Invite ton adversaire.</b> Envoie-lui ce lien : il l'ouvre dans son navigateur et il arrive dans les ruines.</p>
+      <input id="invite-link" type="text" readonly aria-label="Lien du duel">
+      <div class="invite-btns">
+        <button id="invite-copy" type="button" class="cta small">Copier le lien</button>
+        <button id="invite-share" type="button" class="ghost" hidden>Partager</button>
+        <button id="invite-close" type="button" class="ghost">Fermer</button>
+      </div>
+    </div>
     <div id="banner"></div>
     <div id="combo" hidden></div>
     <div id="callouts"></div>
@@ -98,9 +108,11 @@
       </div>
       <div class="title-btns">
         <button id="btn-play" type="button" class="cta">Entrer dans la plaine</button>
+        <button id="btn-duel" type="button" class="ghost" hidden>Créer un duel à deux</button>
         <button type="button" class="ghost" data-fs data-on="Plein écran" data-off="Quitter le plein écran">Plein écran</button>
       </div>
       <p class="save-line" id="save-line" hidden></p>
+      <p class="save-line" id="duel-note" hidden></p>
     </div>
   </div>
 
@@ -148,6 +160,9 @@
 <script src="js/actors.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/story.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="js/net.js"></script>
+<script src="js/duel.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

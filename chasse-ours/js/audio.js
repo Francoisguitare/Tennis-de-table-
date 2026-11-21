@@ -277,6 +277,17 @@ const Snd = (() => {
     [[1, 0.5, 5], [2.0, 0.3, 4], [2.4, 0.22, 3.2], [3.0, 0.16, 2.6], [4.2, 0.1, 1.8], [5.4, 0.07, 1.2]].forEach(([k, a, d]) => tone(t, d, 'sine', 196 * k, 196 * k, a * v, null, 0.003).connect(revIn));
     nz(t, 0.05, 'highpass', 2500, 0.7, 0.5 * v);
   }
+  // mur du son : deux claquements secs rapprochés, puis le grondement qui roule
+  function boom(tier) {
+    if (!ok()) return;
+    const t = now();
+    nz(t, 0.06, 'highpass', 1400, 0.7, 1.0).connect(revIn); nz(t + 0.085, 0.07, 'highpass', 900, 0.7, 0.9).connect(revIn);
+    tone(t, 1.4, 'sine', 110, 26, 1.0); tone(t + 0.085, 0.9, 'triangle', 190, 40, 0.5);
+    nz(t + 0.05, 2.6, 'lowpass', 220, 0.5, 0.7, null, 40).connect(revIn);
+    if (tier >= 3) nz(t + 0.1, 1.6, 'bandpass', 900, 0.8, 0.3, null, 2600).connect(revIn);
+    if (tier >= 4) [74, 81, 86].forEach((m, i) => tone(t + 0.15 + i * 0.05, 2.2, 'sine', mtof(m), mtof(m), 0.07).connect(revIn));
+    musicBus.gain.cancelScheduledValues(t); musicBus.gain.setValueAtTime(0.15, t); musicBus.gain.linearRampToValueAtTime(0.85, t + 1.8);
+  }
   function parry() { if (!ok()) return; const t = now(); nz(t, 0.09, 'bandpass', 3200, 2, 0.6).connect(revIn); tone(t, 0.18, 'square', 520, 240, 0.14); tone(t, 0.25, 'sine', 120, 60, 0.4); }
   function miss() { if (!ok()) return; tone(now(), 0.25, 'triangle', 300, 160, 0.08); }
 
@@ -289,5 +300,5 @@ const Snd = (() => {
   function setMuted(v) { muted = v; if (ctx) master.gain.setTargetAtTime(v ? 0 : 0.9, now(), 0.03); }
   function suspend(v) { if (!ctx) return; if (v) ctx.suspend(); else ctx.resume(); }
 
-  return { init, setMood, setRush, setMuted, suspend, impact, slowmo, whoosh, chargeStart, chargeSet, chargeStop, step: step_, roar, yelp, growl, fly, twinkle, spot, alert, levelUp, hurt, pickup, perfect, ui, swipe, miss, bell, parry, get muted() { return muted; } };
+  return { init, setMood, setRush, setMuted, suspend, impact, slowmo, whoosh, chargeStart, chargeSet, chargeStop, step: step_, roar, yelp, growl, fly, twinkle, spot, alert, levelUp, hurt, pickup, perfect, ui, swipe, miss, bell, parry, boom, get muted() { return muted; } };
 })();

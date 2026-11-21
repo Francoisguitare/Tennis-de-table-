@@ -5,7 +5,7 @@ const FX = (() => {
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   let scene, camera, renderer, cv, g2, VW = 1, VH = 1, dpr = 1;
   let add, alpha, light, lightI = 0, trauma = 0, flashA = 0, flashC = '255,255,255', lines = null;
-  const rings = [], sprites = [], decals = [], domes = [], stars = [];
+  const rings = [], sprites = [], decals = [], domes = [], stars = [], skyRings = [];
   const F = { onDraw: null, rush: 0 };
 
   /* ---------- particules ---------- */
@@ -52,7 +52,7 @@ const FX = (() => {
     light = new THREE.PointLight(0xffc27a, 0, 70, 1.6); light.position.set(0, -50, 0); scene.add(light);
 
     const ringGeo = new THREE.RingGeometry(0.84, 1, 64); ringGeo.rotateX(-Math.PI / 2);
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 11; i++) {
       const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
       m.visible = false; m.renderOrder = 4; scene.add(m); rings.push({ m, t: 0, dur: 0 });
     }
@@ -61,7 +61,7 @@ const FX = (() => {
       const m = new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ color: 0xffe2b0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
       m.visible = false; m.renderOrder = 4; scene.add(m); domes.push({ m, t: 0, dur: 0 });
     }
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 18; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: Actors.glowTex, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true, fog: false }));
       s.visible = false; s.renderOrder = 6; scene.add(s); sprites.push({ s, t: 0, dur: 0 });
     }
@@ -141,33 +141,48 @@ const FX = (() => {
     for (let i = 0; i < n; i++) { const a = rnd(6.283), v = rnd(5, 10); alpha.spawn(x + rnd(-1, 1), y + rnd(0, 1.5), z + rnd(-1, 1), Math.cos(a) * v, rnd(4.5, 8), Math.sin(a) * v, rnd(3, 4.5), 0.42, 0.3, 0.1, 0.08, 0.08, 1, -0.6, 0); }
   }
   function mote(cx, cz) { add.spawn(cx + rnd(-26, 26), rnd(0.4, 5), cz + rnd(-26, 26), rnd(-0.5, 0.2), rnd(-0.1, 0.25), rnd(-0.2, 0.2), rnd(4, 7), 0.12, 0.12, 1, 0.9, 0.6, 0.55, 0, 0); }
-  function trail(x, y, z, mega) {
+  // heat : 2 = traînée de vapeur (supersonique), 3 = flammes (météore), 4 = plasma (orbite)
+  function trail(x, y, z, mega, heat) {
+    if (heat >= 2) alpha.spawn(x + rnd(-0.4, 0.4), y + rnd(-0.4, 0.4), z + rnd(-0.4, 0.4), rnd(-0.5, 0.5), rnd(-0.5, 0.5), rnd(-0.5, 0.5), rnd(0.9, 1.5), 1.4, 4.2, 1, 1, 1, 0.5, 0, 0.6);
+    if (heat === 3) { add.spawn(x + rnd(-0.6, 0.6), y + rnd(-0.6, 0.6), z + rnd(-0.6, 0.6), rnd(-2, 2), rnd(-1, 3), rnd(-2, 2), rnd(0.35, 0.7), 2.2, 0.2, 1, rnd(0.45, 0.8), 0.15, 1, 0, 1); alpha.spawn(x, y, z, rnd(-1, 1), rnd(0, 2), rnd(-1, 1), rnd(1, 1.8), 1.5, 4.5, 0.16, 0.14, 0.13, 0.5, -1, 0.8); }
+    if (heat >= 4) add.spawn(x + rnd(-0.5, 0.5), y + rnd(-0.5, 0.5), z + rnd(-0.5, 0.5), rnd(-2, 2), rnd(-2, 2), rnd(-2, 2), rnd(0.4, 0.8), 2.6, 0.2, 0.55, 0.9, 1, 1, 0, 1);
     alpha.spawn(x + rnd(-0.5, 0.5), y + rnd(-0.5, 0.5), z + rnd(-0.5, 0.5), rnd(-1, 1), rnd(-1, 1), rnd(-1, 1), rnd(0.5, 0.9), 1.2, 3, 0.95, 0.9, 0.8, 0.4, 0, 1);
     add.spawn(x + rnd(-0.8, 0.8), y + rnd(-0.8, 0.8), z + rnd(-0.8, 0.8), rnd(-2, 2), rnd(-2, 2), rnd(-2, 2), rnd(0.3, 0.6), 0.4, 0, mega ? 0.5 : 1, 0.85, mega ? 1 : 0.4, 1, 0, 0);
   }
 
   // l'impact complet : tout part en même temps, c'est ça qui donne le poids
   function impact(o) {
-    const { x, y, z, dx, dz, heavy, mega, sx, sy } = o, col = mega ? 0x7fe9ff : 0xffc46a;
-    light.position.set(x, y + 1.2, z); light.color.setHex(mega ? 0x9fefff : 0xffc27a); lightI = 2.2 + 2.6 * heavy;
+    const { x, y, z, dx, dz, heavy, mega, sx, sy } = o, col = mega ? 0x7fe9ff : 0xffc46a, T = o.tier || 0, tk = 1 + 0.3 * T;   // T : palier du coup de pied
+    light.position.set(x, y + 1.2, z); light.color.setHex(mega ? 0x9fefff : 0xffc27a); lightI = 2.2 + 2.6 * heavy + 0.5 * T;
     sprite(F.tex.glow, x, y, z, 3, 8 + 6 * heavy, 0.22, col, 0.85);
     sprite(F.tex.burst, x, y, z, 3, 8 + 7 * heavy, 0.2, 0xffffff, 0.95, rnd(6));
     sprite(F.tex.ring, x, y, z, 1.5, 11 + 12 * heavy, 0.36, col, 0.8);
     if (mega) sprite(F.tex.ring, x, y, z, 1, 34, 0.6, 0xffffff, 0.55);
-    ring(x, z, 0xffffff, 9 + 12 * heavy, 0.5); ring(x, z, col, 15 + 22 * heavy, 0.95, 0.25, 0.7);
+    ring(x, z, 0xffffff, (9 + 12 * heavy) * tk, 0.5); ring(x, z, col, (15 + 22 * heavy) * tk, 0.95, 0.25, 0.7);
+    if (T >= 1) ring(x, z, 0xffffff, (26 + 30 * heavy) * tk, 1.5, 0.3, 0.45);
+    if (T >= 3) { ring(x, z, 0xff7a2a, (11 + 15 * heavy) * tk, 0.8, 0.22, 0.9); for (let i = 0; i < 40; i++) { const a = rnd(6.283), v = rnd(6, 16); add.spawn(x, 0.4, z, Math.cos(a) * v, rnd(1, 7), Math.sin(a) * v, rnd(0.5, 1.1), 0.7, 0, 1, rnd(0.4, 0.75), 0.12, 1, 9, 1.4); } }
     if (mega) { ring(x, z, 0x7fe9ff, 70, 1.6, 0.3, 0.8); dome(x, z, 0x7fe9ff, 26, 0.9); }
     dome(x, z, mega ? 0xffffff : 0xffe2b0, 7 + 9 * heavy, 0.45);
-    decal(x - dx * 1.6, z - dz * 1.6, 5 + 5 * heavy);
-    sparks(x, y, z, dx, dz, Math.round(34 + 46 * heavy), 20 + 16 * heavy, mega);
-    dust(x, z, Math.round(22 + 22 * heavy), 8 + 9 * heavy);
+    decal(x - dx * 1.6, z - dz * 1.6, 5 + 5 * heavy + 2.2 * T);
+    sparks(x, y, z, dx, dz, Math.round((34 + 46 * heavy) * (1 + 0.3 * T)), 20 + 16 * heavy + 3 * T, mega);
+    dust(x, z, Math.round((22 + 22 * heavy) * (1 + 0.3 * T)), (8 + 9 * heavy) * (1 + 0.15 * T));
     for (let i = 0; i < 9; i++) add.spawn(x, y, z, rnd(-6, 6), rnd(2, 9), rnd(-6, 6), rnd(0.6, 1.1), 0.7, 0, 1, 1, 0.8, 1, 6, 1.5);
-    shake(0.45 + 0.5 * heavy);
+    shake(0.45 + 0.5 * heavy + 0.07 * T);
     flash(reduce ? 0.2 : 0.42 + 0.3 * Math.min(1, heavy), mega ? '200,245,255' : '255,244,220');
     speedLines(sx, sy, 0.45 + 0.4 * heavy, 0.6 + 0.4 * Math.min(1, heavy));
     if (!reduce && heavy > 0.55) impactFrame(mega ? 110 : 70);
   }
 
   /* ---------- 2D par-dessus ---------- */
+  // passage du mur du son : cône de vapeur, éclair, traits de vitesse
+  function sonic(o) {
+    const { x, y, z, tier, sx, sy } = o, col = tier >= 4 ? 0x9fefff : tier === 3 ? 0xffb060 : 0xffffff;
+    sprite(F.tex.ring, x, y, z, 2, 30 + 8 * tier, 0.4, 0xffffff, 0.95); sprite(F.tex.ring, x, y, z, 1, 16 + 5 * tier, 0.26, col, 0.9); sprite(F.tex.glow, x, y, z, 3, 16, 0.2, col, 0.9);
+    for (let i = 0; i < 46; i++) { const a = rnd(6.283), v = rnd(8, 20); alpha.spawn(x, y, z, Math.cos(a) * v, Math.sin(a) * v * 0.8, rnd(-4, 4), rnd(0.5, 1), 1, 3.6, 1, 1, 1, 0.55, 0, 2.2); }
+    light.position.set(x, y, z); light.color.setHex(col); lightI = 4 + tier;
+    shake(0.55 + 0.08 * tier); flash(reduce ? 0.15 : 0.32, tier >= 4 ? '200,245,255' : '255,250,240'); speedLines(sx, sy, 0.5, 0.85);
+  }
+  function skyRing(sx, sy, tier) { skyRings.push({ sx, sy, t: 0, tier }); }
   function shake(a) { trauma = Math.min(1.3, trauma + (reduce ? a * 0.3 : a)); }
   function flash(a, c) { flashA = Math.max(flashA, a); if (c) flashC = c; }
   function speedLines(sx, sy, dur, str) { lines = { sx, sy, t: 0, dur, str }; }
@@ -214,8 +229,8 @@ const FX = (() => {
       }
     }
     if (F.rush > 0.05 && !reduce) {   // sprint : des filets de vitesse sur les bords
-      const R = Math.hypot(VW, VH) / 2; g2.strokeStyle = `rgba(255,255,255,${(0.2 * F.rush).toFixed(3)})`; g2.lineWidth = 1.5; g2.beginPath();
-      for (let i = 0; i < 18; i++) { const a = rnd(6.283), r0 = R * rnd(0.72, 0.95), r1 = r0 + R * rnd(0.08, 0.22) * F.rush; g2.moveTo(VW / 2 + Math.cos(a) * r0, VH / 2 + Math.sin(a) * r0); g2.lineTo(VW / 2 + Math.cos(a) * r1, VH / 2 + Math.sin(a) * r1); }
+      const R = Math.hypot(VW, VH) / 2; g2.strokeStyle = `rgba(255,255,255,${(0.3 * F.rush).toFixed(3)})`; g2.lineWidth = 1.5; g2.beginPath();
+      for (let i = 0; i < 26; i++) { const a = rnd(6.283), r0 = R * rnd(0.6, 0.95), r1 = r0 + R * rnd(0.1, 0.3) * F.rush; g2.moveTo(VW / 2 + Math.cos(a) * r0, VH / 2 + Math.sin(a) * r0); g2.lineTo(VW / 2 + Math.cos(a) * r1, VH / 2 + Math.sin(a) * r1); }
       g2.stroke();
     }
     if (F.onDraw) F.onDraw(g2, VW, VH);
@@ -226,9 +241,13 @@ const FX = (() => {
       for (let j = 0; j < 4; j++) { g2.rotate(Math.PI / 2); g2.beginPath(); g2.moveTo(0, -w); g2.lineTo(L * (j % 2 ? 0.55 : 1), 0); g2.lineTo(0, w); g2.fill(); }
       g2.beginPath(); g2.arc(0, 0, 4 * e * s.size + 1, 0, 6.283); g2.fill(); g2.restore();
     }
+    for (let i = skyRings.length - 1; i >= 0; i--) {   // l'ours qui s'éteint très haut : un anneau dans le ciel
+      const s = skyRings[i]; s.t += rdt; const k = s.t / 1.1; if (k >= 1) { skyRings.splice(i, 1); continue; }
+      g2.strokeStyle = `rgba(${s.tier >= 4 ? '170,240,255' : '255,210,150'},${(1 - k).toFixed(3)})`; g2.lineWidth = 5 * (1 - k) + 1; g2.beginPath(); g2.ellipse(s.sx, s.sy, (30 + 190 * k) * (0.7 + 0.15 * s.tier), (12 + 70 * k) * (0.7 + 0.15 * s.tier), 0, 0, 6.283); g2.stroke();
+    }
     if (flashA > 0.004) { g2.fillStyle = `rgba(${flashC},${flashA.toFixed(3)})`; g2.fillRect(0, 0, VW, VH); flashA *= Math.exp(-9 * rdt); }
   }
 
-  Object.assign(F, { init, resize, update, draw, impact, ring, dome, sprite, decal, dust, puff, sparks, sparkle, aura, leaves, birds, mote, trail, shake, flash, speedLines, star, shakeOffset, reduce });
+  Object.assign(F, { init, resize, update, draw, impact, ring, dome, sprite, decal, dust, puff, sonic, skyRing, sparks, sparkle, aura, leaves, birds, mote, trail, shake, flash, speedLines, star, shakeOffset, reduce });
   return F;
 })();

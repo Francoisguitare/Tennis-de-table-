@@ -47,7 +47,7 @@ const U = (() => {
 
 const World = (() => {
   'use strict';
-  const W = { R: 148, trees: [], colliders: [], patches: [], berries: [], walls: [], kickables: [], sunDir: new THREE.Vector3(-0.62, 0.5, -0.6).normalize() };
+  const W = { R: 200, sites: [], trees: [], colliders: [], patches: [], berries: [], walls: [], kickables: [], sunDir: new THREE.Vector3(-0.62, 0.5, -0.6).normalize() };
   W.camp = { x: -1.8, z: 10 };
   W.town = { x: 10, z: -95, r: 36, gate: { x: 10, z: -59 }, fountain: { x: 10, z: -95 }, bell: { x: 17, z: -108 }, halle: { x: 30, z: -95 },
     pages: [{ x: -10, z: -78 }, { x: -9, z: -112 }, { x: 26, z: -76 }], honey: [{ x: 28, z: -99 }, { x: 32, z: -95 }, { x: 28, z: -91 }, { x: 33, z: -100 }],
@@ -92,6 +92,7 @@ const World = (() => {
   function init(sc, opts) {
     scene = sc;
     const coarse = opts && opts.coarse;
+    planRuins();
 
     /* --- lumière --- */
     hemi = new THREE.HemisphereLight(0xffeccc, 0x4a6a35, 0.66); scene.add(hemi);
@@ -155,9 +156,9 @@ const World = (() => {
     treeFade = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.14, depthWrite: false });
     const geos = { pine: [pineGeo(), pineGeo()], leaf: [leafGeo(0x5c9c3c, 0x4b8a36), leafGeo(0x6aa843, 0x58963a)], fall: [leafGeo(0xe0952e, 0xc9742a), leafGeo(0xd9b53a, 0xc98f2c)] };
     let tries = 0;
-    while (W.trees.length < 185 && tries++ < 9000) {
+    while (W.trees.length < 330 && tries++ < 22000) {
       const a = rng() * U.TAU, r = Math.sqrt(rng()) * (W.R + 2), x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (r < 13 || inTown(x, z, 5) || nearRoad(x, z, 5) || Math.hypot(x + 4, z - 10) < 7) continue;
+      if (r < 13 || inTown(x, z, 5) || nearRoad(x, z, 5) || Math.hypot(x + 4, z - 10) < 7 || nearSite(x, z, 2)) continue;
       if (U.fbm(x * 0.014 + 7, z * 0.014 + 3) < 0.5) continue;
       if (W.trees.some(t => Math.hypot(t.x - x, t.z - z) < 5.2)) continue;
       const kindN = U.vnoise(x * 0.011, z * 0.011 + 20);
@@ -179,21 +180,21 @@ const World = (() => {
 
     /* --- rochers --- */
     const rockGeo = U.part(new THREE.IcosahedronGeometry(1, 0), 0x8d908a, null, 0.12);
-    const rocks = new THREE.InstancedMesh(rockGeo, treeMat, 36);
-    for (let i = 0; i < 36; i++) {
-      let x, z; do { const a = rng() * U.TAU, r = 16 + Math.sqrt(rng()) * (W.R - 20); x = Math.cos(a) * r; z = Math.sin(a) * r; } while (inTown(x, z, 3) || nearRoad(x, z, 4));
+    const rocks = new THREE.InstancedMesh(rockGeo, treeMat, 60);
+    for (let i = 0; i < 60; i++) {
+      let x, z; do { const a = rng() * U.TAU, r = 16 + Math.sqrt(rng()) * (W.R - 20); x = Math.cos(a) * r; z = Math.sin(a) * r; } while (inTown(x, z, 3) || nearRoad(x, z, 4) || nearSite(x, z, 0));
       const s = 0.8 + rng() * 1.6;
       dm.position.set(x, s * 0.25, z); dm.rotation.set(rng() * 3, rng() * 3, rng() * 3); dm.scale.set(s, s * (0.55 + rng() * 0.4), s * (0.8 + rng() * 0.4)); dm.updateMatrix(); rocks.setMatrixAt(i, dm.matrix);
-      W.colliders.push({ x, z, r: s * 0.95 });
+      W.colliders.push({ x, z, r: s * 0.95, h: s * 0.75 });   // h : on peut grimper dessus
     }
     rocks.castShadow = true; rocks.receiveShadow = true; scene.add(rocks);
 
     /* --- hautes herbes (cachettes) --- */
     W.patches.push({ x: 11, z: -9, r: 5.5 }, { x: -14, z: -22, r: 6.5 }, { x: 18, z: -40, r: 5 }, { x: -3, z: -86, r: 4 }, { x: 22, z: -108, r: 3.6 }, { x: 4, z: -104, r: 3.4 }, { x: 19, z: -86, r: 3.2 });
     tries = 0;
-    while (W.patches.length < 27 && tries++ < 2000) {
+    while (W.patches.length < 46 && tries++ < 6000) {
       const a = rng() * U.TAU, r = 24 + Math.sqrt(rng()) * (W.R - 34), x = Math.cos(a) * r, z = Math.sin(a) * r, pr = 4.2 + rng() * 4;
-      if (inTown(x, z, pr + 4) || W.patches.some(p => Math.hypot(p.x - x, p.z - z) < p.r + pr + 9)) continue;
+      if (inTown(x, z, pr + 4) || nearSite(x, z, pr - 4) || W.patches.some(p => Math.hypot(p.x - x, p.z - z) < p.r + pr + 9)) continue;
       W.patches.push({ x, z, r: pr });
     }
     let nb = 0; const dens = coarse ? 1.0 : 1.5;
@@ -234,14 +235,14 @@ const World = (() => {
     grass.receiveShadow = true; grass.frustumCulled = false; scene.add(grass);
 
     /* --- touffes et fleurs partout --- */
-    const nT = coarse ? 1400 : 2600, tufts = new THREE.InstancedMesh(U.part(new THREE.ConeGeometry(0.13, 0.4, 4), 0xffffff, U.mat(0, 0.2, 0), 0), new THREE.MeshLambertMaterial({ vertexColors: true }), nT);
+    const nT = coarse ? 2000 : 3800, tufts = new THREE.InstancedMesh(U.part(new THREE.ConeGeometry(0.13, 0.4, 4), 0xffffff, U.mat(0, 0.2, 0), 0), new THREE.MeshLambertMaterial({ vertexColors: true }), nT);
     for (let i = 0; i < nT; i++) {
       const a = rng() * U.TAU, r = Math.sqrt(rng()) * (W.R + 20);
       dm.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); dm.rotation.set(rng() * 0.3, rng() * 6, rng() * 0.3); const s = 0.6 + rng() * 0.8; dm.scale.set(s, s * (0.8 + rng() * 0.7), s); dm.updateMatrix(); tufts.setMatrixAt(i, dm.matrix);
       ic.setRGB(0.36 + rng() * 0.16, 0.6 + rng() * 0.14, 0.24 + rng() * 0.08); tufts.setColorAt(i, ic);
     }
     tufts.frustumCulled = false; scene.add(tufts);
-    const nF = coarse ? 500 : 950, flowers = new THREE.InstancedMesh(U.part(new THREE.OctahedronGeometry(0.16, 0), 0xffffff, U.mat(0, 0.42, 0), 0), new THREE.MeshLambertMaterial({ vertexColors: true }), nF);
+    const nF = coarse ? 750 : 1500, flowers = new THREE.InstancedMesh(U.part(new THREE.OctahedronGeometry(0.16, 0), 0xffffff, U.mat(0, 0.42, 0), 0), new THREE.MeshLambertMaterial({ vertexColors: true }), nF);
     const fcol = [[1, 1, 0.92], [1, 0.84, 0.25], [0.93, 0.36, 0.3], [0.72, 0.56, 0.95], [1, 0.62, 0.78]];
     for (let i = 0; i < nF; i++) {
       // les fleurs poussent par taches
@@ -258,9 +259,9 @@ const World = (() => {
     for (let i = 0; i < 9; i++) { const a = i * 2.4, y = 0.5 + (i % 3) * 0.3; bP.push(U.part(new THREE.IcosahedronGeometry(0.15, 0), 0x5b4bd6, U.mat(Math.cos(a) * 0.75, y, Math.sin(a) * 0.75), 0.04)); }
     const berryGeo = U.merge(bP), berryMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x241a66 });
     tries = 0;
-    while (W.berries.length < 16 && tries++ < 500) {
+    while (W.berries.length < 26 && tries++ < 900) {
       const a = rng() * U.TAU, r = 18 + Math.sqrt(rng()) * (W.R - 28), x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (inTown(x, z, 3) || W.colliders.some(c => Math.hypot(c.x - x, c.z - z) < c.r + 2)) continue;
+      if (inTown(x, z, 3) || nearSite(x, z, 0) || W.colliders.some(c => Math.hypot(c.x - x, c.z - z) < c.r + 2)) continue;
       const bush = new THREE.Mesh(bushGeo, treeMat), fruit = new THREE.Mesh(berryGeo, berryMat);
       bush.position.set(x, 0, z); fruit.position.set(x, 0, z); bush.castShadow = true; scene.add(bush); scene.add(fruit);
       W.berries.push({ x, z, fruit, ready: true, t: 0 });
@@ -282,9 +283,9 @@ const World = (() => {
       if (rng() < 0.45) P.push(U.part(new THREE.BoxGeometry(len * 0.92, 0.22, thick * 1.2), 0x5f8f3e, U.mat(x, h + 0.08, z, 1, 1, 1, 0, rot, 0), 0.12));
       W.walls.push({ x, z, hl: len / 2, ht: thick / 2, c: Math.cos(rot), s: Math.sin(rot), h, rad: Math.hypot(len / 2, thick / 2) });
     };
-    const ruin = (x1, z1, x2, z2, hb, gap = 0.12) => {
+    const ruin = (x1, z1, x2, z2, hb, gap = 0.12, thick = 0.9) => {
       const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz), n = Math.max(1, Math.round(L / 2.8)), rot = Math.atan2(-dz, dx);
-      for (let i = 0; i < n; i++) { if (rng() < gap) continue; const k = (i + 0.5) / n; wall(x1 + dx * k, z1 + dz * k, L / n + 0.03, 0.75, hb * (0.4 + 0.6 * rng()), rot); }
+      for (let i = 0; i < n; i++) { if (rng() < gap) continue; const k = (i + 0.5) / n; wall(x1 + dx * k, z1 + dz * k, L / n + 0.03, thick, hb * (0.4 + 0.6 * rng()), rot); }
     };
     const house = (cx, cz, w, d, rot, hb = 4.8) => {
       const c = Math.cos(rot), s = Math.sin(rot), pt = (lx, lz) => [cx + lx * c + lz * s, cz - lx * s + lz * c];
@@ -305,23 +306,34 @@ const World = (() => {
     // église : nef, clocher, cloche tombée devant le parvis
     ruin(4, -129, 16, -129, 7.5, 0); ruin(4, -129, 4, -113, 7.5); ruin(16, -129, 16, -113, 7.5); ruin(4, -113, 8.4, -113, 7, 0); ruin(11.6, -113, 16, -113, 7, 0);
     wall(1.2, -111.5, 5, 5, 17, 0, 0xa9a394);
-    P.push(U.part(new THREE.ConeGeometry(4.3, 5.5, 4), 0x5a5f6e, U.mat(1.2, 19.7, -111.5, 1, 1, 1, 0, Math.PI / 4, 0)));
+    for (const [ox, oz] of [[2, 2], [-2, 2], [2, -2], [-2, -2]]) P.push(U.part(new THREE.BoxGeometry(1, 0.9, 1), 0x9d9a90, U.mat(1.2 + ox, 17.45, -111.5 + oz)));   // créneaux : le sommet du clocher est un perchoir
     P.push(U.part(new THREE.BoxGeometry(2.6, 0.6, 2.6), 0x9d9a90, U.mat(t.bell.x, 0.3, t.bell.z)));
     // halle : deux rangées de piliers et quelques poutres
     for (const px of [25, 35]) for (const pz of [-101, -97, -93, -89]) {
-      const h = 4.2 + rng() * 1.4; P.push(U.part(new THREE.CylinderGeometry(0.55, 0.65, h, 7), 0xb9b2a3, U.mat(px, h / 2, pz))); W.colliders.push({ x: px, z: pz, r: 0.75 });
+      const h = 4.2 + rng() * 1.4; P.push(U.part(new THREE.CylinderGeometry(0.55, 0.65, h, 7), 0xb9b2a3, U.mat(px, h / 2, pz))); W.colliders.push({ x: px, z: pz, r: 0.75, h });
     }
     P.push(U.part(new THREE.BoxGeometry(10.6, 0.4, 0.5), 0x6b4a2f, U.mat(30, 5.4, -101)), U.part(new THREE.BoxGeometry(10.6, 0.4, 0.5), 0x6b4a2f, U.mat(30, 5.2, -93, 1, 1, 1, 0, 0, 0.05)), U.part(new THREE.BoxGeometry(0.5, 0.4, 12.6), 0x6b4a2f, U.mat(25, 5.6, -95)));
     // fontaine
     const f = t.fountain;
     P.push(U.part(new THREE.CylinderGeometry(3, 3.3, 0.9, 12), 0xa9a394, U.mat(f.x, 0.45, f.z)), U.part(new THREE.CylinderGeometry(2.5, 2.5, 0.96, 12), 0x6f8f4e, U.mat(f.x, 0.48, f.z)), U.part(new THREE.CylinderGeometry(0.45, 0.7, 3, 8), 0xb9b2a3, U.mat(f.x, 1.5, f.z)), U.part(new THREE.CylinderGeometry(1.4, 0.4, 0.5, 10), 0xa9a394, U.mat(f.x, 3.1, f.z)));
-    W.colliders.push({ x: f.x, z: f.z, r: 3.3 });
+    W.colliders.push({ x: f.x, z: f.z, r: 3.3, h: 0.95 });
     // gravats
     for (let i = 0; i < 70; i++) { const a = rng() * U.TAU, r = Math.sqrt(rng()) * (t.r - 2), s = 0.25 + rng() * 0.5; P.push(U.part(new THREE.IcosahedronGeometry(s, 0), cols[i % 4], U.mat(t.x + Math.cos(a) * r, s * 0.3, t.z + Math.sin(a) * r, 1, 0.7, 1.2, rng() * 3, rng() * 3, 0), 0.1)); }
     // campement de départ : tente, feu
     P.push(U.part(new THREE.ConeGeometry(2.4, 2.7, 4), 0xd9c48a, U.mat(-5.5, 1.35, 11, 1, 1, 1.25, 0, Math.PI / 4, 0)), U.part(new THREE.ConeGeometry(0.9, 2.0, 3), 0x3a2a1c, U.mat(-4.1, 1.0, 9.9, 0.6, 1, 0.2, 0, 0.8, 0)));
     for (let i = 0; i < 3; i++) P.push(U.part(new THREE.CylinderGeometry(0.13, 0.13, 1.3, 5), 0x5a3a22, U.mat(W.camp.x, 0.16, W.camp.z, 1, 1, 1, Math.PI / 2, i * 2.1, 0)));
-    W.colliders.push({ x: -5.5, z: 11, r: 2.0 }, { x: W.camp.x, z: W.camp.z, r: 0.7 });
+    W.colliders.push({ x: -5.5, z: 11, r: 2.0 }, { x: W.camp.x, z: W.camp.z, r: 0.7, h: 0.3 });
+    // des ruines partout dans la plaine : maisons, tours, aqueducs, colonnes — autant de choses à grimper
+    for (const st of W.sites) {
+      const c = Math.cos(st.rot), s = Math.sin(st.rot);
+      if (st.kind === 0) house(st.x, st.z, 7 + rng() * 3, 6 + rng() * 3, st.rot, 3.6 + rng() * 2.4);
+      else if (st.kind === 1) {
+        const h = 8 + rng() * 5; wall(st.x, st.z, 4.4, 4.4, h, st.rot);
+        wall(st.x + c * 3.6, st.z - s * 3.6, 2.8, 2.8, h * 0.34, st.rot); wall(st.x + s * 3.6, st.z + c * 3.6, 2.8, 2.8, h * 0.67, st.rot);
+        for (const [ox, oz] of [[1.6, 1.6], [-1.6, 1.6], [1.6, -1.6], [-1.6, -1.6]]) P.push(U.part(new THREE.BoxGeometry(0.9, 0.7, 0.9), cols[1], U.mat(st.x + ox * c + oz * s, h + 0.35, st.z - ox * s + oz * c, 1, 1, 1, 0, st.rot, 0)));
+      } else if (st.kind === 2) ruin(st.x - c * 13, st.z + s * 13, st.x + c * 13, st.z - s * 13, 6.6, 0.2, 1.7);
+      else for (let i = 0; i < 7; i++) { const a = st.rot + i * 0.9; wall(st.x + Math.cos(a) * 6, st.z + Math.sin(a) * 6, 2, 2, 1.8 + i * 0.95, a); }
+    }
     // la pierre garde un peu de clarté dans l'ombre, sinon les murs virent au kaki
     const m = new THREE.Mesh(U.merge(P), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x2e2a24 })); m.castShadow = true; m.receiveShadow = true; scene.add(m);
     // pavés et vieille route
@@ -336,16 +348,15 @@ const World = (() => {
     // la cloche (elle tremble quand on la frappe) et la flamme du feu de camp
     const bell = new THREE.Mesh(U.merge([U.part(new THREE.CylinderGeometry(0.45, 1.15, 1.5, 10), 0xb8862e, U.mat(0, 0.75, 0), 0.06), U.part(new THREE.SphereGeometry(0.46, 8, 5), 0xa87a26, U.mat(0, 1.5, 0), 0.06), U.part(new THREE.CylinderGeometry(1.2, 1.25, 0.14, 10), 0x8a6a22, U.mat(0, 0.07, 0), 0.06)]), treeMat);
     bell.position.set(t.bell.x, 0.6, t.bell.z); bell.castShadow = true; scene.add(bell);
-    W.colliders.push({ x: t.bell.x, z: t.bell.z, r: 1.3 }); W.kickables.push({ id: 'bell', x: t.bell.x, z: t.bell.z, r: 2.0, y: 1.4, wob: 0, mesh: bell });
+    W.colliders.push({ x: t.bell.x, z: t.bell.z, r: 1.3, h: 2.1 }); W.kickables.push({ id: 'bell', x: t.bell.x, z: t.bell.z, r: 2.0, y: 1.4, wob: 0, mesh: bell });
     flame = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.0, 5), new THREE.MeshBasicMaterial({ color: 0xff9a3a, fog: false })); flame.position.set(W.camp.x, 0.7, W.camp.z); scene.add(flame);
   }
   // un mur coupe-t-il la ligne de vue ? (accroupi, même un muret suffit)
-  function blocked(ax, az, bx, bz, low) {
-    const t = W.town, lim = t.r + 8;
-    if (Math.hypot(ax - t.x, az - t.z) > lim && Math.hypot(bx - t.x, bz - t.z) > lim) return false;
-    const minH = low ? 1.25 : 2.3;
+  // hy : hauteur du plus haut des deux (perché sur un toit, on voit par-dessus les murs)
+  function blocked(ax, az, bx, bz, low, hy) {
+    const minH = (low ? 1.25 : 2.3) + (hy || 0), x0 = Math.min(ax, bx), x1m = Math.max(ax, bx), z0 = Math.min(az, bz), z1m = Math.max(az, bz);
     for (const w of W.walls) {
-      if (w.h < minH) continue;
+      if (w.h < minH || w.x + w.rad < x0 || w.x - w.rad > x1m || w.z + w.rad < z0 || w.z - w.rad > z1m) continue;
       const dax = ax - w.x, daz = az - w.z, dbx = bx - w.x, dbz = bz - w.z;
       const x1 = dax * w.c - daz * w.s, z1 = dax * w.s + daz * w.c, dx = dbx * w.c - dbz * w.s - x1, dz = dbx * w.s + dbz * w.c - z1;
       let t0 = 0, t1 = 1, a, b;
@@ -355,8 +366,11 @@ const World = (() => {
     }
     return false;
   }
-  function collideWalls(o, r) {
+  // repousse hors des murs plus hauts que les pieds ; renvoie le sommet du plus haut mur touché (pour l'escalade)
+  function collideWalls(o, r, y) {
+    let top = -1; const feet = (y || 0) + 0.6;
     for (const w of W.walls) {
+      if (w.h <= feet) continue;
       const dx = o.x - w.x, dz = o.z - w.z, m = w.rad + r; if (Math.abs(dx) > m || Math.abs(dz) > m) continue;
       const lx = dx * w.c - dz * w.s, lz = dx * w.s + dz * w.c, ex = lx - U.clamp(lx, -w.hl, w.hl), ez = lz - U.clamp(lz, -w.ht, w.ht), d2 = ex * ex + ez * ez;
       if (d2 >= r * r) continue;
@@ -364,6 +378,28 @@ const World = (() => {
       if (d2 > 1e-8) { const d = Math.sqrt(d2); nx = ex / d; nz = ez / d; pen = r - d; }
       else { const px = w.hl - Math.abs(lx), pz = w.ht - Math.abs(lz); if (px < pz) { nx = lx < 0 ? -1 : 1; nz = 0; pen = px + r; } else { nx = 0; nz = lz < 0 ? -1 : 1; pen = pz + r; } }
       const mx = lx + nx * pen, mz = lz + nz * pen; o.x = w.x + mx * w.c + mz * w.s; o.z = w.z - mx * w.s + mz * w.c;
+      if (w.h > top) top = w.h;
+    }
+    return top;
+  }
+  // sur quoi a-t-on les pieds : le plus haut sommet (mur, rocher, pilier) sous soi, à portée de marche
+  function groundAt(x, z, y) {
+    let g = 0; const feet = y + 0.6;
+    for (const w of W.walls) {
+      if (w.h > feet || w.h <= g) continue; const dx = x - w.x, dz = z - w.z; if (Math.abs(dx) > w.rad + 0.4 || Math.abs(dz) > w.rad + 0.4) continue;
+      if (Math.abs(dx * w.c - dz * w.s) < w.hl + 0.38 && Math.abs(dx * w.s + dz * w.c) < w.ht + 0.38) g = w.h;
+    }
+    for (const c of W.colliders) { if (!c.h || c.h > feet || c.h <= g) continue; const dx = x - c.x, dz = z - c.z; if (dx * dx + dz * dz < (c.r + 0.2) * (c.r + 0.2)) g = c.h; }
+    return g;
+  }
+  function nearSite(x, z, m) { for (const s of W.sites) if (Math.hypot(x - s.x, z - s.z) < 15 + m) return true; return false; }
+  function planRuins() {
+    W.sites.push({ x: -16, z: -12, kind: 3, rot: 0.4 }, { x: 24, z: -24, kind: 1, rot: 0.3 }, { x: -24, z: -44, kind: 2, rot: Math.PI / 2 }, { x: 30, z: 14, kind: 0, rot: 0.6 });
+    let tries = 0;
+    while (W.sites.length < 34 && tries++ < 4000) {
+      const a = rng() * U.TAU, r = 34 + Math.sqrt(rng()) * (W.R - 54), x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (inTown(x, z, 22) || nearRoad(x, z, 16) || W.sites.some(s => Math.hypot(s.x - x, s.z - z) < 34)) continue;
+      W.sites.push({ x, z, kind: W.sites.length % 4, rot: rng() * U.TAU });
     }
   }
   function setDusk(k) { duskT = k; }
@@ -414,6 +450,6 @@ const World = (() => {
     flame.scale.set(1 + Math.sin(t * 17) * 0.15, 1 + Math.sin(t * 23) * 0.25, 1 + Math.cos(t * 19) * 0.15);
   }
 
-  W.init = init; W.inGrass = inGrass; W.shock = shock; W.update = update; W.darken = darken; W.setMood = setMood; W.blocked = blocked; W.collideWalls = collideWalls; W.setDusk = setDusk; W.inTown = inTown;
+  W.init = init; W.inGrass = inGrass; W.shock = shock; W.update = update; W.darken = darken; W.setMood = setMood; W.blocked = blocked; W.collideWalls = collideWalls; W.groundAt = groundAt; W.setDusk = setDusk; W.inTown = inTown;
   return W;
 })();
