@@ -2,7 +2,7 @@
 const Snd = (() => {
   'use strict';
   let ctx = null, master, musicBus, musicLP, sfxBus, revIn, noise, padLP, arpBus, natureBus;
-  let mood = 'calm', muted = false, step = 0, nextT = 0, chord = 0, ch = null;
+  let mood = 'calm', muted = false, step = 0, nextT = 0, chord = 0, ch = null, rushG = null, rushF = null, rushK = 0;
   const pads = new Set();
   const STEP = 0.125;
   const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -62,6 +62,9 @@ const Snd = (() => {
     wl.connect(wlg); wlg.connect(wg.gain); wl.connect(wlf); wlf.connect(wf.frequency); wl.start();
     ws.connect(wf); wf.connect(wg); wg.connect(natureBus); ws.start();
 
+    // souffle du sprint : un bruit filtré qui monte avec la vitesse
+    const rs = ctx.createBufferSource(); rs.buffer = noise; rs.loop = true; rushF = ctx.createBiquadFilter(); rushF.type = 'bandpass'; rushF.frequency.value = 700; rushF.Q.value = 0.7;
+    rushG = ctx.createGain(); rushG.gain.value = 0; rs.connect(rushF); rushF.connect(rushG); rushG.connect(sfxBus); rs.start();
     nextT = ctx.currentTime + 0.1; step = 0;
     setInterval(schedule, 60);
   }
@@ -268,6 +271,13 @@ const Snd = (() => {
   function perfect() { if (!ok()) return; const t = now(); tone(t, 0.5, 'sine', 1760, 1760, 0.1).connect(revIn); tone(t, 0.5, 'sine', 2637, 2637, 0.07).connect(revIn); }
   function ui() { if (!ok()) return; tone(now(), 0.08, 'triangle', 660, 880, 0.1); }
   function swipe() { if (!ok()) return; const t = now(); nz(t, 0.18, 'bandpass', 900, 1.2, 0.4, null, 2400); }
+  function bell(p) {
+    if (!ok()) return;
+    const t = now(), v = 0.35 + 0.65 * p;
+    [[1, 0.5, 5], [2.0, 0.3, 4], [2.4, 0.22, 3.2], [3.0, 0.16, 2.6], [4.2, 0.1, 1.8], [5.4, 0.07, 1.2]].forEach(([k, a, d]) => tone(t, d, 'sine', 196 * k, 196 * k, a * v, null, 0.003).connect(revIn));
+    nz(t, 0.05, 'highpass', 2500, 0.7, 0.5 * v);
+  }
+  function parry() { if (!ok()) return; const t = now(); nz(t, 0.09, 'bandpass', 3200, 2, 0.6).connect(revIn); tone(t, 0.18, 'square', 520, 240, 0.14); tone(t, 0.25, 'sine', 120, 60, 0.4); }
   function miss() { if (!ok()) return; tone(now(), 0.25, 'triangle', 300, 160, 0.08); }
 
   function setMood(m) {
@@ -275,8 +285,9 @@ const Snd = (() => {
     if (!ok()) return;
     padLP.frequency.setTargetAtTime(m === 'calm' ? 780 : m === 'sighted' ? 1700 : 2400, now(), 0.6);
   }
+  function setRush(k) { if (!rushG || Math.abs(k - rushK) < 0.02) return; rushK = k; const t = now(); rushG.gain.setTargetAtTime(0.16 * k, t, 0.06); rushF.frequency.setTargetAtTime(600 + 900 * k, t, 0.08); }
   function setMuted(v) { muted = v; if (ctx) master.gain.setTargetAtTime(v ? 0 : 0.9, now(), 0.03); }
   function suspend(v) { if (!ctx) return; if (v) ctx.suspend(); else ctx.resume(); }
 
-  return { init, setMood, setMuted, suspend, impact, slowmo, whoosh, chargeStart, chargeSet, chargeStop, step: step_, roar, yelp, growl, fly, twinkle, spot, alert, levelUp, hurt, pickup, perfect, ui, swipe, miss, get muted() { return muted; } };
+  return { init, setMood, setRush, setMuted, suspend, impact, slowmo, whoosh, chargeStart, chargeSet, chargeStop, step: step_, roar, yelp, growl, fly, twinkle, spot, alert, levelUp, hurt, pickup, perfect, ui, swipe, miss, bell, parry, get muted() { return muted; } };
 })();

@@ -47,9 +47,15 @@ const U = (() => {
 
 const World = (() => {
   'use strict';
-  const W = { R: 148, trees: [], colliders: [], patches: [], berries: [], sunDir: new THREE.Vector3(-0.62, 0.5, -0.6).normalize() };
+  const W = { R: 148, trees: [], colliders: [], patches: [], berries: [], walls: [], kickables: [], sunDir: new THREE.Vector3(-0.62, 0.5, -0.6).normalize() };
+  W.camp = { x: -1.8, z: 10 };
+  W.town = { x: 10, z: -95, r: 36, gate: { x: 10, z: -59 }, fountain: { x: 10, z: -95 }, bell: { x: 17, z: -108 }, halle: { x: 30, z: -95 },
+    pages: [{ x: -10, z: -78 }, { x: -9, z: -112 }, { x: 26, z: -76 }], honey: [{ x: 28, z: -99 }, { x: 32, z: -95 }, { x: 28, z: -91 }, { x: 33, z: -100 }],
+    sleepers: [[30, -97.5, 1], [30.5, -92, 4], [33, -89, 2.5]], lts: [[-20, -95], [38, -80], [26, -122]],
+    patrols: [[[10, -70], [-2, -84], [10, -86], [22, -84]], [[-4, -104], [-4, -88], [-21, -86], [-22, -104]], [[22, -104], [10, -106], [22, -110], [36, -106]], [[22, -84], [39, -86], [39, -104], [22, -104]]] };
   const rng = U.rng(20261121);
-  let scene, sky, sunLight, treeMat, treeFade, grassU, clouds = [], shockR = 0, shockAmp = 0, moodK = 0, moodT = 0, darkK = 0;
+  let scene, sky, sunLight, hemi, flame, treeMat, treeFade, grassU, clouds = [], shockR = 0, shockAmp = 0, moodK = 0, moodT = 0, darkK = 0, duskK = 0, duskT = 0;
+  const SUN_DAY = new THREE.Color(0xffd3a0), SUN_DUSK = new THREE.Color(0xff9a6a), FOG_DUSK = new THREE.Color(0xc98a80);
   const FOG_CALM = new THREE.Color(0xf7cf9e), FOG_HOT = new THREE.Color(0xffc089), fogC = new THREE.Color();
 
   function pineGeo() {
@@ -88,7 +94,7 @@ const World = (() => {
     const coarse = opts && opts.coarse;
 
     /* --- lumière --- */
-    scene.add(new THREE.HemisphereLight(0xffeccc, 0x4a6a35, 0.66));
+    hemi = new THREE.HemisphereLight(0xffeccc, 0x4a6a35, 0.66); scene.add(hemi);
     sunLight = new THREE.DirectionalLight(0xffd3a0, 0.88);
     sunLight.castShadow = true;
     const sh = sunLight.shadow; sh.mapSize.set(coarse ? 1024 : 2048, coarse ? 1024 : 2048);
@@ -99,9 +105,9 @@ const World = (() => {
     /* --- ciel --- */
     sky = new THREE.Mesh(new THREE.SphereGeometry(900, 24, 14), new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: { uSun: { value: W.sunDir }, uMood: { value: 0 }, uDark: { value: 0 } },
+      uniforms: { uSun: { value: W.sunDir }, uMood: { value: 0 }, uDark: { value: 0 }, uDusk: { value: 0 } },
       vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: `varying vec3 vDir; uniform vec3 uSun; uniform float uMood; uniform float uDark;
+      fragmentShader: `varying vec3 vDir; uniform vec3 uSun; uniform float uMood; uniform float uDark; uniform float uDusk;
         void main(){ vec3 d = normalize(vDir); float h = clamp(d.y, -0.2, 1.0);
           vec3 hor = mix(vec3(0.97,0.81,0.62), vec3(1.0,0.75,0.54), uMood);
           vec3 mid = mix(vec3(0.66,0.84,0.90), vec3(0.72,0.76,0.95), uMood);
@@ -109,6 +115,7 @@ const World = (() => {
           vec3 c = mix(hor, mid, smoothstep(0.0, 0.2, h)); c = mix(c, top, smoothstep(0.16, 0.7, h));
           float s = max(dot(d, uSun), 0.0);
           c += vec3(1.0,0.74,0.4) * (pow(s, 10.0) * 0.38 + pow(s, 500.0) * 1.6);
+          c = mix(c, c * vec3(0.78,0.5,0.72) + vec3(0.3,0.1,0.02) * (1.0 - smoothstep(0.0, 0.35, h)), uDusk);
           c = mix(c, vec3(0.05,0.07,0.16), uDark * 0.8);
           gl_FragColor = vec4(c, 1.0); }`
     }));
@@ -150,7 +157,7 @@ const World = (() => {
     let tries = 0;
     while (W.trees.length < 185 && tries++ < 9000) {
       const a = rng() * U.TAU, r = Math.sqrt(rng()) * (W.R + 2), x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (r < 13) continue;
+      if (r < 13 || inTown(x, z, 5) || nearRoad(x, z, 5) || Math.hypot(x + 4, z - 10) < 7) continue;
       if (U.fbm(x * 0.014 + 7, z * 0.014 + 3) < 0.5) continue;
       if (W.trees.some(t => Math.hypot(t.x - x, t.z - z) < 5.2)) continue;
       const kindN = U.vnoise(x * 0.011, z * 0.011 + 20);
@@ -168,23 +175,25 @@ const World = (() => {
       dm.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); dm.rotation.y = rng() * 6; dm.scale.setScalar(1.1 + rng() * 1.1); dm.updateMatrix(); border.setMatrixAt(i, dm.matrix);
     }
     border.frustumCulled = false; scene.add(border);
+    buildTown();
 
     /* --- rochers --- */
     const rockGeo = U.part(new THREE.IcosahedronGeometry(1, 0), 0x8d908a, null, 0.12);
     const rocks = new THREE.InstancedMesh(rockGeo, treeMat, 36);
     for (let i = 0; i < 36; i++) {
-      const a = rng() * U.TAU, r = 16 + Math.sqrt(rng()) * (W.R - 20), x = Math.cos(a) * r, z = Math.sin(a) * r, s = 0.8 + rng() * 1.6;
+      let x, z; do { const a = rng() * U.TAU, r = 16 + Math.sqrt(rng()) * (W.R - 20); x = Math.cos(a) * r; z = Math.sin(a) * r; } while (inTown(x, z, 3) || nearRoad(x, z, 4));
+      const s = 0.8 + rng() * 1.6;
       dm.position.set(x, s * 0.25, z); dm.rotation.set(rng() * 3, rng() * 3, rng() * 3); dm.scale.set(s, s * (0.55 + rng() * 0.4), s * (0.8 + rng() * 0.4)); dm.updateMatrix(); rocks.setMatrixAt(i, dm.matrix);
       W.colliders.push({ x, z, r: s * 0.95 });
     }
     rocks.castShadow = true; rocks.receiveShadow = true; scene.add(rocks);
 
     /* --- hautes herbes (cachettes) --- */
-    W.patches.push({ x: 11, z: -9, r: 5.5 }, { x: -14, z: -22, r: 6.5 });
+    W.patches.push({ x: 11, z: -9, r: 5.5 }, { x: -14, z: -22, r: 6.5 }, { x: 18, z: -40, r: 5 }, { x: -3, z: -86, r: 4 }, { x: 22, z: -108, r: 3.6 }, { x: 4, z: -104, r: 3.4 }, { x: 19, z: -86, r: 3.2 });
     tries = 0;
     while (W.patches.length < 27 && tries++ < 2000) {
       const a = rng() * U.TAU, r = 24 + Math.sqrt(rng()) * (W.R - 34), x = Math.cos(a) * r, z = Math.sin(a) * r, pr = 4.2 + rng() * 4;
-      if (W.patches.some(p => Math.hypot(p.x - x, p.z - z) < p.r + pr + 9)) continue;
+      if (inTown(x, z, pr + 4) || W.patches.some(p => Math.hypot(p.x - x, p.z - z) < p.r + pr + 9)) continue;
       W.patches.push({ x, z, r: pr });
     }
     let nb = 0; const dens = coarse ? 1.0 : 1.5;
@@ -251,12 +260,113 @@ const World = (() => {
     tries = 0;
     while (W.berries.length < 16 && tries++ < 500) {
       const a = rng() * U.TAU, r = 18 + Math.sqrt(rng()) * (W.R - 28), x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (W.colliders.some(c => Math.hypot(c.x - x, c.z - z) < c.r + 2)) continue;
+      if (inTown(x, z, 3) || W.colliders.some(c => Math.hypot(c.x - x, c.z - z) < c.r + 2)) continue;
       const bush = new THREE.Mesh(bushGeo, treeMat), fruit = new THREE.Mesh(berryGeo, berryMat);
       bush.position.set(x, 0, z); fruit.position.set(x, 0, z); bush.castShadow = true; scene.add(bush); scene.add(fruit);
       W.berries.push({ x, z, fruit, ready: true, t: 0 });
     }
   }
+
+
+  /* ---------- Val-Perdu : la ville en ruine ---------- */
+  const inTown = (x, z, m = 0) => Math.hypot(x - W.town.x, z - W.town.z) < W.town.r + m;
+  function nearRoad(x, z, m) {
+    const ax = 0, az = 4, bx = W.town.gate.x, bz = W.town.gate.z, dx = bx - ax, dz = bz - az, k = U.clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1);
+    return Math.hypot(x - ax - dx * k, z - az - dz * k) < m;
+  }
+  function buildTown() {
+    const t = W.town, P = [], cols = [0xd9d2c2, 0xc9c2b2, 0xe2dac8, 0xbdb8ac];
+    // un pan de mur = une boîte orientée : elle arrête les corps et, si elle est assez haute, les regards
+    const wall = (x, z, len, thick, h, rot, c) => {
+      P.push(U.part(new THREE.BoxGeometry(len, h, thick), c || cols[Math.floor(rng() * 4)], U.mat(x, h / 2, z, 1, 1, 1, 0, rot, 0), 0.09));
+      if (rng() < 0.45) P.push(U.part(new THREE.BoxGeometry(len * 0.92, 0.22, thick * 1.2), 0x5f8f3e, U.mat(x, h + 0.08, z, 1, 1, 1, 0, rot, 0), 0.12));
+      W.walls.push({ x, z, hl: len / 2, ht: thick / 2, c: Math.cos(rot), s: Math.sin(rot), h, rad: Math.hypot(len / 2, thick / 2) });
+    };
+    const ruin = (x1, z1, x2, z2, hb, gap = 0.12) => {
+      const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz), n = Math.max(1, Math.round(L / 2.8)), rot = Math.atan2(-dz, dx);
+      for (let i = 0; i < n; i++) { if (rng() < gap) continue; const k = (i + 0.5) / n; wall(x1 + dx * k, z1 + dz * k, L / n + 0.03, 0.75, hb * (0.4 + 0.6 * rng()), rot); }
+    };
+    const house = (cx, cz, w, d, rot, hb = 4.8) => {
+      const c = Math.cos(rot), s = Math.sin(rot), pt = (lx, lz) => [cx + lx * c + lz * s, cz - lx * s + lz * c];
+      const A = pt(-w / 2, -d / 2), B = pt(w / 2, -d / 2), C = pt(w / 2, d / 2), D = pt(-w / 2, d / 2), E = pt(-1.4, d / 2), F = pt(1.4, d / 2);
+      ruin(A[0], A[1], B[0], B[1], hb); ruin(B[0], B[1], C[0], C[1], hb); ruin(D[0], D[1], A[0], A[1], hb);
+      ruin(D[0], D[1], E[0], E[1], hb, 0); ruin(F[0], F[1], C[0], C[1], hb, 0);   // façade percée d'une porte
+    };
+    // enceinte, ouverte au sud par la porte
+    for (let i = 0; i < 26; i++) {
+      const a0 = i / 26 * U.TAU, a1 = (i + 1) / 26 * U.TAU;
+      if (Math.abs(U.angDiff((a0 + a1) / 2, Math.PI / 2)) < 0.15 || rng() < 0.28) continue;
+      ruin(t.x + Math.cos(a0) * t.r, t.z + Math.sin(a0) * t.r, t.x + Math.cos(a1) * t.r, t.z + Math.sin(a1) * t.r, 4.4, 0.08);
+    }
+    wall(t.gate.x - 3.8, t.gate.z, 2.2, 2.2, 7.6, 0, 0xa9a394); wall(t.gate.x + 3.8, t.gate.z, 2.2, 2.2, 6.2, 0, 0xa9a394);
+    P.push(U.part(new THREE.BoxGeometry(4.6, 0.9, 1.7), 0x9d9a90, U.mat(t.gate.x - 1.9, 7.7, t.gate.z, 1, 1, 1, 0, 0, -0.12)));
+    // maisons
+    house(-10, -78, 9, 8, 1.75); house(-14, -96, 8, 10, 1.45); house(-9, -112, 9, 8, 1.1); house(26, -76, 9, 8, -1.3); house(30, -114, 8, 8, -0.6); house(-2, -68, 7, 6, 0.1, 3.8);
+    // église : nef, clocher, cloche tombée devant le parvis
+    ruin(4, -129, 16, -129, 7.5, 0); ruin(4, -129, 4, -113, 7.5); ruin(16, -129, 16, -113, 7.5); ruin(4, -113, 8.4, -113, 7, 0); ruin(11.6, -113, 16, -113, 7, 0);
+    wall(1.2, -111.5, 5, 5, 17, 0, 0xa9a394);
+    P.push(U.part(new THREE.ConeGeometry(4.3, 5.5, 4), 0x5a5f6e, U.mat(1.2, 19.7, -111.5, 1, 1, 1, 0, Math.PI / 4, 0)));
+    P.push(U.part(new THREE.BoxGeometry(2.6, 0.6, 2.6), 0x9d9a90, U.mat(t.bell.x, 0.3, t.bell.z)));
+    // halle : deux rangées de piliers et quelques poutres
+    for (const px of [25, 35]) for (const pz of [-101, -97, -93, -89]) {
+      const h = 4.2 + rng() * 1.4; P.push(U.part(new THREE.CylinderGeometry(0.55, 0.65, h, 7), 0xb9b2a3, U.mat(px, h / 2, pz))); W.colliders.push({ x: px, z: pz, r: 0.75 });
+    }
+    P.push(U.part(new THREE.BoxGeometry(10.6, 0.4, 0.5), 0x6b4a2f, U.mat(30, 5.4, -101)), U.part(new THREE.BoxGeometry(10.6, 0.4, 0.5), 0x6b4a2f, U.mat(30, 5.2, -93, 1, 1, 1, 0, 0, 0.05)), U.part(new THREE.BoxGeometry(0.5, 0.4, 12.6), 0x6b4a2f, U.mat(25, 5.6, -95)));
+    // fontaine
+    const f = t.fountain;
+    P.push(U.part(new THREE.CylinderGeometry(3, 3.3, 0.9, 12), 0xa9a394, U.mat(f.x, 0.45, f.z)), U.part(new THREE.CylinderGeometry(2.5, 2.5, 0.96, 12), 0x6f8f4e, U.mat(f.x, 0.48, f.z)), U.part(new THREE.CylinderGeometry(0.45, 0.7, 3, 8), 0xb9b2a3, U.mat(f.x, 1.5, f.z)), U.part(new THREE.CylinderGeometry(1.4, 0.4, 0.5, 10), 0xa9a394, U.mat(f.x, 3.1, f.z)));
+    W.colliders.push({ x: f.x, z: f.z, r: 3.3 });
+    // gravats
+    for (let i = 0; i < 70; i++) { const a = rng() * U.TAU, r = Math.sqrt(rng()) * (t.r - 2), s = 0.25 + rng() * 0.5; P.push(U.part(new THREE.IcosahedronGeometry(s, 0), cols[i % 4], U.mat(t.x + Math.cos(a) * r, s * 0.3, t.z + Math.sin(a) * r, 1, 0.7, 1.2, rng() * 3, rng() * 3, 0), 0.1)); }
+    // campement de départ : tente, feu
+    P.push(U.part(new THREE.ConeGeometry(2.4, 2.7, 4), 0xd9c48a, U.mat(-5.5, 1.35, 11, 1, 1, 1.25, 0, Math.PI / 4, 0)), U.part(new THREE.ConeGeometry(0.9, 2.0, 3), 0x3a2a1c, U.mat(-4.1, 1.0, 9.9, 0.6, 1, 0.2, 0, 0.8, 0)));
+    for (let i = 0; i < 3; i++) P.push(U.part(new THREE.CylinderGeometry(0.13, 0.13, 1.3, 5), 0x5a3a22, U.mat(W.camp.x, 0.16, W.camp.z, 1, 1, 1, Math.PI / 2, i * 2.1, 0)));
+    W.colliders.push({ x: -5.5, z: 11, r: 2.0 }, { x: W.camp.x, z: W.camp.z, r: 0.7 });
+    // la pierre garde un peu de clarté dans l'ombre, sinon les murs virent au kaki
+    const m = new THREE.Mesh(U.merge(P), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x2e2a24 })); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+    // pavés et vieille route
+    const flatMat = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const pg = new THREE.CircleGeometry(t.r + 1.5, 56); pg.rotateX(-Math.PI / 2);
+    const pp = pg.attributes.position, pc = new Float32Array(pp.count * 3), c1 = new THREE.Color(0xc2b9a6), c2 = new THREE.Color(0x93a274), cc = new THREE.Color();
+    for (let i = 0; i < pp.count; i++) { cc.copy(c1).lerp(c2, U.fbm(pp.getX(i) * 0.3 + 3, pp.getZ(i) * 0.3) * (i === 0 ? 0.5 : 1)); pc[i * 3] = cc.r; pc[i * 3 + 1] = cc.g; pc[i * 3 + 2] = cc.b; }
+    pg.setAttribute('color', new THREE.BufferAttribute(pc, 3));
+    const pave = new THREE.Mesh(pg, flatMat); pave.position.set(t.x, 0.04, t.z); pave.receiveShadow = true; scene.add(pave);
+    const rx = t.gate.x, rz = t.gate.z - 4, L = Math.hypot(rx, rz), road = new THREE.Mesh(U.part(new THREE.PlaneGeometry(4.4, L, 1, 14), 0xb89f72, new THREE.Matrix4().makeRotationX(-Math.PI / 2), 0.07), flatMat);
+    road.position.set(rx / 2, 0.03, 4 + rz / 2); road.rotation.y = Math.atan2(rx, rz); road.receiveShadow = true; scene.add(road);
+    // la cloche (elle tremble quand on la frappe) et la flamme du feu de camp
+    const bell = new THREE.Mesh(U.merge([U.part(new THREE.CylinderGeometry(0.45, 1.15, 1.5, 10), 0xb8862e, U.mat(0, 0.75, 0), 0.06), U.part(new THREE.SphereGeometry(0.46, 8, 5), 0xa87a26, U.mat(0, 1.5, 0), 0.06), U.part(new THREE.CylinderGeometry(1.2, 1.25, 0.14, 10), 0x8a6a22, U.mat(0, 0.07, 0), 0.06)]), treeMat);
+    bell.position.set(t.bell.x, 0.6, t.bell.z); bell.castShadow = true; scene.add(bell);
+    W.colliders.push({ x: t.bell.x, z: t.bell.z, r: 1.3 }); W.kickables.push({ id: 'bell', x: t.bell.x, z: t.bell.z, r: 2.0, y: 1.4, wob: 0, mesh: bell });
+    flame = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.0, 5), new THREE.MeshBasicMaterial({ color: 0xff9a3a, fog: false })); flame.position.set(W.camp.x, 0.7, W.camp.z); scene.add(flame);
+  }
+  // un mur coupe-t-il la ligne de vue ? (accroupi, même un muret suffit)
+  function blocked(ax, az, bx, bz, low) {
+    const t = W.town, lim = t.r + 8;
+    if (Math.hypot(ax - t.x, az - t.z) > lim && Math.hypot(bx - t.x, bz - t.z) > lim) return false;
+    const minH = low ? 1.25 : 2.3;
+    for (const w of W.walls) {
+      if (w.h < minH) continue;
+      const dax = ax - w.x, daz = az - w.z, dbx = bx - w.x, dbz = bz - w.z;
+      const x1 = dax * w.c - daz * w.s, z1 = dax * w.s + daz * w.c, dx = dbx * w.c - dbz * w.s - x1, dz = dbx * w.s + dbz * w.c - z1;
+      let t0 = 0, t1 = 1, a, b;
+      if (Math.abs(dx) < 1e-9) { if (x1 < -w.hl || x1 > w.hl) continue; } else { a = (-w.hl - x1) / dx; b = (w.hl - x1) / dx; if (a > b) { const q = a; a = b; b = q; } if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) continue; }
+      if (Math.abs(dz) < 1e-9) { if (z1 < -w.ht || z1 > w.ht) continue; } else { a = (-w.ht - z1) / dz; b = (w.ht - z1) / dz; if (a > b) { const q = a; a = b; b = q; } if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) continue; }
+      return true;
+    }
+    return false;
+  }
+  function collideWalls(o, r) {
+    for (const w of W.walls) {
+      const dx = o.x - w.x, dz = o.z - w.z, m = w.rad + r; if (Math.abs(dx) > m || Math.abs(dz) > m) continue;
+      const lx = dx * w.c - dz * w.s, lz = dx * w.s + dz * w.c, ex = lx - U.clamp(lx, -w.hl, w.hl), ez = lz - U.clamp(lz, -w.ht, w.ht), d2 = ex * ex + ez * ez;
+      if (d2 >= r * r) continue;
+      let nx, nz, pen;
+      if (d2 > 1e-8) { const d = Math.sqrt(d2); nx = ex / d; nz = ez / d; pen = r - d; }
+      else { const px = w.hl - Math.abs(lx), pz = w.ht - Math.abs(lz); if (px < pz) { nx = lx < 0 ? -1 : 1; nz = 0; pen = px + r; } else { nx = 0; nz = lz < 0 ? -1 : 1; pen = pz + r; } }
+      const mx = lx + nx * pen, mz = lz + nz * pen; o.x = w.x + mx * w.c + mz * w.s; o.z = w.z - mx * w.s + mz * w.c;
+    }
+  }
+  function setDusk(k) { duskT = k; }
 
   function inGrass(x, z) { for (const p of W.patches) { const dx = x - p.x, dz = z - p.z; if (dx * dx + dz * dz < (p.r - 0.4) * (p.r - 0.4)) return true; } return false; }
 
@@ -279,11 +389,13 @@ const World = (() => {
     // lumière qui suit le promeneur
     sunLight.target.position.set(px, 0, pz); sunLight.position.set(px + W.sunDir.x * 110, W.sunDir.y * 110, pz + W.sunDir.z * 110);
     sky.position.copy(cam.position);
-    moodK = U.damp(moodK, moodT, 2.2, dt + 0.004); darkK = Math.max(0, darkK - dt * 0.9 - 0.002);
+    moodK = U.damp(moodK, moodT, 2.2, dt + 0.004); darkK = Math.max(0, darkK - dt * 0.9 - 0.002); duskK = U.damp(duskK, duskT, 0.5, dt + 0.002);
+    sunLight.color.copy(SUN_DAY).lerp(SUN_DUSK, duskK); sunLight.intensity = 0.88 - 0.3 * duskK; hemi.intensity = 0.66 - 0.14 * duskK; sky.material.uniforms.uDusk.value = duskK;
     sky.material.uniforms.uMood.value = moodK; sky.material.uniforms.uDark.value = darkK;
-    fogC.copy(FOG_CALM).lerp(FOG_HOT, moodK); if (darkK > 0) fogC.multiplyScalar(1 - darkK * 0.6); scene.fog.color.copy(fogC);
+    fogC.copy(FOG_CALM).lerp(FOG_HOT, moodK).lerp(FOG_DUSK, duskK * 0.8); if (darkK > 0) fogC.multiplyScalar(1 - darkK * 0.6); scene.fog.color.copy(fogC);
     grassU.uTime.value = t; grassU.uPlayer.value.set(px, 0, pz);
     shockR += 34 * dt; shockAmp *= Math.exp(-1.5 * dt); grassU.uShock.value.z = shockR; grassU.uShockAmp.value = shockAmp;
+    const cxm = cam.position.x, czm = cam.position.z, sxm = fx - cxm, szm = fz - czm, sl2 = sxm * sxm + szm * szm + 1e-6, sl = Math.sqrt(sl2);
     for (const tr of W.trees) {
       let rx = Math.sin(t * 1.1 + tr.ph) * 0.012, rz = Math.cos(t * 0.9 + tr.ph) * 0.012;
       if (tr.shakeA > 0.002) {
@@ -293,13 +405,15 @@ const World = (() => {
       tr.mesh.rotation.set(rx, tr.ry, rz);
       // un arbre entre la caméra et le promeneur devient translucide
       // (couloir entre l'objectif et le point visé, plus large tout près de l'objectif)
-      const dz = tr.z - fz, fade = dz > 0.8 && dz < 21 && Math.abs(tr.x - fx) < (dz > 11 ? 5.2 : 3.1) * tr.s;
+      const ux = tr.x - cxm, uz = tr.z - czm, u = (ux * sxm + uz * szm) / sl2, fade = u > 0.03 && u < 0.97 && Math.abs(ux * szm - uz * sxm) / sl < (u < 0.4 ? 5.2 : 3.1) * tr.s;
       if (fade !== tr.faded) { tr.faded = fade; tr.mesh.material = fade ? treeFade : treeMat; tr.mesh.castShadow = !fade; }
     }
     for (let i = 0; i < clouds.length; i++) clouds[i].position.x += dt * (1.2 + i * 0.15);
     for (const b of W.berries) { if (!b.ready && t > b.t) { b.ready = true; b.fruit.visible = true; } }
+    for (const k of W.kickables) { k.wob = Math.max(0, k.wob - dt * 0.7); k.mesh.rotation.z = Math.sin(t * 13) * 0.22 * k.wob; k.mesh.rotation.x = Math.cos(t * 11) * 0.12 * k.wob; }
+    flame.scale.set(1 + Math.sin(t * 17) * 0.15, 1 + Math.sin(t * 23) * 0.25, 1 + Math.cos(t * 19) * 0.15);
   }
 
-  W.init = init; W.inGrass = inGrass; W.shock = shock; W.update = update; W.darken = darken; W.setMood = setMood;
+  W.init = init; W.inGrass = inGrass; W.shock = shock; W.update = update; W.darken = darken; W.setMood = setMood; W.blocked = blocked; W.collideWalls = collideWalls; W.setDusk = setDusk; W.inTown = inTown;
   return W;
 })();

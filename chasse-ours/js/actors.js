@@ -32,6 +32,10 @@ const Actors = (() => {
     mesh(legGeo, M, legA); mesh(legGeo, M, legB);
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffa040, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
     glow.position.set(0, -0.85, 0.1); glow.scale.setScalar(0.01); legA.add(glow);
+    // silhouette : quand un mur, un arbre ou les herbes cachent le promeneur, on le devine quand même
+    const sil = new THREE.MeshBasicMaterial({ color: 0xfff3d4, transparent: true, opacity: 0.36, depthFunc: THREE.GreaterDepth, depthWrite: false, fog: false });
+    M.transparent = true; const solid = []; root.traverse(o => { if (o.isMesh) solid.push(o); });
+    solid.forEach(o => { o.renderOrder = 2; const s = new THREE.Mesh(o.geometry, sil); s.renderOrder = 1; o.add(s); });
     return { root, pose, body, armA, armB, legA, legB, glow, phase: 0 };
   }
 
@@ -43,7 +47,7 @@ const Actors = (() => {
     m.pose.rotation.y = -Math.PI / 2 * side;   // profil : le chassé part de côté, talon en avant
     const hipY = 0.98 - 0.34 * c;
     m.body.position.y = hipY + Math.abs(Math.sin(m.phase)) * 0.05 * mv - 0.06 * ch * (1 - k);
-    m.body.rotation.x = 0.45 * c * front + 0.1 * mv * front;
+    m.body.rotation.x = (0.45 * c + 0.1 * mv + 0.32 * (s.sprint || 0)) * front;
     m.body.rotation.z = 0.3 * ch * (1 - k) + 0.62 * k;
     const ls = 1 - 0.34 * c;
     m.legA.position.y = m.legB.position.y = hipY;
@@ -51,7 +55,7 @@ const Actors = (() => {
     m.legA.rotation.x = sw * front;
     m.legA.rotation.z = lerp(0.85 * ch, Math.PI / 2 * 1.02, k);
     m.legA.scale.y = lerp(lerp(ls, 0.7, ch), 1.2, k);
-    m.armA.rotation.x = lerp(-sw * 0.9, -1.3, side); m.armB.rotation.x = lerp(sw * 0.9, -1.7, side);
+    const as = 0.9 + 0.7 * (s.sprint || 0); m.armA.rotation.x = lerp(-sw * as, -1.3, side); m.armB.rotation.x = lerp(sw * as, -1.7, side);
     m.armA.rotation.z = 0.5 * side; m.armB.rotation.z = -0.4 * side;
     const g = Math.max(ch * ch, k) * (s.mega ? 2.6 : 1.7) * (1 + 0.15 * Math.sin(t * 40));
     m.glow.scale.setScalar(Math.max(0.01, g));
@@ -73,6 +77,12 @@ const Actors = (() => {
     S(0.18, c1, 0.43, 2.1, 1.45); S(0.18, c1, -0.43, 2.1, 1.45);
     S(0.07, 0x15100c, 0.25, 1.78, 2.04); S(0.07, 0x15100c, -0.25, 1.78, 2.04);
     S(0.2, c1, 0, 1.55, -1.92);                            // queue
+    if (T.helmet) { P.push(U.part(new THREE.CylinderGeometry(0.5, 0.64, 0.42, 8), 0x8a9299, U.mat(0, 2.1, 1.5), 0.05)); S(0.2, 0x8a9299, 0, 2.38, 1.5); S(0.5, 0x737b82, 0.78, 1.9, 0.5, 1, 0.5, 1.2); S(0.5, 0x737b82, -0.78, 1.9, 0.5, 1, 0.5, 1.2); }
+    if (T.crown) {
+      P.push(U.part(new THREE.CylinderGeometry(0.44, 0.44, 0.18, 10), 0xffc83a, U.mat(0.08, 2.14, 1.5, 1, 1, 1, 0, 0, -0.18), 0.04));
+      for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; P.push(U.part(new THREE.ConeGeometry(0.13, 0.5, 4), 0xffc83a, U.mat(0.14 + Math.sin(a) * 0.38, 2.4, 1.5 + Math.cos(a) * 0.38), 0.04)); }
+      S(0.1, 0xd8322a, 0.3, 1.72, 2.02, 0.6, 2.4, 0.6);   // la balafre
+    }
     const leg = U.merge([U.part(new THREE.CylinderGeometry(0.31, 0.27, 1.0, 6), c1, U.mat(0, -0.45, 0), 0.08), U.part(new THREE.SphereGeometry(0.32, 6, 4), T.paw || c1, U.mat(0, -0.9, 0.1, 1, 0.55, 1.3), 0.08)]);
     return cache[T.id] = { body: U.merge(P), leg };
   }
@@ -97,15 +107,19 @@ const Actors = (() => {
       m.spin.rotation.x += b.spinX * dt; m.spin.rotation.z += b.spinZ * dt;
       const sq = Math.max(0, 1 - b.lt * 5); m.spin.scale.set(1 + 0.3 * sq, 1 + 0.3 * sq, 1 - 0.4 * sq);
       m.cone.visible = false;
+    } else if (b.state === 'sleep') {
+      const br = Math.sin(t * 1.6 + b.phase) * 0.03;
+      m.tilt.rotation.set(0, 0, 0); m.tilt.position.y = -0.52; m.legs.forEach((l, i) => { l.rotation.x = i < 2 ? -1.35 : 1.35; });
+      m.spin.scale.set(1.05, 0.9 + br, 1); m.cone.visible = false;
     } else {
       b.phase += b.sp * dt * 1.5 / b.size;
       const sw = Math.sin(b.phase) * Math.min(1, b.sp / 3) * 0.6;
-      const rearT = b.state === 'alert' ? 1 : (b.state === 'attack' && b.at < b.windup ? 0.6 : 0);
+      const rearT = b.state === 'alert' || b.state === 'bwind' ? 1 : (b.state === 'attack' && b.at < b.windup ? 0.6 : 0);
       b.rear = U.damp(b.rear, rearT, 9, dt);
       const strike = b.state === 'attack' && b.at >= b.windup ? Math.max(0, 1 - (b.at - b.windup) / 0.25) : 0;
       m.tilt.rotation.x = -0.85 * b.rear + 0.4 * strike;
       m.tilt.position.y = 0.8 * b.rear + Math.abs(Math.sin(b.phase)) * 0.07 * Math.min(1, b.sp / 3);
-      m.tilt.rotation.z = b.state === 'stunned' ? Math.sin(t * 16) * 0.14 : 0;
+      m.tilt.rotation.z = b.state === 'stunned' || b.state === 'tired' ? Math.sin(t * 16) * 0.14 : 0;
       m.legs[0].rotation.x = lerp(sw, -1.0 + Math.sin(t * 9) * 0.25, b.rear); m.legs[1].rotation.x = lerp(-sw, -1.0 - Math.sin(t * 9) * 0.25, b.rear);
       m.legs[2].rotation.x = -sw; m.legs[3].rotation.x = sw;
       // écrasement à l'impact

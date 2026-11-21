@@ -228,10 +228,71 @@ h1 span { color: var(--amber); }
 .perk em { font-style: normal; font-size: 12px; opacity: .7; letter-spacing: .1em; text-transform: uppercase; }
 .pause-btns { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; margin-top: 10px; }
 
+
+/* ---------- Histoire, plein écran, caméra ---------- */
+#game:fullscreen, #game:-webkit-full-screen { width: 100vw; height: 100vh; }
+#look-zone { position: absolute; right: 0; top: 22%; bottom: 0; width: 50%; pointer-events: auto; touch-action: none; }
+.defi { font-size: 13px; opacity: .78; line-height: 1.15; }
+.title-btns, .pause-btns { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.ghost.off { opacity: .5; text-decoration: line-through; }
+#card { background: linear-gradient(180deg, rgba(10, 22, 16, .88), rgba(10, 22, 16, .96)); }
+.story-card { width: min(100%, 620px); display: flex; flex-direction: column; gap: 12px; align-items: flex-start; animation: tagIn .4s both; }
+.story-card .eyebrow { margin: 0; color: var(--amber); opacity: 1; font-weight: 700; font-size: 14px; }
+.story-card h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: clamp(32px, 7.5vw, 60px); line-height: .95; text-transform: uppercase; color: var(--cream); text-shadow: 0 .05em 0 var(--ember), 0 .1em 0 var(--ink); transform: rotate(-2deg); transform-origin: left bottom; text-wrap: balance; }
+#card-body { display: flex; flex-direction: column; gap: 9px; border-left: 3px solid var(--amber); padding-left: 14px; }
+#card-body p { margin: 0; font-size: clamp(17px, 2.4vw, 20px); font-weight: 500; line-height: 1.32; max-width: 62ch; }
+.reward { margin: 0; font-family: var(--f-display); font-size: 22px; color: var(--leaf); text-shadow: 0 2px 0 var(--ink); }
+.pause-obj { display: flex; flex-direction: column; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 8px 14px; max-width: 46ch; font-size: 17px !important; }
+.pause-obj b { color: var(--amber); font-size: 13px; text-transform: uppercase; letter-spacing: .1em; }
+.pause-obj i { font-style: normal; font-size: 14px; opacity: .8; }
+
+/* bague de Furie autour du bouton Chassé */
+#t-kick::before {
+  content: ""; position: absolute; inset: -10px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(var(--amber) calc(var(--fury, 0) * 1%), rgba(0, 0, 0, .4) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px)); mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+}
+#t-kick.mega::before { background: #7fe9ff; box-shadow: 0 0 22px #7fe9ff; animation: throb .4s infinite alternate; }
+
+/* ---------- Affichage épuré : téléphone et petites fenêtres ---------- */
+#game.compact .hud-tl { width: auto; max-width: 62vw; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px; top: 8px; }
+#game.compact .lvl { background: none; border: 0; padding: 0; gap: 6px; }
+#game.compact .lvl-badge { width: 30px; height: 30px; font-size: 14px; box-shadow: 0 0 0 1.5px var(--ink); }
+#game.compact .lvl-badge span { width: 21px; height: 21px; box-shadow: 0 0 0 1.5px var(--ink); }
+#game.compact .lvl-info { flex: none; width: 84px; }
+#game.compact .lvl-title, #game.compact .lvl-xp, #game.compact .gauge .lab, #game.compact .stats, #game.compact #btn-fs, #game.compact #btn-sound, #game.compact .defi { display: none; }
+#game.compact .bar.xp { height: 5px; }
+#game.compact .hearts { font-size: 17px; gap: 1px; }
+#game.compact .gauge { flex-basis: 100%; background: none; border: 0; padding: 0; grid-template-columns: 120px; }
+#game.compact .gauge .bar { height: 5px; }
+#game.compact #stamina-gauge { opacity: 0; transition: opacity .35s; }
+#game.compact #stamina-gauge.show { opacity: 1; }
+body.touch #game.compact #fury-gauge { display: none; }
+#game.compact .hud-tr { top: 8px; width: min(52vw, 250px); gap: 6px; }
+#game.compact .btns button { min-width: 38px; height: 30px; background: rgba(16, 35, 26, .5); }
+#game.compact .mission { position: absolute; top: 116px; right: 0; width: min(66vw, 290px); opacity: 0; transform: translateY(-6px); transition: opacity .4s, transform .4s; padding: 5px 8px 6px; }
+#game.compact .mission.show { opacity: 1; transform: none; }
+#game.compact #mission-text { font-size: 14px; }
+#game.compact .mission .eyebrow { font-size: 10px; }
+#game.compact .chip { top: 9px; bottom: auto; font-size: 10px; padding: 3px 10px; transition: opacity .4s, background .2s; }
+#game.compact .chip.idle { opacity: 0; }
+#game.compact #banner { top: 72px; font-size: clamp(15px, 4.4vw, 22px); white-space: normal; width: 92vw; }
+#game.compact #t-kick { width: 88px; height: 88px; font-size: 15px; background: rgba(255, 90, 31, .62); border-width: 2px; }
+#game.compact #t-kick.down { background: #fff; }
+#game.compact #t-crouch { width: 60px; height: 60px; font-size: 11px; right: calc(var(--gr) + 104px); background: rgba(16, 35, 26, .5); border-width: 2px; }
+#game.compact #t-crouch.on { background: rgba(60, 130, 50, .85); }
+#game.compact #hint { font-size: 15px; padding: 6px 10px; }
+#game.compact #combo { top: 34%; }
+#game.compact .hit-tags span { font-size: 11px; padding: 0 6px; }
+body.touch #game.compact #charge { bottom: 128px; width: min(48vw, 260px); }
+body.touch #game.compact #hint { bottom: 176px; }
+@media (max-width: 520px) { #game.compact .chip { top: 42px; } #game.compact #banner { top: 76px; } }
+@media (max-height: 460px) { body.touch #game.compact #charge { bottom: 14px; } body.touch #game.compact #hint { bottom: 60px; max-width: 46vw; } }
+
 @media (max-width: 520px) {
   .lvl-badge { width: 36px; height: 36px; font-size: 18px; } .lvl-badge span { width: 25px; height: 25px; }
   .lvl-title { font-size: 14px; } .gauge { grid-template-columns: 46px 1fr; padding: 3px 7px; }
-  #mission-text { font-size: 13px; } .chip { top: auto; bottom: 226px; font-size: 11px; } #banner { top: 148px; }
+  #mission-text { font-size: 13px; }
   .rules { font-size: 17px; }
 }
 @media (max-height: 460px) {

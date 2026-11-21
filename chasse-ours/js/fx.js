@@ -6,7 +6,7 @@ const FX = (() => {
   let scene, camera, renderer, cv, g2, VW = 1, VH = 1, dpr = 1;
   let add, alpha, light, lightI = 0, trauma = 0, flashA = 0, flashC = '255,255,255', lines = null;
   const rings = [], sprites = [], decals = [], domes = [], stars = [];
-  const F = { onDraw: null };
+  const F = { onDraw: null, rush: 0 };
 
   /* ---------- particules ---------- */
   class PSys {
@@ -140,7 +140,7 @@ const FX = (() => {
   function birds(x, y, z, n) {
     for (let i = 0; i < n; i++) { const a = rnd(6.283), v = rnd(5, 10); alpha.spawn(x + rnd(-1, 1), y + rnd(0, 1.5), z + rnd(-1, 1), Math.cos(a) * v, rnd(4.5, 8), Math.sin(a) * v, rnd(3, 4.5), 0.42, 0.3, 0.1, 0.08, 0.08, 1, -0.6, 0); }
   }
-  function mote(cx, cz) { add.spawn(cx + rnd(-26, 26), rnd(0.4, 5), cz + rnd(-30, 8), rnd(-0.5, 0.2), rnd(-0.1, 0.25), rnd(-0.2, 0.2), rnd(4, 7), 0.12, 0.12, 1, 0.9, 0.6, 0.55, 0, 0); }
+  function mote(cx, cz) { add.spawn(cx + rnd(-26, 26), rnd(0.4, 5), cz + rnd(-26, 26), rnd(-0.5, 0.2), rnd(-0.1, 0.25), rnd(-0.2, 0.2), rnd(4, 7), 0.12, 0.12, 1, 0.9, 0.6, 0.55, 0, 0); }
   function trail(x, y, z, mega) {
     alpha.spawn(x + rnd(-0.5, 0.5), y + rnd(-0.5, 0.5), z + rnd(-0.5, 0.5), rnd(-1, 1), rnd(-1, 1), rnd(-1, 1), rnd(0.5, 0.9), 1.2, 3, 0.95, 0.9, 0.8, 0.4, 0, 1);
     add.spawn(x + rnd(-0.8, 0.8), y + rnd(-0.8, 0.8), z + rnd(-0.8, 0.8), rnd(-2, 2), rnd(-2, 2), rnd(-2, 2), rnd(0.3, 0.6), 0.4, 0, mega ? 0.5 : 1, 0.85, mega ? 1 : 0.4, 1, 0, 0);
@@ -212,6 +212,11 @@ const FX = (() => {
           g2.beginPath(); g2.moveTo(lines.sx + cx * r0, lines.sy + sy_ * r0); g2.lineTo(lines.sx + Math.cos(a - w) * R, lines.sy + Math.sin(a - w) * R); g2.lineTo(lines.sx + Math.cos(a + w) * R, lines.sy + Math.sin(a + w) * R); g2.fill();
         }
       }
+    }
+    if (F.rush > 0.05 && !reduce) {   // sprint : des filets de vitesse sur les bords
+      const R = Math.hypot(VW, VH) / 2; g2.strokeStyle = `rgba(255,255,255,${(0.2 * F.rush).toFixed(3)})`; g2.lineWidth = 1.5; g2.beginPath();
+      for (let i = 0; i < 18; i++) { const a = rnd(6.283), r0 = R * rnd(0.72, 0.95), r1 = r0 + R * rnd(0.08, 0.22) * F.rush; g2.moveTo(VW / 2 + Math.cos(a) * r0, VH / 2 + Math.sin(a) * r0); g2.lineTo(VW / 2 + Math.cos(a) * r1, VH / 2 + Math.sin(a) * r1); }
+      g2.stroke();
     }
     if (F.onDraw) F.onDraw(g2, VW, VH);
     for (let i = stars.length - 1; i >= 0; i--) {
