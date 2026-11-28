@@ -159,10 +159,17 @@
         this.pings.push({ x: e.x, y: e.y, t0: this.r.t });
         const al = this.lastAlert = { x: e.x, y: e.y, t0: this.r.t };
         this.toast('⚠️ Vous êtes attaqué ! (touchez ici)', 'warn', () => this.center(al.x, al.y)); R.sfx.play('alert');
-      } else if (e.k === 'built' && e.p === me) { if (!['farm', 'house', 'palisade', 'wall', 'gate', 'pgate'].includes(e.t)) this.toast(B[e.t].name + ' terminé(e).', 'ok'); R.sfx.play('built'); }
+        this.battleT = 12;
+      } else if (e.k === 'built' && e.p === me) { if (!['farm', 'house', 'palisade', 'wall', 'gate', 'pgate'].includes(e.t)) this.toast(B[e.t].name + ' terminé(e).', 'ok'); R.sfx.play('built', { t: e.t }); }
       else if (e.k === 'trained' && e.p === me) R.sfx.play('train');
       else if (e.k === 'tech' && e.p === me) { this.toast('Technologie terminée : ' + TE[e.t].name, 'ok'); R.sfx.play('tech'); }
-      else if (e.k === 'conv') { if (e.q === me) this.toast('Une de vos unités a été convertie !', 'warn'); }
+      else if (e.k === 'conv') { if (e.q === me) this.toast('Une de vos unités a été convertie !', 'warn'); if (this.r.visible(e.x, e.y)) this.sndAt('convert', e.x, e.y); }
+      else if (e.k === 'die' && this.r.visible(e.x, e.y)) {
+        this.sndAt(e.kk === 'b' ? 'collapse' : 'death', e.x, e.y, { t: e.t });
+        if (e.kk !== 'r') this.battleT = Math.max(this.battleT || 0, 8);
+      }
+      else if (e.k === 'proj' && this.r.visible(e.x, e.y)) { this.sndAt(e.p === 'arrow' ? 'arrow' : 'hit', e.x, e.y); this.battleT = Math.max(this.battleT || 0, 6); }
+      else if (e.k === 'boom' && this.r.visible(e.x, e.y)) this.sndAt('hit', e.x, e.y, { gain: 0.9 });
       if (e.k === 'proj' || e.k === 'die' || e.k === 'boom' || e.k === 'conv') this.r.addFx(e, this.w.speed || 1.7);
     }
     this.agePings();
@@ -209,7 +216,53 @@
 
   // ---------- Recherche d'entité sous le doigt ----------
   // own : unités sélectionnées (pour réduire la zone de touche des animaux quand des villageois sont prêts à récolter)
+  // Choix de l'objet touché, au pixel près : seuls les pixels réellement dessinés comptent (pas l'ombre ni le sol autour),
+  // avec une marge pour le doigt plus large pour les petites unités que pour les bâtiments.
   P.pick = function (sx, sy, touch, own) {
+    const r = this.r, w = this.w;
+    if (!r.hitScan || !r._nHit) return this.pickBox(sx, sy, touch, own);
+    const me = this.me();
+    const vill = own && own.some(u => u.t === 'villager');
+    const tolU = touch ? 14 : 5, tolB = touch ? 4 : 1, tolR = touch ? 8 : 3;
+    const hits = r.hitScan(sx, sy, tolU);
+    // objets opaques exactement sous le doigt : ce qui est devant cache ce qui est derrière
+    let frontSolid = -1;
+    for (const h of hits) if (h.d === 0 && h.e.k !== 'u' && !(h.e.k === 'b' && B[h.e.t] && B[h.e.t].farm) && h.o > frontSolid) frontSolid = h.o;
+    let best = null, bs = 1e9, bd = 1e9;
+    for (const h of hits) {
+      const e = h.e;
+      if (e.dead || !w.ents.has(e.id)) continue;
+      let tol, pen;
+      if (e.k === 'u') {
+        if (e.inside) continue;
+        const animal = U[e.t] && U[e.t].animal;
+        tol = animal && vill ? (touch ? 8 : 4) : tolU;
+        // unités déjà sélectionnables : avec une sélection en cours, il faut viser l'unité elle-même (sinon c'est un déplacement)
+        if (own && own.length && e.o === me && !animal) tol = touch ? 5 : 3;
+        pen = 0;
+        // unité cachée derrière un bâtiment ou un arbre : seules les siennes (silhouette visible) restent touchables
+        if (h.d === 0 && frontSolid > h.o && e.o !== me) pen = 12;
+      } else if (e.k === 'b') { tol = tolB; pen = 3; }
+      else { tol = tolR; pen = 3.5; }
+      if (h.d > tol) continue;
+      const sc = h.d + pen - h.o * 1e-6;
+      if (sc < bs) { bs = sc; best = e; bd = h.d; }
+    }
+    // fondations : toute l'emprise au sol compte (le chantier est bas et peu visible)
+    if (!best) {
+      const [wx, wy] = r.toWorld(sx, sy);
+      for (const e of w.ents.values()) {
+        if (e.k !== 'b' || e.built) continue;
+        const sz = B[e.t].size;
+        if (wx >= e.tx && wx <= e.tx + sz && wy >= e.ty && wy <= e.ty + sz && r.entVisible(e)) { best = e; bd = 0; break; }
+      }
+    }
+    this.pickD = bd;
+    return best;
+  };
+
+  // ancienne méthode (boîtes approximatives), utilisée tant que rien n'a encore été dessiné
+  P.pickBox = function (sx, sy, touch, own) {
     const r = this.r, w = this.w, z = r.cam.z;
     const [wx, wy] = r.toWorld(sx, sy);
     let best = null, bd = 1e9;
@@ -267,6 +320,7 @@
     const w = this.w, r = this.r, me = this.me();
     const [wx, wy] = r.toWorld(sx, sy);
     if (this.placing) { this.placeTap(wx, wy, touch); return; }
+    if (touch) r.addFx({ k: 'tap', x: wx, y: wy });
     const own = this.ownSelUnits();
     const hit = this.pick(sx, sy, touch, own);
     if (this.mode === 'amove') {
@@ -299,7 +353,7 @@
       if (mine && hit.k === 'b' && hit.built && B[hit.t].drop && vill.length && vill.some(u => u.carry && u.carry.n >= 1 && B[hit.t].drop.includes(u.carry.t))) { this.commandAt(own, hit, wx, wy); return; }
       if (mine && own.length && hit.k === 'u' && hit.id !== own[0].id && own.every(u => u.t === 'monk') && hit.hp < hit.mhp) { this.commandAt(own, hit, wx, wy); return; }
       // unité à soi d'un autre type touchée « de loin » : c'est un déplacement, pas un changement de sélection
-      if (mine && own.length && hit.k === 'u' && !own.some(u => u.t === hit.t) && this.pickD > Math.max(12, 10 * r.cam.z)) { this.commandAt(own, null, wx, wy); return; }
+      if (mine && own.length && hit.k === 'u' && !own.some(u => u.t === hit.t) && this.pickD > 4) { this.commandAt(own, null, wx, wy); return; }
       if (mine || !own.length) { this.selectHit(hit); return; }
       if (hit.k === 'u' && hit.o >= 0 && w.ally(me, hit.o)) { this.commandAt(own, null, hit.x, hit.y); return; }
       this.commandAt(own, hit, wx, wy);
@@ -333,8 +387,29 @@
     }
     this.lastTap = { t: now, id: hit.id };
     this.setSel([hit.id]);
-    R.sfx.play('click');
+    this.selSound(hit);
   };
+
+  // son propre à ce qu'on vient de sélectionner (chaque bâtiment a le sien)
+  P.selSound = function (e) {
+    if (!e) return R.sfx.play('click');
+    if (e.k === 'b') R.sfx.play(e.built === false ? 'place' : 'sel_' + e.t);
+    else if (e.k === 'u') R.sfx.play('sel_unit', { t: e.t });
+    else R.sfx.play('click');
+  };
+  // son placé dans l'espace : panoramique selon la position à l'écran, atténué hors de l'écran ; null si trop loin
+  P.sndOpts = function (x, y, extra) {
+    const r = this.r;
+    const [sx, sy] = r.toScreen(x, y);
+    const W = r.W || innerWidth, H = r.H || innerHeight;
+    const dx = Math.max(0, Math.abs(sx - W / 2) - W / 2) / W, dy = Math.max(0, Math.abs(sy - H / 2) - H / 2) / H;
+    const out = Math.hypot(dx, dy);
+    if (out > 1.2) return null;
+    const o = { pan: Math.max(-1, Math.min(1, (sx / W) * 2 - 1)) * 0.8, gain: out <= 0 ? 1 : Math.max(0.15, 1 - out * 0.8) };
+    if (extra) for (const k in extra) o[k] = extra[k];
+    return o;
+  };
+  P.sndAt = function (name, x, y, extra) { const o = this.sndOpts(x, y, extra); if (o) R.sfx.play(name, o); };
 
   P.commandAt = function (us, hit, wx, wy) {
     const w = this.w, me = this.me();
@@ -349,6 +424,7 @@
       this.r.addFx({ k: 'mark', x: wx, y: wy, c: '#7cff7c' });
     }
     R.sfx.play('cmd');
+    if (us[0]) R.sfx.play('sel_unit', { t: us[0].t, gain: 0.6 });
   };
 
   P.boxSelect = function (b) {
@@ -436,7 +512,7 @@
       if (!this.canPlaceAt(pl.type, pl.tx, pl.ty)) { this.toast('Emplacement impossible ici.', 'err'); R.sfx.play('err'); return; }
       this.send({ c: 'build', t: pl.type, tx: pl.tx, ty: pl.ty, ids: vil });
     }
-    R.sfx.play('cmd');
+    R.sfx.play('place');
     const keep = this.keys.Shift;
     if (keep && R.canAfford(this.player(), B[pl.type].cost)) { pl.wallA = null; pl.wallB = null; pl.tiles = null; }
     else this.placing = null;
@@ -590,12 +666,12 @@
     R.sfx.unlock();
     this.r.cv.setPointerCapture(ev.pointerId);
     const touch = ev.pointerType !== 'mouse';
-    this.ptrs.set(ev.pointerId, { x: ev.offsetX, y: ev.offsetY, x0: ev.offsetX, y0: ev.offsetY, t0: performance.now(), btn: ev.button, touch });
+    this.ptrs.set(ev.pointerId, { x: ev.offsetX, y: ev.offsetY, x0: ev.offsetX, y0: ev.offsetY, t0: performance.now(), btn: ev.button, touch, cx: this.r.cam.x, cy: this.r.cam.y });
     if (this.ptrs.size === 2) {
       clearTimeout(this.lpT); this.box = null;
       const [a, b] = [...this.ptrs.values()];
       this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: this.r.cam.z, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
-      for (const p of this.ptrs.values()) { p.moved = true; p.dragGhost = false; }
+      for (const p of this.ptrs.values()) { p.moved = true; p.dragGhost = false; p.two = true; }
       return;
     }
     if (this.ptrs.size > 2) return;
@@ -675,7 +751,12 @@
     if (this.pinch) { this.pinch = null; return; }
     if (p.boxMode && this.box && p.moved) { this.boxSelect(this.box); this.box = null; if (this.boxToggle) { this.boxToggle = false; this.refresh(true); } return; }
     this.box = null;
-    if (p.moved) return;
+    if (p.moved) {
+      // toucher rapide qui a un peu glissé : c'est quand même un toucher (la vue revient où elle était)
+      const quick = p.touch && !p.boxMode && !p.dragGhost && !p.two && performance.now() - p.t0 < 300 && Math.hypot(p.x - p.x0, p.y - p.y0) < 18;
+      if (!quick) return;
+      this.r.cam.x = p.cx; this.r.cam.y = p.cy; this.r.clampCam();
+    }
     const alt = !p.touch && p.btn === 2;
     this.tap(p.x0, p.y0, p.touch, alt);
   };
@@ -1065,7 +1146,7 @@
     if (d.garrison) {
       add({ id: 'ungar', emo: '🚪', label: 'Sortir', en: garN(b) > 0, on: () => this.send({ c: 'ungarrison', id: b.id }), hint: '<b>Faire sortir</b> la garnison' });
     }
-    if (b.t === 'tc') add({ id: 'bell', emo: '🔔', label: this.bellOn ? 'Fin' : 'Cloche', active: this.bellOn, on: () => { this.bellOn = !this.bellOn; this.send({ c: 'bell', on: this.bellOn }); this.refresh(true); }, hint: this.bellOn ? '<b>Fin de l’alerte</b> — les villageois retournent au travail' : '<b>Cloche d’alarme</b> — tous les villageois s’abritent' });
+    if (b.t === 'tc') add({ id: 'bell', emo: '🔔', label: this.bellOn ? 'Fin' : 'Cloche', active: this.bellOn, on: () => { this.bellOn = !this.bellOn; this.send({ c: 'bell', on: this.bellOn }); R.sfx.play(this.bellOn ? 'alarm' : 'bell_off'); this.refresh(true); }, hint: this.bellOn ? '<b>Fin de l’alerte</b> — les villageois retournent au travail' : '<b>Cloche d’alarme</b> — tous les villageois s’abritent' });
     add({ id: 'del', emo: '🗑️', label: 'Suppr.', on: () => this.confirmDelete([b.id]), hint: '<b>Détruire</b> ce bâtiment — touchez deux fois' });
     return specs;
   };
@@ -1229,7 +1310,55 @@
     if (cur !== this.cursor) { this.cursor = cur; this.r.cv.style.cursor = cur; }
   };
 
+  // bruits de travail des villageois visibles (marteau, hache, pioche, champs) et ambiance selon ce qui est à l'écran
+  P.audioTick = function (dt) {
+    this.workT = (this.workT || 0) - dt;
+    this.sceneT = (this.sceneT || 0) - dt;
+    if (this.battleT > 0) this.battleT -= dt;
+    if (this.workT > 0 && this.sceneT > 0) return;
+    const r = this.r, w = this.w, me = this.me();
+    const [x0, y0] = r.toWorld(0, 0), [x1, y1] = r.toWorld(r.W, r.H), [x2, y2] = r.toWorld(r.W, 0), [x3, y3] = r.toWorld(0, r.H);
+    const minX = Math.min(x0, x1, x2, x3), maxX = Math.max(x0, x1, x2, x3), minY = Math.min(y0, y1, y2, y3), maxY = Math.max(y0, y1, y2, y3);
+    const onScr = e => { const [sx, sy] = r.toScreen(e.x, e.y); return sx > -20 && sy > -20 && sx < r.W + 20 && sy < r.H + 20; };
+    if (this.workT <= 0) {
+      const workers = [];
+      for (const e of w.ents.values()) {
+        if (e.k !== 'u' || e.o !== me || e.t !== 'villager' || e.inside) continue;
+        if ((e.st === 'build' || e.st === 'gather') && e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY && onScr(e)) workers.push(e);
+      }
+      const builders = workers.filter(e => e.st === 'build');
+      // le chantier sonne plus souvent que la récolte, et un peu plus quand il y a du monde, sans jamais devenir un vacarme
+      if (builders.length && Math.random() < 0.75) {
+        const e = builders[(Math.random() * builders.length) | 0];
+        this.sndAt('build_hit', e.x, e.y, { gain: 0.8 });
+        this.workT = 0.35 + Math.random() * 0.5 / Math.min(3, builders.length);
+      } else if (workers.length) {
+        const e = workers[(Math.random() * workers.length) | 0];
+        const t = e.carry && e.carry.t;
+        const name = t === 'w' || t === 'wood' ? 'chop' : (t === 'g' || t === 's' || t === 'gold' || t === 'stone') ? 'mine_hit' : 'farm';
+        this.sndAt(name, e.x, e.y, { gain: 0.6 });
+        this.workT = 0.9 + Math.random() * 1.6;
+      } else this.workT = 0.8;
+    }
+    if (this.sceneT <= 0 && R.audio && R.audio.setScene) {
+      this.sceneT = 1;
+      const N = w.N, T = w.T;
+      let water = 0, tot = 0, trees = 0;
+      const sx = Math.max(1, Math.floor((maxX - minX) / 12)), sy = Math.max(1, Math.floor((maxY - minY) / 12));
+      for (let y = Math.max(0, Math.floor(minY)); y < Math.min(N, maxY); y += sy) for (let x = Math.max(0, Math.floor(minX)); x < Math.min(N, maxX); x += sx) {
+        const [px, py] = r.toScreen(x, y); if (px < 0 || py < 0 || px > r.W || py > r.H) continue;
+        tot++; if (T && T[y * N + x] === 1) water++;
+      }
+      for (const e of w.ents.values()) if (e.k === 'r' && e.t === 'tree' && e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY) trees++;
+      const area = Math.max(1, (maxX - minX) * (maxY - minY) / 2);
+      const forest = Math.min(1, trees / area * 2.5), wat = tot ? Math.min(1, water / tot * 2.5) : 0;
+      const p = this.player();
+      R.audio.setScene({ forest, water: wat, open: Math.max(0, 1 - forest - wat * 0.5), battle: this.battleT > 0 ? Math.min(1, this.battleT / 8) : 0, age: p ? p.age : 1 });
+    }
+  };
+
   P.frame = function (dt) {
+    this.audioTick(dt);
     this.refreshT -= dt;
     if (this.refreshT <= 0) { this.refreshT = 0.2; this.refresh(false); this.agePings(); }
     this.hoverT -= dt;

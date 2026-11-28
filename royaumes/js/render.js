@@ -1216,7 +1216,7 @@
     this._ft = new Float32Array(90); this._fti = 0; this._ftn = 0; this._resT = 0; this._downT = -99; this._upT = 0; this._lockUp = false;
     this._list = []; this._frame = 0; this._zsLast = -1; this._zsT = 0; this._started = false; this._gcT = 0;
     this.smk = new Float32Array(SMK * 7); this.nSmk = 0;
-    this._occ = []; this._nOcc = 0; this._mine = []; this._nMine = 0; this._cells = [];
+    this._occ = []; this._nOcc = 0; this._mine = []; this._nMine = 0; this._cells = []; this._hit = []; this._nHit = 0;
     this.tT = null; this.tP = null;
     this._tb = new Int32Array(4);
     this.applyGfx(false);
@@ -1516,6 +1516,7 @@
     else if (ev.k === 'boom') { this.fx.push({ k: 'boom', x: ev.x, y: ev.y, t0: t, t1: t + 0.6 }); this.dust(ev.x, ev.y, 0.6, 2); }
     else if (ev.k === 'conv') this.fx.push({ k: 'conv', x: ev.x, y: ev.y, t0: t, t1: t + 1.2 });
     else if (ev.k === 'mark') this.fx.push({ k: 'mark', x: ev.x, y: ev.y, t0: t, t1: t + 0.6, c: ev.c });
+    else if (ev.k === 'tap') this.fx.push({ k: 'tap', x: ev.x, y: ev.y, t0: t, t1: t + 0.32 });
     if (this.fx.length > 400) this.fx.splice(0, this.fx.length - 400);
   };
   // particules (fumée, poussière) : pool préalloué, coordonnées iso non mises à l'échelle
@@ -1891,7 +1892,7 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
     // passe principale (px physiques)
-    this._nOcc = 0; this._nMine = 0;
+    this._nOcc = 0; this._nMine = 0; this._nHit = 0;
     const m = 200 * zs, k = Math.min(1, dt * 12);
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
@@ -1950,6 +1951,56 @@
     this.miniT -= dt;
     if (this.mini && this.miniT <= 0) { this.drawMini(ui); this.miniT = 0.4; }
     this._started = true;
+  };
+
+  // ---------- Toucher précis : sprites réellement dessinés à l'image précédente ----------
+  RP.recHit = function (e, s, X, Y, zs) {
+    let o = this._hit[this._nHit];
+    if (!o) o = this._hit[this._nHit] = { e: null, s: null, x: 0, y: 0, f: 1 };
+    const f = zs / s.sc;
+    o.e = e; o.s = s; o.f = f;
+    if (f === 1) { o.x = Math.round(X + s.ox); o.y = Math.round(Y + s.oy); } else { o.x = X + s.ox * f; o.y = Y + s.oy * f; }
+    this._nHit++;
+  };
+  // masque d'opacité d'un sprite (calculé une fois, au premier toucher) ; les ombres portées (semi-transparentes) n'en font pas partie
+  function maskOf(s) {
+    if (s.mask !== undefined) return s.mask;
+    let m = null;
+    try {
+      const d = s.c.getContext('2d').getImageData(0, 0, s.cw, s.ch).data;
+      m = new Uint8Array(s.cw * s.ch);
+      for (let i = 0, j = 3; i < m.length; i++, j += 4) m[i] = d[j] > 200 ? 1 : 0;
+    } catch (err) { m = null; }
+    s.mask = m;
+    return m;
+  }
+  // distance (px CSS) entre le point touché et le pixel opaque le plus proche de chaque objet dessiné, dans un rayon tol
+  // renvoie [{ e, d, o }] (o = ordre d'affichage, plus grand = devant)
+  RP.hitScan = function (sx, sy, tol) {
+    const dpr = this.dpr, px = sx * dpr, py = sy * dpr, out = [];
+    for (let i = this._nHit - 1; i >= 0; i--) {
+      const h = this._hit[i], s = h.s, f = h.f;
+      const tp = tol * dpr;
+      if (px < h.x - tp || py < h.y - tp || px > h.x + s.cw * f + tp || py > h.y + s.ch * f + tp) continue;
+      const m = maskOf(s);
+      const lx = (px - h.x) / f, ly = (py - h.y) / f, rt = tp / f;
+      if (!m) { out.push({ e: h.e, d: 0, o: i }); continue; }
+      const W = s.cw, H = s.ch;
+      const at = (x, y) => { x = Math.floor(x); y = Math.floor(y); return x >= 0 && y >= 0 && x < W && y < H && m[y * W + x] === 1; };
+      if (at(lx, ly)) { out.push({ e: h.e, d: 0, o: i }); continue; }
+      // anneaux concentriques : on s'arrête au premier pixel opaque trouvé
+      let best = -1;
+      const step = Math.max(1, rt / 8);
+      for (let r = step; r <= rt + 0.01 && best < 0; r += step) {
+        const n = Math.max(8, Math.ceil(r * 0.8));
+        for (let k = 0; k < n; k++) {
+          const a = k / n * Math.PI * 2;
+          if (at(lx + Math.cos(a) * r, ly + Math.sin(a) * r)) { best = r; break; }
+        }
+      }
+      if (best >= 0) out.push({ e: h.e, d: best * f / dpr, o: i });
+    }
+    return out;
   };
 
   // occultants (bâtiments, arbres) et unités du joueur pour les silhouettes
@@ -2062,13 +2113,16 @@
       X += e._jX * zs; Y += e._jY * zs;
       if (s.sc === zs) { const bx = Math.round(X + s.ox), by = Math.round(Y + s.oy); ctx.drawImage(s.c, bx, by); if (!felled && this._nMine) this.addOcc(s, bx, by, e._d); }
       else blit(ctx, s, X, Y, zs);
+      this.recHit(e, s, X, Y, zs);
       return;
     }
     const d = R.RES_TYPES[e.t];
     const tot = e.t === 'carcass' ? (e.from === 'boar' ? 340 : e.from === 'deer' ? 140 : 100) : (d ? d.amt : 100);
     const frac = Math.max(0, Math.min(1, (e.amt || 0) / tot));
     const step = Math.max(1, Math.ceil(frac * 4));
-    blit(ctx, resSprite(e.t, (e.v || 0) & 3, step, e.t === 'carcass' ? e.from : ''), X, Y, zs);
+    const rs = resSprite(e.t, (e.v || 0) & 3, step, e.t === 'carcass' ? e.from : '');
+    blit(ctx, rs, X, Y, zs);
+    this.recHit(e, rs, X, Y, zs);
   };
 
   RP.drawBldE = function (e, X, Y, zs) {
@@ -2091,11 +2145,14 @@
         ctx.globalAlpha = 0.92; blit(ctx, s, X, Y, zs);
         ctx.restore();
       }
-      blit(ctx, miscSprite('scaf:' + d.size, d.size * TW + 24, d.size * 25 + 54, d.size * TW / 2 + 12, d.size * 9 + 32, x => drawScaffold(x, d.size), 'rgba(30,20,10,0.4)'), X, Y, zs);
+      const sf = miscSprite('scaf:' + d.size, d.size * TW + 24, d.size * 25 + 54, d.size * TW / 2 + 12, d.size * 9 + 32, x => drawScaffold(x, d.size), 'rgba(30,20,10,0.4)');
+      blit(ctx, sf, X, Y, zs);
+      this.recHit(e, sf, X, Y, zs);
       return;
     }
     if (s.sc === zs) { const bx = Math.round(X + s.ox), by = Math.round(Y + s.oy); ctx.drawImage(s.c, bx, by); if (!d.farm && this._nMine) this.addOcc(s, bx, by, e._d); }
     else blit(ctx, s, X, Y, zs);
+    this.recHit(e, s, X, Y, zs);
     const own = e.o >= 0 && w.ally(w.me, e.o);
     const seen = own || this.visible(e.x, e.y);
     if (e.t === 'mill') {
@@ -2169,6 +2226,7 @@
       ctx.drawImage(s.c, bx, by);
       if (e.o === w.me && pl) this.addMine(s, bx, by, e._d, R.COLORS[pl.color] ? R.COLORS[pl.color].light : '#fff');
     } else blit(ctx, s, X, Yb, zs);
+    this.recHit(e, s, X, Yb, zs);
     if (st === 'convert' || st === 'heal') {
       ctx.strokeStyle = st === 'heal' ? 'rgba(120,255,140,0.7)' : 'rgba(255,230,120,0.8)'; ctx.lineWidth = 1.5 * this.dpr;
       ctx.beginPath(); ctx.arc(X, Y - 18 * zs, (10 + Math.sin(this.t * 6) * 3) * zs, 0, 7); ctx.stroke();
@@ -2245,6 +2303,15 @@
         const [sx, sy] = this.toScreen(f.x, f.y);
         ctx.strokeStyle = 'rgba(255,240,150,' + (1 - k) + ')'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(sx, sy - 16 * z, (6 + k * 20) * z, 0, 7); ctx.stroke();
+      } else if (f.k === 'tap') {
+        // retour visuel du doigt : taille fixe à l'écran, quel que soit le zoom
+        const k = (t - f.t0) / (f.t1 - f.t0);
+        const [sx, sy] = this.toScreen(f.x, f.y);
+        ctx.globalAlpha = 0.55 * (1 - k); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(sx, sy, 5 + k * 13, 0, 7); ctx.stroke();
+        ctx.globalAlpha = 0.35 * (1 - k); ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(sx, sy, 3, 0, 7); ctx.fill();
+        ctx.globalAlpha = 1;
       } else if (f.k === 'mark') {
         const k = (t - f.t0) / (f.t1 - f.t0);
         const [sx, sy] = this.toScreen(f.x, f.y);

@@ -494,6 +494,7 @@
     // centré dans la zone de carte visible (entre la barre du haut et le panneau)
     if (tc) ui.center(tc.x - 0.3, tc.y - 0.3);
     keepAwake();
+    if (R.audio) { R.audio.start(); R.audio.pause(false); }
     clearTimeout(A.rotT);
     if (!store.get('rotateOk', '')) { $('rotate').classList.remove('hidden'); A.rotT = setTimeout(() => $('rotate').classList.add('hidden'), 8000); }
     else $('rotate').classList.add('hidden');
@@ -537,6 +538,7 @@
     $('b-end-watch').classList.toggle('hidden', !!(A.game && A.game.winner) || !!(A.world.players.length && title === 'Victoire !'));
     ovl('ovl-end', true);
     R.sfx.play(win ? 'win' : 'lose');
+    if (R.audio) R.audio.pause(true);
   }
   $('b-end-watch').onclick = () => { ovl('ovl-end', false); A.spectating = true; if (A.r) { A.r.reveal = 'tout'; A.r.vis.fill(2); } };
   $('b-end-menu').onclick = () => quitGame();
@@ -552,7 +554,8 @@
     $('b-resume').textContent = A.paused ? '▶️ Reprendre la partie' : '▶️ Retour au jeu';
     if (A.paused && A.running && !A.ended) { ovl('ovl-pause', true); renderPausePlayers(); }
     else if (!A.paused && A.mode !== 'solo' && !A.menuOpen) ovl('ovl-pause', false);
-    $('b-sfx').textContent = '🔈 Effets sonores : ' + (R.sfx.on ? 'oui' : 'non');
+    if (R.audio) R.audio.pause(!!(A.paused && A.running && !A.ended) || (!A.running));
+    updVolumes();
     const gq = R.getGfxQuality ? R.getGfxQuality() : 'auto';
     $('b-gfx').textContent = '🎨 Qualité graphique : ' + ({ auto: 'Auto', high: 'Élevée', eco: 'Économie' }[gq] || 'Auto');
     $('b-gfx').title = gq === 'eco' ? 'Économie : résolution réduite, sans particules ni détails du sol (batterie, téléphones modestes)' : gq === 'high' ? 'Élevée : pleine résolution en permanence' : 'Auto : la résolution baisse si le jeu ralentit';
@@ -585,7 +588,27 @@
     else if (A.client) A.client.send({ t: 'pause', on: false });
     ovl('ovl-pause', false);
   };
-  $('b-sfx').onclick = () => { R.sfx.toggle(); updPause(); };
+  // volumes : musique, nature, effets (0 = coupé), mémorisés sur l'appareil
+  const VOLS = [['vol-music', 'music'], ['vol-amb', 'amb'], ['vol-sfx', 'sfx']];
+  function updVolumes() {
+    for (const [id, k] of VOLS) {
+      const el = $(id); if (!el) continue;
+      let v = R.audio ? R.audio.getVol(k) : 0.5;
+      if (k === 'sfx' && !R.sfx.on) v = 0;
+      el.value = Math.round(v * 100);
+      el.parentNode.classList.toggle('mute', v <= 0);
+    }
+  }
+  for (const [id, k] of VOLS) {
+    const el = $(id); if (!el) continue;
+    el.oninput = () => {
+      const v = +el.value / 100;
+      if (R.audio) R.audio.setVol(k, v);
+      if (k === 'sfx') { if ((v > 0) !== R.sfx.on) R.sfx.toggle(); }
+      el.parentNode.classList.toggle('mute', v <= 0);
+    };
+    el.onchange = () => { if (k === 'sfx' && R.sfx.on) R.sfx.play('click'); };
+  }
   $('b-resign').onclick = () => {
     if (!confirm('Abandonner la partie ?')) return;
     A.menuOpen = false;
@@ -604,6 +627,7 @@
     if (A.host) { A.host.broadcast({ t: 'bye' }); const h = A.host; setTimeout(() => h.close(), 400); A.host = null; }
     leaveClient();
     A.game = null; A.world = null; A.r = null; A.paused = false; A.ended = false;
+    if (R.audio) R.audio.stop();
     try { wakeLock && wakeLock.release(); } catch (e) { /* rien */ }
     ovl('ovl-pause', false); ovl('ovl-end', false); $('chatbox').classList.add('hidden');
     history.replaceState(null, '', location.pathname + location.search);
