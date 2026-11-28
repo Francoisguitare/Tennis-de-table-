@@ -664,6 +664,8 @@
   P.pDown = function (ev) {
     ev.preventDefault();
     R.sfx.unlock();
+    // le navigateur peut avoir bloqué le son au lancement (invité qui rejoint) : premier toucher = démarrage
+    if (R.audio && R.audio.isStarted && !R.audio.isStarted()) R.audio.start();
     this.r.cv.setPointerCapture(ev.pointerId);
     const touch = ev.pointerType !== 'mouse';
     this.ptrs.set(ev.pointerId, { x: ev.offsetX, y: ev.offsetY, x0: ev.offsetX, y0: ev.offsetY, t0: performance.now(), btn: ev.button, touch, cx: this.r.cam.x, cy: this.r.cam.y });

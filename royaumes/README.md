@@ -20,6 +20,8 @@ Dans le dépôt : Settings → Pages → « Deploy from a branch », choisir la 
 - Combat à contres (lanciers > cavalerie > archers > infanterie, tirailleurs > archers), précision des tirs (on peut esquiver une flèche en bougeant), dégâts de zone du mangonneau (y compris sur ses propres troupes), siège (bélier, mangonneau, trébuchet à déployer), moines (soin, conversion).
 - Déplacements de groupe en formation (bouton « Rangs / Libre »), postures (agressif, défensif, position, passif), riposte automatique.
 - Victoire par conquête ou par merveille ; équipes et alliances ; IA facile / normale / difficile ; jusqu'à 6 joueurs.
+- Sons : musique d'ambiance générée (nappes douces qui ne bouclent jamais, petites phrases de luth ou de flûte), bruits de nature selon ce qu'on regarde (vent, feuillages, eau, plusieurs oiseaux, grillons), un son propre à chaque bâtiment, chantiers et récolte audibles, cloche d'alarme, cor d'attaque. Volumes musique / nature / effets dans le menu ☰.
+- Toucher au pixel près : seuls les dessins réels comptent (pas l'ombre ni le sol autour d'un bâtiment) ; avec une sélection en cours, toucher à côté de ses unités les déplace.
 - Brouillard de guerre, minicarte, sélection tactile (appui long, double touche, pincer pour zoomer), souris et clavier sur ordinateur (raccourcis selon la position des boutons, groupes Alt+1…9).
 
 ## Graphismes et fluidité
