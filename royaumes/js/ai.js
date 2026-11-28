@@ -145,6 +145,9 @@
     this.train(s);
     // --- Répartition des villageois
     this.assign(s);
+    // --- Sanglier, réparations
+    this.huntBoar(s);
+    this.repair(s);
     // --- Éclaireur
     this.scout(s);
     // --- Défense / attaque
@@ -268,7 +271,10 @@
       ['smith', 'forging', 1], ['smith', 'fletch', 1], ['smith', 'scale', 1], ['barracks', 'manatarms', 1],
       ['lumber', 'saw', 2], ['mill', 'plow', 2], ['tc', 'cart', 2], ['mine', 'goldshaft', 2], ['mine', 'stonemin', 2], ['smith', 'padded', 1],
       ['archery', 'crossbow', 2], ['stable', 'lightcav', 2], ['barracks', 'longsword', 2], ['barracks', 'pikeman', 2],
-      ['smith', 'ironcast', 2], ['smith', 'bodkin', 2], ['smith', 'chain', 2], ['archery', 'eliteskirm', 2]
+      ['smith', 'ironcast', 2], ['smith', 'bodkin', 2], ['smith', 'chain', 2], ['archery', 'eliteskirm', 2],
+      ['stable', 'haras', 1], ['stable', 'ferrage', 2], ['mine', 'galeries', 2], ['tower', 'tourrenf', 2], ['market', 'mortier', 2],
+      ['lumber', 'scierie', 3], ['mill', 'assolement', 3], ['barracks', 'brise', 3], ['barracks', 'guisarm', 3], ['archery', 'arbal', 3],
+      ['stable', 'estradiot', 3], ['stable', 'banneret', 3], ['siege', 'ferre', 3], ['siege', 'grandmang', 3]
     ];
     const ageing = Object.keys(p.busy).some(t => TE[t].ageUp);
     for (const [bt, t, minAge] of want) {
@@ -417,6 +423,42 @@
     return g.findRes(this.pid, h.x, h.y, rt, 24, 0, kind);
   };
 
+  // Chasse au sanglier : à plusieurs, jamais seul
+  A.huntBoar = function (s) {
+    const g = this.g;
+    if (s.vill.length < 10 || this.n % 3 !== 0) return;
+    const busy = s.vill.some(v => { if (!v.cmd || v.cmd.k !== 'gather') return false; const t = g.ents.get(v.cmd.t); return t && t.k === 'u' && t.t === 'boar'; });
+    if (busy) return;
+    let boar = null, bd = 16;
+    for (const e of g.list) {
+      if (e.dead || e.k !== 'u' || e.t !== 'boar') continue;
+      const d = Math.hypot(e.x - this.home.x, e.y - this.home.y);
+      if (d < bd) { bd = d; boar = e; }
+    }
+    if (!boar) return;
+    // un autre joueur le chasse déjà ?
+    for (const v of g.unitsNear(boar.x, boar.y, 4)) if (v.o >= 0 && v.o !== this.pid && !U[v.t].animal) return;
+    const pool = s.vill.filter(v => !v.inside && v.hp > v.mhp * 0.8 && v.cmd && v.cmd.k === 'gather' && (v.cmd.rt === 'w' || v.cmd.rt === 'f') && !(g.ents.get(v.cmd.t) && g.ents.get(v.cmd.t).k === 'b'));
+    pool.sort((a, b) => Math.hypot(a.x - boar.x, a.y - boar.y) - Math.hypot(b.x - boar.x, b.y - boar.y));
+    const hunters = pool.slice(0, 3);
+    if (hunters.length >= 3) this.cmd({ c: 'target', id: boar.id, ids: hunters.map(v => v.id) });
+  };
+
+  // Réparer les bâtiments défensifs endommagés quand la base est calme
+  A.repair = function (s) {
+    const g = this.g;
+    if (this.n % 5 !== 0 || this.threat) return;
+    for (const t of ['tc', 'castle', 'tower']) {
+      for (const b of s.blds[t] || []) {
+        if (!b.built || b.hp >= b.mhp * 0.7) continue;
+        if (s.vill.some(v => v.cmd && v.cmd.k === 'build' && v.cmd.t === b.id)) continue;
+        const bs = this.pickBuilders(s, t === 'tower' ? 1 : 2, b.x, b.y);
+        if (bs.length) { this.cmd({ c: 'target', id: b.id, ids: bs.map(v => v.id) }); return; }
+      }
+    }
+    void g;
+  };
+
   A.scout = function (s) {
     const g = this.g;
     for (const sc of s.scouts) {
@@ -439,10 +481,25 @@
       if (near) { tn++; if (!threat || Math.hypot(e.x - this.home.x, e.y - this.home.y) < Math.hypot(threat.x - this.home.x, threat.y - this.home.y)) threat = e; }
     }
     const army = s.mil;
+    this.threat = threat;
+    // repli des unités presque mortes et isolées (difficile)
+    if (this.level === 'difficile' && this.n % 2 === 0) {
+      const back = [];
+      for (const u of army) {
+        if (u.hp >= u.mhp * 0.25 || (U[u.t].cls || []).includes('siege') || u.retreat) continue;
+        let foe = false, friend = false;
+        for (const v of g.unitsNear(u.x, u.y, 3)) {
+          if (v === u || v.inside || U[v.t].animal) continue;
+          if (g.enemy(this.pid, v.o) && U[v.t].atk) foe = true; else if (v.o === this.pid && U[v.t].atk && v.t !== 'villager') friend = true;
+        }
+        if (foe && !friend) { u.retreat = true; back.push(u.id); }
+      }
+      if (back.length) this.cmd({ c: 'move', ids: back, x: this.home.x + 2, y: this.home.y + 2, f: 0 });
+    }
     if (threat) {
       const defenders = this.attacking ? army.filter(u => Math.hypot(u.x - this.home.x, u.y - this.home.y) < 30) : army;
       const ids = defenders.filter(u => !u.cmd || u.cmd.k !== 'attack').map(u => u.id);
-      if (ids.length) this.cmd({ c: 'move', ids, x: threat.x, y: threat.y, am: true });
+      if (ids.length) this.cmd({ c: 'move', ids, x: threat.x, y: threat.y, am: true, f: 0 }); // défense : chacun à sa vitesse
       // cloche si la menace dépasse la défense
       if (s.tc && this.level !== 'facile' && tn >= 4 && tn > defenders.length + 2 && Math.hypot(threat.x - s.tc.x, threat.y - s.tc.y) < 9 && g.time - (this.bellOff || -999) > 60) {
         if (!this.bell) { this.bell = true; this.bellT = g.time; this.cmd({ c: 'bell', on: true, r: 16 }); }
@@ -463,12 +520,19 @@
     if (this.attacking) {
       if (army.length < Math.max(2, this.waveStart * 0.3)) {
         this.attacking = false; this.waveSize = Math.min(40, this.waveSize + 4); this.nextAttack = g.time + 90;
+        for (const u of army) u.retreat = false;
         const ids = army.map(u => u.id); if (ids.length) this.cmd({ c: 'move', ids, x: this.home.x + 3, y: this.home.y + 3 });
       } else if (g.time - this.lastOrder > 12) {
         const tgt = this.pickTarget();
         if (tgt) {
-          const idle = army.filter(u => !u.cmd);
-          if (idle.length) this.cmd({ c: 'move', ids: idle.map(u => u.id), x: tgt.x, y: tgt.y, am: true });
+          const idle = army.filter(u => !u.cmd && !u.retreat);
+          // armée bloquée (par un mur) : ouvrir une brèche
+          const stuck = army.filter(u => !u.cmd || u.pathOk === false);
+          const wall = stuck.length > army.length * 0.5 && army.some(u => u.pathOk === false) ? this.wallToBreach(army, tgt) : null;
+          if (wall) {
+            const ids = stuck.slice().sort((a, b) => (U[b.t].onlyBld ? 1 : 0) - (U[a.t].onlyBld ? 1 : 0)).map(u => u.id);
+            this.cmd({ c: 'target', id: wall.id, ids });
+          } else if (idle.length) this.cmd({ c: 'move', ids: idle.map(u => u.id), x: tgt.x, y: tgt.y, am: true });
           // les béliers visent directement les bâtiments
           const rams = army.filter(u => U[u.t].onlyBld && (!u.cmd || u.cmd.k !== 'attack'));
           if (rams.length && tgt.k === 'b') this.cmd({ c: 'target', ids: rams.map(u => u.id), id: tgt.id });
@@ -483,6 +547,22 @@
       if (ids.length) this.cmd({ c: 'move', ids, x: rx, y: ry });
     }
     void p;
+  };
+
+  // Mur ou porte ennemi le plus proche de l'armée, de préférence sur le chemin de la cible
+  A.wallToBreach = function (army, tgt) {
+    const g = this.g;
+    let cx = 0, cy = 0; for (const u of army) { cx += u.x; cy += u.y; } cx /= army.length; cy /= army.length;
+    if (Math.hypot(tgt.x - cx, tgt.y - cy) < 8) return null;
+    let best = null, bd = 1e9;
+    for (const e of g.list) {
+      if (e.dead || e.k !== 'b' || !B[e.t].wall || !g.enemy(this.pid, e.o)) continue;
+      const d1 = Math.hypot(e.x - cx, e.y - cy);
+      if (d1 > 25) continue;
+      const sc = d1 + Math.hypot(e.x - tgt.x, e.y - tgt.y) * 0.5 + (B[e.t].gate ? -1 : 0) + e.hp / 1000;
+      if (sc < bd) { bd = sc; best = e; }
+    }
+    return best;
   };
 
   A.pickTarget = function () {

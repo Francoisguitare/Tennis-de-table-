@@ -15,10 +15,18 @@ Dans le dépôt : Settings → Pages → « Deploy from a branch », choisir la 
 ## Contenu
 
 - 4 ressources (nourriture, bois, or, pierre), villageois, dépôts, maisons, fermes qui se ressèment.
-- 4 âges, 19 bâtiments, 12 unités (plus leurs améliorations), 23 technologies, marché, murs et portes, garnison et cloche d'alarme.
-- Combat à contres (lanciers > cavalerie > archers > infanterie, tirailleurs > archers), siège (bélier, mangonneau, trébuchet à déployer), moines (soin, conversion).
+- 4 âges, 20 bâtiments, 12 unités (plus leurs améliorations jusqu'au dernier âge), 37 technologies, marché et tributs entre alliés, palissades, murs et portes, garnison et cloche d'alarme (les villageois sans place attendent à l'abri puis reprennent leur travail).
+- Gibier : moutons, cerfs et sangliers (qui chargent : à chasser à plusieurs).
+- Combat à contres (lanciers > cavalerie > archers > infanterie, tirailleurs > archers), précision des tirs (on peut esquiver une flèche en bougeant), dégâts de zone du mangonneau (y compris sur ses propres troupes), siège (bélier, mangonneau, trébuchet à déployer), moines (soin, conversion).
+- Déplacements de groupe en formation (bouton « Rangs / Libre »), postures (agressif, défensif, position, passif), riposte automatique.
 - Victoire par conquête ou par merveille ; équipes et alliances ; IA facile / normale / difficile ; jusqu'à 6 joueurs.
-- Brouillard de guerre, minicarte, sélection tactile (appui long, double touche, pincer pour zoomer), souris et clavier sur ordinateur.
+- Brouillard de guerre, minicarte, sélection tactile (appui long, double touche, pincer pour zoomer), souris et clavier sur ordinateur (raccourcis selon la position des boutons, groupes Alt+1…9).
+
+## Graphismes et fluidité
+
+- Terrain détaillé (rivages, écume, profondeur de l'eau, transitions naturelles), trois familles d'arbres, bâtiments texturés avec ombres portées, murs qui se raccordent, feu et fumée sur les bâtiments abîmés, unités animées (marche, attaque, travail).
+- Le rendu est découpé en tuiles mises en cache et les sprites sont générés à l'échelle de l'écran : 3 à 5 fois moins de temps par image qu'avant.
+- Menu ☰ → « Qualité graphique » : **Auto** (la résolution baisse si le jeu ralentit), **Élevée** (pleine résolution), **Économie** (résolution réduite, sans particules ni détails du sol : pour les téléphones modestes ou pour économiser la batterie).
 
 ## Technique
 
@@ -29,6 +37,6 @@ Dans le dépôt : Settings → Pages → « Deploy from a branch », choisir la 
 ## Tests
 
 ```
-node tests/scenarios.js        # 38 scénarios du moteur + fuzz de commandes réseau
+node tests/scenarios.js        # 92 vérifications du moteur + fuzz de commandes réseau (QUICK=1 : sans les longues parties IA)
 node tests/sim-test.js 1,2,3 30 2   # parties IA contre IA (graines, minutes, joueurs)
 ```

@@ -76,7 +76,7 @@
       d.className = 'slot';
       const col = R.COLORS[s.color];
       let h = '<button class="sw" style="background:' + col.main + '" title="Changer la couleur"></button>';
-      h += '<span class="nm">' + esc(s.kind === 'ai' ? LVL[s.level] : s.name) + (i === 0 && s.kind === 'human' ? ' <span class="tag">vous</span>' : '') + '</span>';
+      h += '<span class="nm">' + esc(s.kind === 'ai' ? 'IA' : s.name) + (i === 0 && s.kind === 'human' ? ' <span class="tag">vous</span>' : '') + '</span>';
       if (s.kind === 'human' && i > 0) h += '<span class="tag ' + (s.online ? 'on' : '') + '">' + (s.online ? (s.mic ? '🎙️ en ligne' : 'en ligne') : 'déconnecté') + '</span>';
       if (s.kind === 'ai') h += '<select class="lv"><option value="facile">Facile</option><option value="normal">Normale</option><option value="difficile">Difficile</option></select>';
       h += '<select class="tm" title="Équipe"><option value="0">–</option><option value="1">Éq. 1</option><option value="2">Éq. 2</option><option value="3">Éq. 3</option><option value="4">Éq. 4</option></select>';
@@ -489,11 +489,14 @@
     A.r = r; A.ui = ui;
     // caméra sur l'hôtel de ville
     const tc = [...A.world.ents.values()].find(e => e.k === 'b' && e.t === 'tc' && e.o === A.me);
-    if (tc) r.centerOn(tc.x, tc.y + 2);
-    r.cam.z = window.innerWidth < 700 ? 0.9 : 1;
+    r.cam.z = Math.min(window.innerWidth, window.innerHeight) < 500 ? 0.9 : 1;
     ui.refresh(true);
+    // centré dans la zone de carte visible (entre la barre du haut et le panneau)
+    if (tc) ui.center(tc.x - 0.3, tc.y - 0.3);
     keepAwake();
-    if (!store.get('rotateOk', '')) $('rotate').classList.remove('hidden'); else $('rotate').classList.add('hidden');
+    clearTimeout(A.rotT);
+    if (!store.get('rotateOk', '')) { $('rotate').classList.remove('hidden'); A.rotT = setTimeout(() => $('rotate').classList.add('hidden'), 8000); }
+    else $('rotate').classList.add('hidden');
     // boucle d'affichage
     let last = performance.now();
     cancelAnimationFrame(A.raf);
@@ -506,7 +509,14 @@
     A.raf = requestAnimationFrame(frame);
   }
   $('rotate-x').onclick = () => { store.set('rotateOk', '1'); $('rotate').classList.add('hidden'); };
-  window.addEventListener('resize', () => { if (A.r) { A.r.resize(); A.r.clampCam(); } });
+  window.addEventListener('resize', () => {
+    if (!A.r) return;
+    // garde le même point au centre de la zone visible après une rotation de l'écran
+    const band = A.ui ? A.ui.viewBand() : [0, A.r.H];
+    const c = A.r.toWorld(A.r.W / 2, (band[0] + band[1]) / 2);
+    A.r.resize();
+    if (A.ui) { A.ui.center(c[0], c[1]); A.ui.lastSig = ''; A.ui.refresh(true); } else A.r.clampCam();
+  });
 
   function checkEnd(ev) {
     for (const e of ev) {
@@ -543,12 +553,21 @@
     if (A.paused && A.running && !A.ended) { ovl('ovl-pause', true); renderPausePlayers(); }
     else if (!A.paused && A.mode !== 'solo' && !A.menuOpen) ovl('ovl-pause', false);
     $('b-sfx').textContent = '🔈 Effets sonores : ' + (R.sfx.on ? 'oui' : 'non');
+    const gq = R.getGfxQuality ? R.getGfxQuality() : 'auto';
+    $('b-gfx').textContent = '🎨 Qualité graphique : ' + ({ auto: 'Auto', high: 'Élevée', eco: 'Économie' }[gq] || 'Auto');
+    $('b-gfx').title = gq === 'eco' ? 'Économie : résolution réduite, sans particules ni détails du sol (batterie, téléphones modestes)' : gq === 'high' ? 'Élevée : pleine résolution en permanence' : 'Auto : la résolution baisse si le jeu ralentit';
   }
+  $('b-gfx').onclick = () => {
+    const order = ['auto', 'high', 'eco'];
+    const cur = R.getGfxQuality ? R.getGfxQuality() : 'auto';
+    if (R.setGfxQuality) R.setGfxQuality(order[(order.indexOf(cur) + 1) % order.length]);
+    updPause();
+  };
   function renderPausePlayers() {
     const box = $('pause-players'); if (!box || !A.world || !A.world.players) return;
     const online = A.mode === 'host' ? A.slots.map(s => s.kind === 'ai' || s.online) : A.lobby ? A.lobby.slots.map(s => s.online !== false) : [];
     const mics = A.mode === 'host' ? A.slots.map(s => s.mic) : A.lobby ? A.lobby.slots.map(s => s.mic) : [];
-    box.innerHTML = A.world.players.map((p, i) => '<div class="slot"><span class="sw" style="background:' + R.COLORS[p.color].main + '"></span><span class="nm">' + esc(p.name) + (i === A.me ? ' <span class="tag">vous</span>' : '') + '</span>' + (mics[i] ? '🎙️' : '') + (p.alive ? '' : ' ☠️') + (online[i] === false ? ' <span class="tag">hors ligne</span>' : '') + '</div>').join('');
+    box.innerHTML = A.world.players.map((p, i) => '<div class="slot" title="' + esc(p.name) + '"><span class="sw" style="background:' + R.COLORS[p.color].main + '"></span><span class="nm">' + esc(p.name) + (i === A.me ? ' <span class="tag">vous</span>' : '') + '</span>' + (mics[i] ? '🎙️' : '') + (p.alive ? '' : ' ☠️') + (online[i] === false ? ' <span class="tag">hors ligne</span>' : '') + '</div>').join('');
   }
   function openPause() {
     A.menuOpen = true;

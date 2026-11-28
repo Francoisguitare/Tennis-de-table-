@@ -20,7 +20,7 @@
     const d = U[type];
     const s = {
       name: d.name, hp: d.hp, arm: [d.arm[0], d.arm[1]], speed: d.speed, los: d.los, rad: d.rad,
-      atk: d.atk ? { d: d.atk.d, t: d.atk.t, r: d.atk.r, rate: d.atk.rate, b: Object.assign({}, d.atk.b || {}), min: d.atk.min || 0, splash: d.atk.splash || 0, proj: d.atk.proj } : null,
+      atk: d.atk ? { d: d.atk.d, t: d.atk.t, r: d.atk.r, rate: d.atk.rate, b: Object.assign({}, d.atk.b || {}), min: d.atk.min || 0, splash: d.atk.splash || 0, proj: d.atk.proj, acc: d.atk.acc || 1 } : null,
       cls: d.cls || [], cap: 10
     };
     if (d.up && p) {
@@ -29,6 +29,8 @@
           s.name = u.name; if (u.hp) s.hp = u.hp; if (u.atkD && s.atk) s.atk.d = u.atkD;
           if (u.arm) s.arm = [u.arm[0], u.arm[1]]; if (u.range && s.atk) s.atk.r = u.range; if (u.los) s.los = u.los;
           if (u.bonus && s.atk) s.atk.b = Object.assign({}, u.bonus);
+          if (s.atk) { if (u.splash) s.atk.splash = u.splash; if (u.rate) s.atk.rate = u.rate; if (u.acc) s.atk.acc = u.acc; }
+          if (u.speed) s.speed = u.speed;
         }
       }
     }
@@ -37,6 +39,7 @@
       const inf = c.includes('inf'), cav = c.includes('cav'), arch = c.includes('arch');
       if ((inf || cav) && s.atk) { if (has(p, 'forging')) s.atk.d++; if (has(p, 'ironcast')) s.atk.d++; }
       if (inf || cav) { if (has(p, 'scale')) { s.arm[0]++; s.arm[1]++; } if (has(p, 'chain')) { s.arm[0]++; s.arm[1]++; } }
+      if (cav) { if (has(p, 'haras')) s.hp += 20; if (has(p, 'ferrage')) s.speed *= 1.1; }
       if (arch && s.atk) {
         if (has(p, 'fletch')) { s.atk.d++; s.atk.r++; s.los++; }
         if (has(p, 'bodkin')) { s.atk.d++; s.atk.r++; s.los++; }
@@ -46,7 +49,7 @@
         if (has(p, 'loom')) { s.hp += 15; s.arm[0] += 1; s.arm[1] += 2; }
         if (has(p, 'wheel')) s.speed *= 1.1;
         if (has(p, 'cart')) s.speed *= 1.1;
-        s.cap = Math.floor(10 * (1 + (has(p, 'wheel') ? 0.25 : 0) + (has(p, 'cart') ? 0.25 : 0)));
+        s.cap = Math.floor(10 * (1 + (has(p, 'wheel') ? 0.25 : 0) + (has(p, 'cart') ? 0.5 : 0)));
       }
     }
     if (p) { p._sc = p._sc || {}; p._sc[key] = s; }
@@ -54,25 +57,29 @@
   };
 
   R.bldStat = function (p, type) {
+    if (p && p._bc && p._bc[type]) return p._bc[type];
     const d = B[type];
-    const s = { name: d.name, hp: d.hp, arm: d.arm, los: d.los, atk: null };
+    const s = { name: d.name, hp: d.hp, arm: [d.arm[0], d.arm[1]], los: d.los, atk: null };
     if (d.atk) {
-      s.atk = { d: d.atk.d, t: d.atk.t, r: d.atk.r, rate: d.atk.rate, b: d.atk.b || {}, proj: d.atk.proj, base: d.atk.base };
+      s.atk = { d: d.atk.d, t: d.atk.t, r: d.atk.r, rate: d.atk.rate, b: d.atk.b || {}, proj: d.atk.proj, base: d.atk.base, acc: 1 };
       if (has(p, 'fletch')) { s.atk.d++; s.atk.r++; }
       if (has(p, 'bodkin')) { s.atk.d++; s.atk.r++; }
     }
+    if (type === 'tower' && has(p, 'tourrenf')) { s.hp += 300; if (s.atk) { s.atk.d++; s.atk.r++; } s.los++; }
+    if (has(p, 'mortier') && !d.farm) { s.hp = Math.round(s.hp * 1.1); s.arm[0]++; s.arm[1]++; }
+    if (p) { p._bc = p._bc || {}; p._bc[type] = s; }
     return s;
   };
 
   R.gatherRate = function (p, kind) {
     let r = GATHER[kind] || 0.3;
-    if (kind === 'w') { if (has(p, 'axe')) r *= 1.2; if (has(p, 'saw')) r *= 1.2; }
+    if (kind === 'w') { if (has(p, 'axe')) r *= 1.2; if (has(p, 'saw')) r *= 1.2; if (has(p, 'scierie')) r *= 1.1; }
     if (kind === 'g') { if (has(p, 'goldmin')) r *= 1.15; if (has(p, 'goldshaft')) r *= 1.15; }
-    if (kind === 's') { if (has(p, 'stonemin')) r *= 1.15; }
+    if (kind === 's') { if (has(p, 'stonemin')) r *= 1.15; if (has(p, 'galeries')) r *= 1.15; }
     return r * ((p && p.hcap) || 1);
   };
 
-  R.farmFood = function (p) { return 175 + (has(p, 'collar') ? 75 : 0) + (has(p, 'plow') ? 125 : 0); };
+  R.farmFood = function (p) { return 175 + (has(p, 'collar') ? 75 : 0) + (has(p, 'plow') ? 125 : 0) + (has(p, 'assolement') ? 175 : 0); };
 
   R.isAlly = function (players, a, b) {
     if (a === b) return true;
@@ -126,6 +133,17 @@
     // Objets de la carte
     for (const o of map.objects) this.addRes(o.type, o.x + 0.5, o.y + 0.5);
     for (const a of map.animals) this.addUnit(a.type, a.owner, a.x, a.y);
+    // Sangliers (gibier dangereux) : 2 par joueur, à 10-14 cases du départ
+    if (R.FEATURES && R.FEATURES.boar && !map.animals.some(a => a.type === 'boar')) {
+      for (const st of map.starts) {
+        for (let k = 0, n = 0; k < 40 && n < 2; k++) {
+          const a = this.rand() * Math.PI * 2, r = 10 + this.rand() * 4;
+          const x = Math.floor(st.x + Math.cos(a) * r), y = Math.floor(st.y + Math.sin(a) * r);
+          if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || this.T[y * N + x] === 1 || this.blk[y * N + x]) continue;
+          this.addUnit('boar', -1, x + 0.5, y + 0.5); n++;
+        }
+      }
+    }
     // Départs : hôtel de ville + 3 villageois + éclaireur
     this.players.forEach((p, i) => {
       const s = map.starts[i];
@@ -168,16 +186,17 @@
     const st = R.unitStat(p, type);
     const e = {
       id: this.nextId++, k: 'u', t: type, o, x, y, hp: st.hp, mhp: st.hp, cmd: null, st: 'idle', path: null, pi: 0, cd: 0,
-      carry: { t: '', n: 0 }, face: 1, inside: 0, stuck: 0, repaths: 0, acq: this.rand() * 0.5, faith: 100, packed: true, packT: 0, fleeT: 0
+      carry: { t: '', n: 0 }, face: 1, inside: 0, stuck: 0, repaths: 0, acq: this.rand() * 0.5, faith: 100, packed: true, packT: 0, fleeT: 0, stance: 0
     };
     this.ents.set(e.id, e); this.list.push(e);
     return e;
   };
   G.addBld = function (type, o, tx, ty, built) {
     const d = B[type];
+    const mhp = R.bldStat(this.players[o], type).hp;
     const e = {
       id: this.nextId++, k: 'b', t: type, o, x: tx + d.size / 2, y: ty + d.size / 2, tx, ty,
-      mhp: d.hp, hp: built ? d.hp : 1, built: !!built, prog: built ? 1 : 0, q: [], rally: null, gar: [], cd: 0, nb: 0, nbP: 0,
+      mhp, hp: built ? mhp : 1, built: !!built, prog: built ? 1 : 0, q: [], rally: null, gar: [], cd: 0, nb: 0, nbP: 0,
       food: d.farm ? R.farmFood(this.players[o]) : 0, farmer: 0, wonderT: 0, debt: {}
     };
     this.ents.set(e.id, e); this.list.push(e);
@@ -307,7 +326,8 @@
     c = {
       c: typeof c.c === 'string' ? c.c : '', ids: Array.isArray(c.ids) ? c.ids.filter(num) : [], id: num(c.id) ? c.id : 0,
       x: c.x, y: c.y, tx: c.tx, ty: c.ty, ax: c.ax, ay: c.ay, bx: c.bx, by: c.by, am: !!c.am, on: !!c.on, r: c.r, op: c.op,
-      t: typeof c.t === 'string' ? c.t : '', n: num(c.n) ? c.n : 1, qi: num(c.qi) ? c.qi : 0, tid: num(c.tid) ? c.tid : 0
+      t: typeof c.t === 'string' ? c.t : '', n: num(c.n) ? c.n : 1, qi: num(c.qi) ? c.qi : 0, tid: num(c.tid) ? c.tid : 0,
+      to: num(c.to) ? c.to | 0 : -1, f: c.f === 0 ? 0 : 1
     };
     if (c.c === 'build' || c.c === 'wall') { if (!own(B, c.t)) return; }
     if (c.c === 'train' && !own(U, c.t)) return;
@@ -316,7 +336,7 @@
       case 'move': {
         if (!num(c.x) || !num(c.y)) return;
         const us = this.ownUnits(pid, c.ids);
-        this.groupMove(us, Math.max(0.5, Math.min(this.N - 0.5, c.x)), Math.max(0.5, Math.min(this.N - 0.5, c.y)), !!c.am);
+        this.groupMove(us, Math.max(0.5, Math.min(this.N - 0.5, c.x)), Math.max(0.5, Math.min(this.N - 0.5, c.y)), !!c.am, c.f !== 0);
         break;
       }
       case 'target': {
@@ -327,6 +347,27 @@
         break;
       }
       case 'stop': for (const u of this.ownUnits(pid, c.ids)) this.setCmd(u, null); break;
+      case 'stance': {
+        // 0 agressif, 1 défensif, 2 tenir la position, 3 passif
+        const n = Math.max(0, Math.min(3, c.n | 0));
+        for (const u of this.ownUnits(pid, c.ids)) {
+          if (U[u.t].animal || u.t === 'villager') continue;
+          u.stance = n;
+          if (u.cmd && u.cmd.auto && (n === 3 || n === 2)) this.setCmd(u, null);
+        }
+        break;
+      }
+      case 'tribute': {
+        const r = c.r, n = c.n | 0, to = this.players[c.to];
+        if (!['f', 'w', 'g', 's'].includes(r) || (n !== 100 && n !== 500)) return;
+        if (!to || !to.alive || to.id === pid || !this.ally(pid, to.id)) return;
+        if (!this.hasBuilt(pid, 'market')) { this.msg(pid, 'Il faut un marché pour envoyer un tribut.', 'err'); return; }
+        if ((p.res[r] || 0) < n) { this.msg(pid, 'Ressources insuffisantes.', 'err'); return; }
+        p.res[r] -= n; to.res[r] += n * (1 - R.TRIBUTE_TAX);
+        this.msg(pid, 'Tribut envoyé à ' + to.name + ' : ' + n + ' ' + R.RES_NAME[r].toLowerCase() + ' (' + Math.round(R.TRIBUTE_TAX * 100) + ' % de frais).', 'info');
+        this.msg(to.id, p.name + ' vous envoie ' + Math.round(n * (1 - R.TRIBUTE_TAX)) + ' ' + R.RES_NAME[r].toLowerCase() + '.', 'info');
+        break;
+      }
       case 'garrison': {
         const b = this.ents.get(c.id);
         if (!b || b.k !== 'b' || !this.ally(b.o, pid) || !B[b.t].garrison) return;
@@ -353,7 +394,7 @@
         const type = c.t; const d = B[type];
         if (!d || !d.wall || !this.bldAvailable(p, type)) return;
         if (![c.ax, c.ay, c.bx, c.by].every(num)) return;
-        const tiles = R.wallLine(Math.floor(c.ax), Math.floor(c.ay), Math.floor(c.bx), Math.floor(c.by), type === 'gate' ? 1 : 40);
+        const tiles = R.wallLine(Math.floor(c.ax), Math.floor(c.ay), Math.floor(c.bx), Math.floor(c.by), d.gate ? 1 : 40);
         let first = null; let placed = 0;
         for (const [x, y] of tiles) {
           if (!this.canPlace(pid, type, x, y)) continue;
@@ -402,7 +443,14 @@
       }
       case 'rally': {
         const b = this.ownBld(pid, c.id); if (!b || !num(c.x) || !num(c.y)) return;
-        b.rally = { x: c.x, y: c.y, id: c.tid | 0 };
+        const rt = c.tid ? this.ents.get(c.tid) : null;
+        let kind = '', rk = '';
+        if (rt && !rt.dead) {
+          if (rt.k === 'r') { kind = rt.t === 'carcass' ? 'animal' : rt.t; rk = rt.rt; }
+          else if (rt.k === 'b' && B[rt.t].farm) { kind = 'farm'; rk = 'f'; }
+          else if (rt.k === 'u' && U[rt.t].animal && rt.t !== 'boar') { kind = 'animal'; rk = 'f'; }
+        }
+        b.rally = { x: c.x, y: c.y, id: c.tid | 0, kind, rt: rk };
         break;
       }
       case 'delete': {
@@ -459,9 +507,19 @@
     if (u.t === 'treb' && cmd && cmd.k !== 'attack' && !u.packed) u.packT = U.treb.pack;
   };
 
-  G.groupMove = function (us, x, y, am) {
+  // Rôle dans la formation : 0 mêlée (devant), 1 tireurs, 2 soutien (moines, siège, villageois)
+  G.formRole = function (u) {
+    const d = U[u.t], s = this.stat(u);
+    if (!s.atk || u.t === 'villager' || (d.cls || []).includes('siege')) return 2;
+    return s.atk.r < 1 ? 0 : 1;
+  };
+
+  G.groupMove = function (us, x, y, am, form) {
     if (!us.length) return;
     if (us.length === 1) { this.setCmd(us[0], { k: 'move', x, y, am }); return; }
+    let cx0 = 0, cy0 = 0; for (const u of us) { cx0 += u.x; cy0 += u.y; } cx0 /= us.length; cy0 /= us.length;
+    const far = Math.hypot(x - cx0, y - cy0);
+    if (form !== false && far > 4) return this.formationMove(us, x, y, am, cx0, cy0, far);
     // Formation : cases libres en spirale autour de la cible
     const slots = [];
     const N = this.N;
@@ -493,6 +551,57 @@
     }
   };
 
+  // Déplacement en formation : mêlée devant, tireurs puis soutien derrière, tous à la vitesse du plus lent
+  G.formationMove = function (us, x, y, am, cx, cy, far) {
+    const N = this.N, mask = this.mask(us[0].o);
+    const dx = (x - cx) / far, dy = (y - cy) / far; // direction de marche
+    const px = -dy, py = dx; // perpendiculaire (largeur du front)
+    const n = us.length;
+    const wide = Math.max(2, Math.ceil(Math.sqrt(n * 2))); // front plus large que profond
+    const sp = 0.85;
+    const slots = [];
+    // rangées successives derrière le point visé, centrées latéralement
+    const rows = Math.ceil(n / wide) + 3;
+    for (let row = 0; slots.length < n && row < rows; row++) {
+      for (let k = 0; k < wide && slots.length < n + wide; k++) {
+        const lat = (k - (wide - 1) / 2) * sp, back = row * sp;
+        const sx = x + px * lat - dx * back, sy = y + py * lat - dy * back;
+        if (sx < 0.5 || sy < 0.5 || sx > N - 0.5 || sy > N - 0.5) continue;
+        if (!this.passTile(Math.floor(sx), Math.floor(sy), mask)) continue;
+        slots.push({ x: sx, y: sy, f: -row, l: lat });
+      }
+    }
+    if (slots.length < n) { // terrain encombré : repli sur la spirale classique
+      for (let r = 0; slots.length < n && r < 14; r++) for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+        if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
+        const sx = x + i * sp, sy = y + j * sp;
+        if (sx < 0.5 || sy < 0.5 || sx > N - 0.5 || sy > N - 0.5 || !this.passTile(Math.floor(sx), Math.floor(sy), mask)) continue;
+        if (slots.some(q => Math.abs(q.x - sx) < 0.4 && Math.abs(q.y - sy) < 0.4)) continue;
+        slots.push({ x: sx, y: sy, f: Math.round(((sx - x) * dx + (sy - y) * dy) / sp), l: (sx - x) * px + (sy - y) * py });
+      }
+    }
+    slots.sort((a, b) => b.f - a.f || Math.abs(a.l) - Math.abs(b.l));
+    const roles = [[], [], []];
+    for (const u of us) roles[this.formRole(u)].push(u);
+    // vitesse commune (hors traînards très loin derrière, qui rattrapent à pleine vitesse)
+    const dist = us.map(u => Math.hypot(u.x - x, u.y - y)).sort((a, b) => a - b);
+    const med = dist[dist.length >> 1];
+    let gs = 1e9; for (const u of us) if (Math.hypot(u.x - x, u.y - y) <= med + 5) gs = Math.min(gs, this.stat(u).speed);
+    let si = 0;
+    for (const grp of roles) {
+      if (!grp.length) continue;
+      const layer = slots.slice(si, si + grp.length); si += grp.length;
+      layer.sort((a, b) => a.l - b.l);
+      const ord = grp.slice().sort((a, b) => ((a.x - cx) * px + (a.y - cy) * py) - ((b.x - cx) * px + (b.y - cy) * py));
+      for (let k = 0; k < ord.length; k++) {
+        const u = ord[k], sl = layer[k];
+        const cmd = { k: 'move', x: sl ? sl.x : x, y: sl ? sl.y : y, am };
+        if (Math.hypot(u.x - x, u.y - y) <= med + 5 && gs < 1e8) cmd.gs = gs;
+        this.setCmd(u, cmd);
+      }
+    }
+  };
+
   G.canGarrison = function (u, b) {
     const d = B[b.t]; if (!d.garrison || !b.built) return false;
     const c = U[u.t].cls || [];
@@ -510,7 +619,7 @@
         else this.setCmd(u, { k: 'move', x: t.x, y: t.y });
       } else if (t.k === 'u' && U[t.t].animal) {
         if (u.t === 'villager') this.setCmd(u, { k: 'gather', t: t.id, rt: 'f' });
-        else if (t.t === 'deer' && d.atk && !d.onlyBld) this.setCmd(u, { k: 'attack', t: t.id });
+        else if ((t.t === 'deer' || t.t === 'boar') && d.atk && !d.onlyBld) this.setCmd(u, { k: 'attack', t: t.id });
         else this.setCmd(u, { k: 'move', x: t.x, y: t.y });
       } else if (t.k === 'b' && this.ally(t.o, pid)) {
         if (u.t === 'villager') {
@@ -531,29 +640,52 @@
     }
   };
 
+  // Places réservées dans chaque abri (garnison + unités déjà en route)
+  G.garPending = function (pid) {
+    const pend = new Map();
+    for (const u of this.list) if (!u.dead && u.k === 'u' && u.o === pid && !u.inside && u.cmd && u.cmd.k === 'gar') pend.set(u.cmd.t, (pend.get(u.cmd.t) || 0) + 1);
+    return pend;
+  };
+  G.bellShelter = function (u, homes, pend, exclude) {
+    let best = null, bd = 1e9;
+    for (const b of homes) {
+      if (b.dead || b.id === exclude || !this.canGarrison(u, b)) continue;
+      const free = B[b.t].garrison - b.gar.length - (pend.get(b.id) || 0);
+      if (free <= 0) continue;
+      const d = Math.hypot(b.x - u.x, b.y - u.y);
+      if (d < bd) { bd = d; best = b; }
+    }
+    return best;
+  };
   G.townBell = function (pid, on, radius) {
     const homes = this.list.filter(e => !e.dead && e.k === 'b' && e.o === pid && e.built && B[e.t].garrison);
-    for (const u of this.list) {
-      if (u.dead || u.k !== 'u' || u.o !== pid || u.t !== 'villager') continue;
-      if (on) {
-        if (u.inside) continue;
+    if (on) {
+      const pend = this.garPending(pid);
+      for (const u of this.list) {
+        if (u.dead || u.k !== 'u' || u.o !== pid || u.t !== 'villager' || u.inside) continue;
+        if (u.cmd && u.cmd.k === 'gar') continue;
         if (radius && !homes.some(b => b.t === 'tc' && Math.hypot(b.x - u.x, b.y - u.y) < radius)) continue;
-        let best = null, bd = 1e9;
-        for (const b of homes) {
-          const free = B[b.t].garrison - b.gar.length - homes.filter(() => false).length;
-          if (free <= 0) continue;
-          const d = Math.hypot(b.x - u.x, b.y - u.y);
-          if (d < bd) { bd = d; best = b; }
+        // ordre à reprendre après l'alerte (on garde le premier si la cloche sonne deux fois)
+        if (u.bellCmd === undefined || !(u.cmd && u.cmd.bell)) u.bellCmd = u.cmd && !u.cmd.bell ? u.cmd : null;
+        const best = this.bellShelter(u, homes, pend, 0);
+        if (best) { this.setCmd(u, { k: 'gar', t: best.id, bell: true }); pend.set(best.id, (pend.get(best.id) || 0) + 1); }
+        else {
+          // plus de place : se réfugier près de l'abri le plus proche et attendre la fin de l'alerte
+          let near = null, nd = 1e9;
+          for (const b of homes) { const d = Math.hypot(b.x - u.x, b.y - u.y); if (d < nd) { nd = d; near = b; } }
+          if (near && nd > B[near.t].size / 2 + 2.5) this.setCmd(u, { k: 'move', x: near.x + (this.rand() - 0.5) * 2, y: near.y + B[near.t].size / 2 + 0.8, bell: true });
+          else this.setCmd(u, null);
         }
-        if (best) { u.bellCmd = u.cmd && u.cmd.k !== 'gar' ? u.cmd : null; this.setCmd(u, { k: 'gar', t: best.id }); }
       }
     }
     if (!on) {
       for (const b of homes) this.ungarrison(b, true);
       for (const u of this.list) {
         if (u.dead || u.k !== 'u' || u.o !== pid || u.t !== 'villager') continue;
-        if (u.cmd && u.cmd.k === 'gar') this.setCmd(u, null);
-        if (u.bellCmd !== undefined && !u.inside) { const c = u.bellCmd; delete u.bellCmd; if (c) this.setCmd(u, c); }
+        if (u.bellCmd === undefined || u.inside) continue;
+        const c = u.bellCmd; delete u.bellCmd;
+        // ne pas écraser un ordre donné entre-temps
+        if (!u.cmd || u.cmd.bell || u.cmd.k === 'gar') this.setCmd(u, c || null);
       }
     }
   };
@@ -805,18 +937,28 @@
       return;
     }
     if (u.t === 'villager' || !d.atk) return;
-    const t = this.findTarget(u, this.stat(u).los + 1);
+    const stance = u.stance | 0;
+    if (stance === 3) return; // passif
+    const s = this.stat(u);
+    if (stance === 2) { // tenir la position : seulement ce qui est à portée
+      const t = this.findTarget(u, s.atk.r + 0.5 + d.rad);
+      if (t) this.setCmd(u, { k: 'attack', t: t.id, auto: true, ground: true, hx: u.x, hy: u.y });
+      return;
+    }
+    const t = this.findTarget(u, s.los + 1);
     if (t) this.setCmd(u, { k: 'attack', t: t.id, auto: true, hx: u.x, hy: u.y });
   };
 
   G.findTarget = function (u, r) {
     const d = U[u.t];
     let best = null, bs = 1e9;
+    const splash = d.atk && d.atk.splash ? this.stat(u).atk.splash : 0;
     if (!d.onlyBld) {
       for (const v of this.unitsNear(u.x, u.y, r)) {
         if (!this.enemy(u.o, v.o) || v.inside) continue;
         const dist = Math.hypot(v.x - u.x, v.y - u.y);
         if (dist > r) continue;
+        if (splash && this.splashRisk(u.o, v, splash)) continue;
         // priorité : unités militaires, puis villageois
         const sc = dist + (U[v.t].atk ? 0 : 3) + (v.t === 'villager' ? 1 : 0);
         if (sc < bs) { bs = sc; best = v; }
@@ -841,6 +983,16 @@
     return best;
   };
 
+  // Tir de zone : plus d'unités amies qu'ennemies autour de la cible ?
+  G.splashRisk = function (o, v, splash) {
+    let mine = 0, foe = 0;
+    for (const w of this.unitsNear(v.x, v.y, splash + 0.5)) {
+      if (w.inside || U[w.t].animal || Math.hypot(w.x - v.x, w.y - v.y) > splash + 0.5) continue;
+      if (this.enemy(o, w.o)) foe++; else mine++;
+    }
+    return mine > foe;
+  };
+
   G.doMove = function (u, dt, c) {
     if (u.t === 'treb' && !u.packed) { u.packT = U.treb.pack; return; }
     if (!u.goal) this.goalPoint(u, c.x, c.y);
@@ -848,12 +1000,13 @@
       u.acq -= dt;
       if (u.acq <= 0) {
         u.acq = 0.5;
-        const t = U[u.t].atk ? this.findTarget(u, this.stat(u).los) : null;
+        const t = U[u.t].atk && (u.stance | 0) !== 3 ? this.findTarget(u, this.stat(u).los) : null;
         if (t) { const resume = c; this.setCmd(u, { k: 'attack', t: t.id, resume }); return; }
       }
     }
     u.st = 'move';
-    const r = this.moveAlong(u, dt, this.stat(u).speed);
+    const sp = this.stat(u).speed;
+    const r = this.moveAlong(u, dt, c.gs ? Math.min(c.gs, sp) : sp);
     if (r === 'done') { this.setCmd(u, null); u.goal = null; }
   };
 
@@ -886,17 +1039,28 @@
     const d = U[u.t];
     const s = this.stat(u);
     const valid = t && !t.dead && !t.inside && (this.enemy(u.o, t.o) || (t.k === 'u' && U[t.t].animal && t.o < 0) || (t.k === 'u' && t.t === 'deer'));
+    const stance = u.stance | 0;
     if (!valid || !s.atk || (d.onlyBld && t.k !== 'b')) {
       if (c.resume) { this.setCmd(u, c.resume); return; }
-      const nt = d.atk && !(t && t.k === 'u' && U[t.t].animal) ? this.findTarget(u, s.los + 1) : null;
-      if (nt) { this.setCmd(u, { k: 'attack', t: nt.id, auto: c.auto, hx: c.hx, hy: c.hy }); return; }
+      const nt = d.atk && stance !== 3 && !(t && t.k === 'u' && U[t.t].animal) ? this.findTarget(u, c.ground ? s.atk.r + 0.5 + d.rad : s.los + 1) : null;
+      if (nt) { this.setCmd(u, { k: 'attack', t: nt.id, auto: c.auto, ground: c.ground, hx: c.hx, hy: c.hy }); return; }
       if (c.auto && c.hx != null && Math.hypot(c.hx - u.x, c.hy - u.y) > 1.5) { this.setCmd(u, { k: 'move', x: c.hx, y: c.hy }); return; }
       this.setCmd(u, null); return;
     }
-    // ne pas poursuivre trop loin une cible auto
-    if (c.auto && c.hx != null && Math.hypot(c.hx - u.x, c.hy - u.y) > s.los + 6) { this.setCmd(u, { k: 'move', x: c.hx, y: c.hy }); return; }
+    // ne pas poursuivre trop loin une cible auto (agressif : plus loin que défensif)
+    if (c.auto && c.hx != null && Math.hypot(c.hx - u.x, c.hy - u.y) > s.los + (stance === 0 ? 12 : 6)) { this.setCmd(u, c.resume || { k: 'move', x: c.hx, y: c.hy }); return; }
+    // en s'attaquant à un bâtiment (ordre automatique), se retourner contre une unité armée qui approche
+    if (t.k === 'b' && (c.auto || c.resume) && !d.onlyBld && u.t !== 'villager' && stance < 2) {
+      u.swT = (u.swT || 0) - dt;
+      if (u.swT <= 0) {
+        u.swT = 1;
+        const nt = this.armedNear(u, s.los);
+        if (nt) { this.setCmd(u, { k: 'attack', t: nt.id, auto: true, hx: c.hx != null ? c.hx : u.x, hy: c.hy != null ? c.hy : u.y, resume: c.resume }); return; }
+      }
+    }
     const reach = this.reach(u, t);
     const range = s.atk.r + (t.k === 'u' ? 0.2 : 0.45);
+    if (c.ground && (reach > range || reach < (s.atk.min || 0) - 0.3)) { this.setCmd(u, null); return; }
     if (reach <= range && reach >= (s.atk.min || 0) - 0.3) {
       u.path = null; u.goal = null; u.needPath = false;
       if (Math.abs(t.x - u.x) > 0.01) u.face = t.x > u.x ? 1 : -1;
@@ -920,6 +1084,17 @@
     if (this.chase(u, dt, t) === 'fail') this.setCmd(u, c.resume || null);
   };
 
+  // Unité ennemie armée la plus proche (hors villageois et animaux)
+  G.armedNear = function (u, r) {
+    let best = null, bd = 1e9;
+    for (const v of this.unitsNear(u.x, u.y, r)) {
+      if (v.inside || !this.enemy(u.o, v.o) || !U[v.t].atk || v.t === 'villager' || U[v.t].animal) continue;
+      const dd = Math.hypot(v.x - u.x, v.y - u.y);
+      if (dd <= r && dd < bd) { bd = dd; best = v; }
+    }
+    return best;
+  };
+
   // Tir / coup
   G.fire = function (src, t, atk, n, fromBld) {
     const ranged = !!atk.proj;
@@ -930,7 +1105,7 @@
     const dur = Math.max(0.15, dist / spd);
     for (let k = 0; k < n; k++) {
       const delay = k * 0.07;
-      this.proj.push({ t: t.id, tx: t.x, ty: t.y, atk, o: src.o, src: src.id, left: dur + delay, splash: atk.splash || 0 });
+      this.proj.push({ t: t.id, tx: t.x, ty: t.y, atk, o: src.o, src: src.id, left: dur + delay, splash: atk.splash || 0, acc: atk.acc || 1 });
     }
     this.emit({ k: 'proj', x: sx, y: sy, tx: t.x, ty: t.y, d: dur, p: atk.proj, n: Math.min(n, 6), b: fromBld ? 1 : 0 });
   };
@@ -943,36 +1118,59 @@
       const t = this.ents.get(pr.t);
       const src = this.ents.get(pr.src);
       if (pr.splash) {
-        const ix = t && !t.dead ? t.x : pr.tx, iy = t && !t.dead ? t.y : pr.ty;
-        if (t && !t.dead && t.k === 'b') this.damage(t, pr.atk, pr.o, src);
-        for (const v of this.unitsNear(ix, iy, pr.splash + 0.4)) {
-          if (!this.enemy(pr.o, v.o)) continue;
+        // tir de zone au sol, là où était la cible : on peut l'esquiver, et il blesse aussi vos unités
+        let ix = pr.tx, iy = pr.ty;
+        if (t && !t.dead && t.k === 'b') { this.damage(t, pr.atk, pr.o, src); ix = t.x; iy = t.y; }
+        for (const v of this.unitsNear(ix, iy, pr.splash + 0.6)) {
+          if (v.inside || U[v.t].animal) continue;
           if (Math.hypot(v.x - ix, v.y - iy) <= pr.splash + U[v.t].rad) this.damage(v, pr.atk, pr.o, src);
         }
         this.emit({ k: 'boom', x: ix, y: iy });
-      } else if (t && !t.dead && !t.inside) this.damage(t, pr.atk, pr.o, src);
+        continue;
+      }
+      const alive = t && !t.dead && !t.inside;
+      if (alive && (t.k !== 'u' || U[t.t].animal)) { this.damage(t, pr.atk, pr.o, src); continue; }
+      // flèche sur une unité : esquive si elle a bougé, précision du tireur
+      if (alive && Math.hypot(t.x - pr.tx, t.y - pr.ty) < U[t.t].rad + 0.45 && (pr.acc >= 1 || this.rand() < pr.acc)) { this.damage(t, pr.atk, pr.o, src); continue; }
+      // flèche perdue : peut toucher un autre ennemi au point d'impact (demi-dégâts)
+      let stray = null, sd = 0.4;
+      for (const v of this.unitsNear(pr.tx, pr.ty, 1)) {
+        if (v === t || v.inside || U[v.t].animal || !this.enemy(pr.o, v.o)) continue;
+        const dd = Math.hypot(v.x - pr.tx, v.y - pr.ty) - U[v.t].rad;
+        if (dd < sd) { sd = dd; stray = v; }
+      }
+      if (stray) this.damage(stray, pr.atk, pr.o, src, 0.5);
     }
     this.proj = keep;
   };
 
-  G.damage = function (t, atk, o, src) {
+  G.damage = function (t, atk, o, src, mul) {
     if (t.dead) return;
     let arm;
     let cls;
     if (t.k === 'u') {
-      if (U[t.t].animal) { arm = [0, 0]; cls = ['animal']; } else { const s = this.stat(t); arm = s.arm; cls = s.cls; }
-    } else if (t.k === 'b') { arm = B[t.t].arm; cls = ['bld']; } else return;
+      if (U[t.t].animal) { arm = U[t.t].arm || [0, 0]; cls = ['animal']; } else { const s = this.stat(t); arm = s.arm; cls = s.cls; }
+    } else if (t.k === 'b') { arm = R.bldStat(this.players[t.o], t.t).arm; cls = ['bld']; } else return;
     const base = Math.max(0, atk.d - (atk.t === 'm' ? arm[0] : arm[1]));
     let bonus = 0;
     if (atk.b) for (const c of cls) if (atk.b[c]) bonus += atk.b[c];
-    const dmg = Math.max(1, base + bonus);
+    const dmg = Math.max(1, (base + bonus) * (mul || 1));
     t.hp -= dmg;
     if (t.k === 'u' && U[t.t].flee && src) { t.fleeT = 3; t.fx = src.x; t.fy = src.y; }
-    // riposte
-    if (t.k === 'u' && !t.cmd && src && !src.dead && src.k === 'u' && U[t.t].atk && t.t !== 'villager' && this.enemy(t.o, src.o)) {
-      const ts = this.stat(t);
-      if (!U[t.t].onlyBld) this.setCmd(t, { k: 'attack', t: src.id, auto: true, hx: t.x, hy: t.y });
-      void ts;
+    // sanglier : charge celui qui l'attaque
+    if (t.k === 'u' && U[t.t].aggr && src && !src.dead && src.k === 'u' && !U[src.t].animal) {
+      const cur = t.cmd && t.cmd.k === 'attack' ? this.ents.get(t.cmd.t) : null;
+      if (!cur || cur.dead || cur.inside) { if (t.hx == null) { t.hx = t.x; t.hy = t.y; } this.setCmd(t, { k: 'attack', t: src.id }); }
+    }
+    // riposte (selon la posture) : unité inactive, ou occupée à frapper un bâtiment par ordre automatique
+    if (t.k === 'u' && src && !src.dead && src.k === 'u' && U[t.t].atk && !U[t.t].animal && !U[t.t].onlyBld && t.t !== 'villager' && this.enemy(t.o, src.o)) {
+      const c = t.cmd, stance = t.stance | 0;
+      const onBld = c && c.k === 'attack' && (c.auto || c.resume) && (this.ents.get(c.t) || {}).k === 'b';
+      if (stance !== 3 && (!c || onBld)) {
+        const hx = c && c.hx != null ? c.hx : t.x, hy = c && c.hy != null ? c.hy : t.y;
+        if (stance === 2) { if (this.reach(t, src) <= this.stat(t).atk.r + 0.3) this.setCmd(t, { k: 'attack', t: src.id, auto: true, ground: true, hx, hy }); }
+        else this.setCmd(t, { k: 'attack', t: src.id, auto: true, hx, hy, resume: c ? c.resume : undefined });
+      }
     }
     if (t.o >= 0 && this.enemy(t.o, o)) {
       const p = this.players[t.o];
@@ -996,7 +1194,7 @@
     }
     this.remove(e);
     if (e.o >= 0 && this.players[e.o]) this.players[e.o].stats.lost++;
-    if (by >= 0 && this.players[by] && by !== e.o) { if (e.k === 'u') this.players[by].stats.kills++; else this.players[by].stats.bkill++; }
+    if (by >= 0 && this.players[by] && by !== e.o && (e.o < 0 || this.enemy(by, e.o))) { if (e.k === 'u') this.players[by].stats.kills++; else this.players[by].stats.bkill++; }
     this.emit({ k: 'die', x: e.x, y: e.y, t: e.t, o: e.o, kk: e.k });
     if (e.k === 'b') {
       // éjecter la garnison
@@ -1054,7 +1252,7 @@
       for (const e of this.list) {
         if (e.dead || e.id === exclude) continue;
         const isC = e.k === 'r' && e.t === 'carcass' && e.amt > 0;
-        const isA = e.k === 'u' && U[e.t].animal && (e.o === o || e.o < 0) && (kindPref !== 'carcass');
+        const isA = e.k === 'u' && U[e.t].animal && (e.o === o || e.o < 0) && (kindPref !== 'carcass') && !U[e.t].aggr; // pas de sanglier en solo
         if (!isC && !isA) continue;
         const d = Math.hypot(e.x - x, e.y - y);
         if (d <= r && d < bd) { bd = d; best = e; }
@@ -1112,12 +1310,14 @@
     // chasse : tuer d'abord
     if (isAnimal) {
       if (!u.phase || u.phase === 'go') {
-        const rng = r.t === 'deer' ? 3 : 0.4;
+        const ranged = r.t === 'deer' || r.t === 'boar';
+        const rng = ranged ? 3 : 0.4;
         if (this.reach(u, r) <= rng + 0.4) {
           u.st = 'attack'; u.path = null;
+          if (Math.abs(r.x - u.x) > 0.05) u.face = r.x > u.x ? 1 : -1;
           if (u.cd <= 0) {
             u.cd = 1.5;
-            if (r.t === 'deer') this.fire(u, r, { d: 4, t: 'p', r: 3, rate: 1.5, proj: 'arrow' }, 1);
+            if (ranged) this.fire(u, r, { d: 4, t: 'p', r: 3, rate: 1.5, proj: 'arrow' }, 1);
             else this.damage(r, { d: 4, t: 'm' }, u.o, u);
           }
           return;
@@ -1169,7 +1369,7 @@
     if (Math.abs(r.x - u.x) > 0.05) u.face = r.x > u.x ? 1 : -1;
     if (isFarm) r.farmer = u.id;
     let kind = rt;
-    if (isFarm) kind = 'farm'; else if (r.t === 'berry') kind = 'berry'; else if (r.t === 'carcass') kind = r.from === 'deer' ? 'hunt' : 'sheep';
+    if (isFarm) kind = 'farm'; else if (r.t === 'berry') kind = 'berry'; else if (r.t === 'carcass') kind = r.from === 'deer' || r.from === 'boar' ? 'hunt' : 'sheep';
     const rate = R.gatherRate(p, kind);
     u.carry.t = rt;
     let amt = rate * dt;
@@ -1204,7 +1404,7 @@
     const p = this.players[u.o];
     if (!b || b.dead || !this.ally(b.o, u.o) || (b.built && b.hp >= b.mhp)) {
       if (b && !b.dead && b.built) return this.afterBuild(u, b);
-      const nb = this.nearFoundation(u, 10);
+      const nb = this.nearFoundation(u, 10, b && b.t);
       if (nb) { this.setCmd(u, { k: 'build', t: nb.id }); return; }
       this.setCmd(u, null); return;
     }
@@ -1225,7 +1425,8 @@
     const n = Math.max(1, b.nbP);
     const d = B[b.t];
     if (!b.built) {
-      const dp = dt / d.time * (3 / (n + 2));
+      // chaque bâtisseur en plus ajoute 1/3 de vitesse (temps total = 3t/(n+2))
+      const dp = dt / d.time * ((n + 2) / (3 * n));
       const add = Math.min(dp, 1 - b.prog);
       b.prog += add;
       b.hp = Math.min(b.mhp, b.hp + b.mhp * add);
@@ -1235,7 +1436,7 @@
       }
     } else {
       // réparation : coûte la moitié du prix proportionnellement
-      const hpRate = Math.max(8, b.mhp / d.time * 0.75) * (3 / (n + 2));
+      const hpRate = Math.max(8, b.mhp / d.time * 0.75) * ((n + 2) / (3 * n));
       const add = Math.min(hpRate * dt, b.mhp - b.hp);
       for (const k in d.cost) {
         const owe = d.cost[k] * 0.5 * add / b.mhp;
@@ -1246,12 +1447,15 @@
     }
   };
 
-  G.nearFoundation = function (u, r) {
+  // Fondation suivante à bâtir : uniquement les siennes, de préférence du même type (lignes de murs, de maisons)
+  G.nearFoundation = function (u, r, pref) {
     let best = null, bd = 1e9;
     for (const e of this.list) {
-      if (e.dead || e.k !== 'b' || e.built || !this.ally(e.o, u.o)) continue;
+      if (e.dead || e.k !== 'b' || e.built || e.o !== u.o) continue;
       const d = Math.hypot(e.x - u.x, e.y - u.y);
-      if (d < r && d < bd) { bd = d; best = e; }
+      if (d >= r) continue;
+      const sc = d - (pref && e.t === pref ? 3 : 0);
+      if (sc < bd) { bd = sc; best = e; }
     }
     return best;
   };
@@ -1259,7 +1463,7 @@
   G.afterBuild = function (u, b) {
     const d = B[b.t];
     if (d.farm) { this.setCmd(u, { k: 'gather', t: b.id, rt: 'f' }); return; }
-    const nb = this.nearFoundation(u, 10);
+    const nb = this.nearFoundation(u, 10, b.t);
     if (nb && !d.drop) { this.setCmd(u, { k: 'build', t: nb.id }); return; }
     if (d.drop && b.t !== 'tc') {
       let rt = d.drop[0];
@@ -1289,7 +1493,15 @@
     const b = this.ents.get(c.t);
     if (!b || b.dead || !this.ally(b.o, u.o) || !this.canGarrison(u, b)) { this.setCmd(u, null); return; }
     if (this.reach(u, b) <= 0.7) {
-      if (b.gar.length >= B[b.t].garrison) { this.setCmd(u, null); if (u.bellCmd !== undefined) { const cc = u.bellCmd; delete u.bellCmd; if (cc) this.setCmd(u, cc); } return; }
+      if (b.gar.length >= B[b.t].garrison) {
+        if (u.bellCmd !== undefined) {
+          // alerte : chercher un autre abri libre, sinon attendre sur place (l'ordre est repris à la fin de l'alerte)
+          const homes = this.list.filter(e => !e.dead && e.k === 'b' && e.o === u.o && e.built && B[e.t].garrison);
+          const alt = this.bellShelter(u, homes, this.garPending(u.o), b.id);
+          this.setCmd(u, alt ? { k: 'gar', t: alt.id, bell: true } : null);
+        } else this.setCmd(u, null);
+        return;
+      }
       if (u.t === 'villager') this.deposit(u);
       u.inside = b.id; b.gar.push(u.id); u.cmd = null; u.st = 'idle'; u.path = null;
       return;
@@ -1346,11 +1558,30 @@
       u.face = dx > 0 ? 1 : -1;
       return;
     }
+    if (u.cmd && u.cmd.k === 'attack') return this.doAttackAnimal(u, dt);
     if (u.cmd && u.cmd.k === 'move') { this.doMove(u, dt, u.cmd); return; }
     u.st = 'idle';
     if (u.t === 'deer' && this.rand() < 0.004) {
       this.setCmd(u, { k: 'move', x: u.x + (this.rand() - 0.5) * 3, y: u.y + (this.rand() - 0.5) * 3 });
     }
+  };
+
+  // Sanglier : poursuit son agresseur, abandonne s'il s'éloigne trop de son terrier
+  G.doAttackAnimal = function (u, dt) {
+    const d = U[u.t];
+    const t = this.ents.get(u.cmd.t);
+    const away = u.hx != null ? Math.hypot(u.hx - u.x, u.hy - u.y) : 0;
+    if (!d.atk || !t || t.dead || t.inside || t.k !== 'u' || away > 10) {
+      if (u.hx != null && away > 1) this.setCmd(u, { k: 'move', x: u.hx, y: u.hy }); else this.setCmd(u, null);
+      return;
+    }
+    if (this.reach(u, t) <= d.atk.r + 0.2) {
+      u.st = 'attack'; u.path = null; u.goal = null; u.needPath = false;
+      if (Math.abs(t.x - u.x) > 0.01) u.face = t.x > u.x ? 1 : -1;
+      if (u.cd <= 0) { u.cd = d.atk.rate; this.damage(t, d.atk, -1, u); }
+      return;
+    }
+    if (this.chase(u, dt, t) === 'fail') this.setCmd(u, null);
   };
 
   G.sheepOwnership = function () {
@@ -1373,9 +1604,12 @@
 
   // ---------- Bâtiments ----------
   G.updBld = function (b, dt) {
+    const p = this.players[b.o];
+    // maj PV max après une technologie (tour renforcée, mortier…)
+    const bs = R.bldStat(p, b.t);
+    if (bs.hp !== b.mhp) { b.hp = Math.max(1, b.hp + (bs.hp - b.mhp) * (b.built ? 1 : b.prog)); b.mhp = bs.hp; }
     if (!b.built) return;
     const d = B[b.t];
-    const p = this.players[b.o];
     // production
     if (b.q.length) {
       const it = b.q[0];
@@ -1431,7 +1665,10 @@
     const u = this.addUnit(type, b.o, sp.x, sp.y);
     if (b.rally) {
       const t = b.rally.id ? this.ents.get(b.rally.id) : null;
+      // ressource épuisée : le villageois prend la plus proche du même genre
+      const nr = (!t || t.dead) && b.rally.kind && type === 'villager' ? this.findRes(b.o, b.rally.x, b.rally.y, b.rally.rt, 7, 0, b.rally.kind) : null;
       if (t && !t.dead) this.orderTarget(b.o, [u], t);
+      else if (nr) this.orderTarget(b.o, [u], nr);
       else this.setCmd(u, { k: 'move', x: b.rally.x, y: b.rally.y });
     }
     this.emit({ k: 'trained', p: b.o, t: type });
@@ -1441,14 +1678,15 @@
     const td = TE[t];
     delete p.busy[t];
     p.techs[t] = true;
-    p._sc = {};
+    p._sc = {}; p._bc = {};
     if (td.ageUp) {
       p.age = td.ageUp;
       this.msg(-1, p.name + ' passe à l’' + R.AGES[p.age].name + ' !', 'age');
       this.emit({ k: 'age', p: p.id, a: p.age });
     } else this.emit({ k: 'tech', p: p.id, t });
-    if (t === 'collar' || t === 'plow') {
-      for (const e of this.list) if (!e.dead && e.k === 'b' && e.o === p.id && B[e.t].farm) e.food += t === 'collar' ? 75 : 125;
+    const farmAdd = { collar: 75, plow: 125, assolement: 175 }[t];
+    if (farmAdd) {
+      for (const e of this.list) if (!e.dead && e.k === 'b' && e.o === p.id && B[e.t].farm) e.food += farmAdd;
     }
     void b;
   };
@@ -1512,7 +1750,7 @@
     const a = [e.id, e.k, e.t, e.o, Math.round(e.x * 100), Math.round(e.y * 100), Math.ceil(e.hp), Math.ceil(e.mhp)];
     if (e.k === 'u') {
       a.push(e.st, e.face, e.carry.t, Math.floor(e.carry.n), e.inside, e.t === 'treb' ? (e.packed ? 1 : 0) + (e.packT > 0 ? 2 : 0) : e.t === 'monk' ? Math.floor(e.faith) : 0,
-        e.cmd ? (e.cmd.k + (e.cmd.t ? ':' + e.cmd.t : '')) : '');
+        e.cmd ? (e.cmd.k + (e.cmd.t ? ':' + e.cmd.t : '')) : '', e.stance | 0);
     } else if (e.k === 'b') {
       a.push(e.built ? 1 : 0, Math.floor(e.prog * 1000), Math.floor(e.food), e.q.length ? e.q.map(q => q.k + ',' + q.t + ',' + Math.floor(q.p * 100) + (q.housed ? ',h' : '')).join(';') : '',
         e.rally ? Math.round(e.rally.x * 10) + ',' + Math.round(e.rally.y * 10) : '', e.gar.length, Math.ceil(e.wonderT), e.tx, e.ty);
@@ -1527,7 +1765,7 @@
     if (e.k === 'u') {
       e.st = a[8]; e.face = a[9]; e.carry = { t: a[10], n: a[11] }; e.inside = a[12];
       if (e.t === 'treb') { e.packed = !!(a[13] & 1); e.packT = a[13] & 2 ? 1 : 0; } else if (e.t === 'monk') e.faith = a[13];
-      e.cmdS = a[14];
+      e.cmdS = a[14]; e.stance = a[15] | 0;
     } else if (e.k === 'b') {
       e.built = !!a[8]; e.prog = a[9] / 1000; e.food = a[10];
       e.q = a[11] ? a[11].split(';').map(s => { const p = s.split(','); return { k: p[0], t: p[1], p: (+p[2]) / 100, housed: p[3] === 'h' }; }) : [];
